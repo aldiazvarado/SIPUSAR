@@ -19,6 +19,15 @@
     let GAS_API_URL = localStorage.getItem("uika_gas_api_url") || "";
 
     function openApiConfigModal() {
+      if (!isMasterAdmin()) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Akses Dibatasi',
+          text: 'Pengaturan Endpoint API GAS hanya dapat diakses oleh Master Admin.'
+        });
+        return;
+      }
+
       Swal.fire({
         title: "Konfigurasi URL REST API GAS",
         text: "Masukkan URL Web App Deployment Google Apps Script Anda (akhiran /exec):",
@@ -331,11 +340,11 @@
 
       <!-- FOOTER SIDEBAR -->
       <div class="mt-auto shrink-0 px-2.5 py-2 border-t border-slate-800 space-y-0.5 text-xs bg-slate-900 sticky bottom-0 z-10">
-                <button onclick="openApiConfigModal()" class="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-emerald-400 hover:text-white hover:bg-slate-800 transition text-left font-medium text-[11px]">
+        <button id="btnEndpointApiGas" onclick="openApiConfigModal()" style="display: none !important;" class="hidden w-full items-center space-x-2 px-2.5 py-1.5 rounded-lg text-emerald-400 hover:text-white hover:bg-slate-800 transition text-left font-medium text-[11px]">
           <i class="fas fa-plug w-4 text-center text-xs"></i>
           <span>Endpoint API GAS</span>
         </button>
-<button onclick="openChangePasswordModal()" class="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-left font-medium text-[11px]">
+        <button onclick="openChangePasswordModal()" class="w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition text-left font-medium text-[11px]">
           <i class="fas fa-key w-4 text-center text-blue-400 text-xs"></i>
           <span>Ganti Password</span>
         </button>
@@ -2306,12 +2315,22 @@
 
     function hideElem(id) {
       const el = document.getElementById(id);
-      if (el) el.classList.add('hidden');
+      if (el) {
+        el.classList.add('hidden');
+        el.style.setProperty('display', 'none', 'important');
+      }
     }
 
-    function showElem(id) {
+    function showElem(id, displayStyle = '') {
       const el = document.getElementById(id);
-      if (el) el.classList.remove('hidden');
+      if (el) {
+        el.classList.remove('hidden');
+        if (displayStyle) {
+          el.style.setProperty('display', displayStyle, 'important');
+        } else {
+          el.style.removeProperty('display');
+        }
+      }
     }
 
     function updateSidebarVisibility() {
@@ -2326,7 +2345,7 @@
       const labelPendaftaran = document.getElementById('tabLabelPendaftaran');
 
       // 1. Role MAHASISWA:
-      // SEMBUNYIKAN/HAPUS TOTAL: Dashboard Executive, Jadwal Periode, Invoice & Kwitansi, Master Data, Spreadsheet Live, Master Ruangan, Kelola & Alat, Source Code
+      // SEMBUNYIKAN/HAPUS TOTAL: Dashboard Executive, Jadwal Periode, Invoice & Kwitansi, Master Data, Spreadsheet Live, Master Ruangan, Kelola & Alat, Source Code, Endpoint API GAS
       // HANYA TAMPILKAN (4 MENU): Pendaftaran & Cek Riwayat, Jadwal Ujian, Kartu Ujian Digital, Notifikasi
       if (isMhs) {
         hideElem('tabBtnExecutive');
@@ -2338,6 +2357,7 @@
         hideElem('btnMasterRuanganTop');
         hideElem('btnExcelSyncTop');
         hideElem('btnAiDiagnostics');
+        hideElem('btnEndpointApiGas');
 
         showElem('tabBtnPendaftaran');
         showElem('tabBtnJadwal');
@@ -2361,7 +2381,7 @@
       }
       // 2. Role KAPRODI & SEKPRODI:
       // Menu tampil: Dashboard Executive, Pendaftaran, Notifikasi
-      // Sembunyikan: Invoice & Kwitansi, Spreadsheet Live, Master Ruangan, Jadwal Ujian, Kartu Ujian, Jadwal Periode, Master Data, Kelola & Alat
+      // Sembunyikan: Invoice & Kwitansi, Spreadsheet Live, Master Ruangan, Jadwal Ujian, Kartu Ujian, Jadwal Periode, Master Data, Kelola & Alat, Endpoint API GAS
       // Sembunyikan tombol aksi: [+ Tambah Pendaftaran], [Input Jadwal Ujian], [Hapus Notifikasi], [Terbitkan Notifikasi], [Tambah Periode Baru], [Tambah Tahun Akademik]
       else if (isKaprodiOrSekprodi) {
         showElem('tabBtnExecutive');
@@ -2378,6 +2398,7 @@
         hideElem('btnMasterRuanganTop');
         hideElem('btnExcelSyncTop');
         hideElem('btnAiDiagnostics');
+        hideElem('btnEndpointApiGas');
 
         if (labelPendaftaran) labelPendaftaran.innerText = 'Pendaftaran';
 
@@ -2394,7 +2415,7 @@
         if (subKaprodi) subKaprodi.innerText = 'Pengumuman resmi dan informasi penting terkait pendaftaran dan jadwal ujian.';
       }
       // 3. Role DEKAN & WAKIL DEKAN:
-      // Menu tampil: Dashboard Executive, Pendaftaran, Notifikasi, Invoice & Kwitansi, Source Code
+      // Menu tampil: Dashboard Executive, Pendaftaran, Notifikasi, Invoice & Kwitansi
       else if (isDekanOrWadek) {
         showElem('tabBtnExecutive');
         showElem('tabBtnPendaftaran');
@@ -2409,6 +2430,7 @@
         hideElem('btnMasterRuanganTop');
         hideElem('btnExcelSyncTop');
         hideElem('btnAiDiagnostics');
+        hideElem('btnEndpointApiGas');
 
         if (labelPendaftaran) labelPendaftaran.innerText = 'Pendaftaran';
 
@@ -2425,7 +2447,7 @@
         if (subDekan) subDekan.innerText = 'Pengumuman resmi dan informasi penting terkait pendaftaran dan jadwal ujian.';
       }
       // 4. Role MASTER ADMIN & ADMIN TU:
-      // Seluruh Menu Tampil! Termasuk Source Code & Skrip
+      // Seluruh Menu Tampil! Termasuk Endpoint API GAS & AI Diagnostics (Master)
       else {
         showElem('tabBtnExecutive');
         showElem('tabBtnPendaftaran');
@@ -2447,7 +2469,7 @@
         showElem('btnTambahJadwal');
         showElem('btnTambahPeriode');
         showElem('btnTambahTahunAkademik');
-        showElem('btnTambahNotifikasi'); // Master Admin & Admin TU dapat menerbitkan notifikasi
+        showElem('btnTambahNotifikasi');
 
         // Eksklusif Hapus Notifikasi: HANYA Master Admin
         if (isMaster) {
@@ -2463,6 +2485,17 @@
           const subAdminTU = document.getElementById('notifSubtitleText');
           if (subAdminTU) subAdminTU.innerText = 'Pusat pengumuman resmi dan informasi penting terkait pendaftaran dan jadwal ujian.';
         }
+      }
+
+      // ==========================================
+      // [ATURAN MUTLAK: ENDPOINT API GAS]
+      // Tombol Endpoint API GAS HANYA dan EKSKLUSIF untuk role Master Admin
+      // Seluruh role lain (Dekan, Wadek, Admin TU, Kaprodi, Sekprodi, Mahasiswa) DIKUNCI & DISEMBUNYIKAN TOTAL
+      // ==========================================
+      if (isMaster) {
+        showElem('btnEndpointApiGas', 'flex');
+      } else {
+        hideElem('btnEndpointApiGas');
       }
     }
 
