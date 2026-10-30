@@ -21,17 +21,15 @@
     let GAS_API_URL = localStorage.getItem("uika_gas_api_url") || "";
 
     function openApiConfigModal() {
-      if (currentUser && currentUser.role) {
-        const roleLower = currentUser.role.toString().toLowerCase().trim();
-        const isAdmin = ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes(roleLower);
-        if (!isAdmin) {
-          Swal.fire({
-            icon: 'warning',
-            title: 'Akses Dibatasi',
-            text: 'Pengaturan Endpoint API hanya dapat diakses oleh Master Admin dan Admin TU.'
-          });
-          return;
-        }
+      const roleLower = (currentUser && currentUser.role ? currentUser.role : '').toString().toLowerCase().trim();
+      const isMaster = roleLower === 'master admin' || roleLower === 'master_admin';
+      if (!isMaster) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Akses Dibatasi',
+          text: 'Pengaturan Endpoint API hanya dapat diakses oleh Master Admin.'
+        });
+        return;
       }
 
       Swal.fire({
@@ -319,7 +317,7 @@
         <button id="tabBtnSpreadsheet" onclick="switchTab('spreadsheet')" class="hidden w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition text-left text-slate-300 hover:text-white hover:bg-slate-800 text-[11px]">
           <div class="flex items-center space-x-2">
             <i class="fas fa-table-cells w-4 text-center text-emerald-400 text-xs"></i>
-            <span>Spreadsheet Live</span>
+            <span>Database Website</span>
           </div>
         </button>
 
@@ -346,7 +344,7 @@
 
       <!-- FOOTER SIDEBAR -->
       <div class="mt-auto shrink-0 px-2.5 py-2 border-t border-slate-800 space-y-0.5 text-xs bg-slate-900 sticky bottom-0 z-10">
-        <button id="btnEndpointApiGas" onclick="openApiConfigModal()" class="hidden w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-emerald-400 hover:text-white hover:bg-slate-800 transition text-left font-medium text-[11px]">
+        <button id="btnEndpointApiGas" onclick="openApiConfigModal()" style="display: none !important;" class="hidden w-full items-center space-x-2 px-2.5 py-1.5 rounded-lg text-emerald-400 hover:text-white hover:bg-slate-800 transition text-left font-medium text-[11px]">
           <i class="fas fa-plug w-4 text-center text-xs"></i>
           <span>Endpoint API GAS</span>
         </button>
@@ -396,7 +394,7 @@
           <div>
             <span class="inline-block bg-blue-100 text-blue-900 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase mb-1 border border-blue-200">Executive Analytics</span>
             <h2 class="text-xl font-bold text-slate-800">Ringkasan Laporan Pendaftaran Akademik</h2>
-            <p class="text-xs text-slate-500">Pemantauan realtime data pendaftaran Google Sheets FEB UIKA Bogor</p>
+            <p class="text-xs text-slate-500">Pemantauan realtime data pendaftaran website akademik FEB UIKA Bogor</p>
           </div>
 
           <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
@@ -429,7 +427,7 @@
 
             <button onclick="loadAppData()" class="bg-blue-900 hover:bg-blue-800 text-white px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1.5 shadow-sm">
               <i class="fas fa-arrows-rotate"></i>
-              <span>Sync Sheets</span>
+              <span>Sync Website</span>
             </button>
           </div>
         </div>
@@ -908,7 +906,7 @@
         <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <h3 class="font-bold text-slate-800 mb-1">Master Data Referensi Sistem & Log Aktivitas (Anti-Hilang)</h3>
-            <p class="text-xs text-slate-500">Mencatat Log Aktivitas Real-Time yang tersimpan aman pada cache persisten dan Google Sheets.</p>
+            <p class="text-xs text-slate-500">Mencatat Log Aktivitas Real-Time yang tersimpan aman pada database sistem website.</p>
           </div>
           <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -926,21 +924,21 @@
           <div class="bg-slate-100 border-b border-slate-300 p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
             <div class="flex flex-wrap items-center gap-2">
               <span class="font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg">
-                <i class="fas fa-table"></i> Spreadsheet Live Workbook
+                <i class="fas fa-database"></i> Database Website Terintegrasi
               </span>
               <select id="activeSheetSelector" onchange="renderSpreadsheetWorkbook()" class="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-bold">
-                <option value="Pendaftaran">Sheet: Pendaftaran</option>
-                <option value="Jadwal_Ujian">Sheet: Jadwal_Ujian</option>
-                <option value="Master_Ruangan">Sheet: Master_Ruangan</option>
-                <option value="User_Staff">Sheet: User_Staff</option>
-                <option value="User_Mahasiswa">Sheet: User_Mahasiswa</option>
-                <option value="Periode_Pendaftaran">Sheet: Periode_Pendaftaran</option>
-                <option value="Master_Prodi">Sheet: Master_Prodi</option>
-                <option value="Master_Matkul">Sheet: Master_Matkul</option>
-                <option value="Master_Kelas">Sheet: Master_Kelas</option>
-                <option value="Master_Dosen">Sheet: Master_Dosen</option>
-                <option value="Users">Sheet: Users</option>
-                <option value="Log_Aktivitas">Sheet: Log_Aktivitas</option>
+                <option value="Pendaftaran">Data Pendaftaran</option>
+                <option value="Jadwal_Ujian">Jadwal Ujian</option>
+                <option value="Master_Ruangan">Master Ruangan</option>
+                <option value="User_Staff">User Staff</option>
+                <option value="User_Mahasiswa">User Mahasiswa</option>
+                <option value="Periode_Pendaftaran">Periode Pendaftaran</option>
+                <option value="Master_Prodi">Master Prodi</option>
+                <option value="Master_Matkul">Master Matkul</option>
+                <option value="Master_Kelas">Master Kelas</option>
+                <option value="Master_Dosen">Master Dosen</option>
+                <option value="Users">Users Akun</option>
+                <option value="Log_Aktivitas">Log Aktivitas</option>
               </select>
             </div>
             <div class="flex flex-wrap items-center gap-2">
@@ -1656,19 +1654,19 @@
     <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
         <div>
-          <h3 class="text-base font-black text-slate-800"><i class="fas fa-file-excel text-emerald-700"></i> Sinkronisasi Data Excel / Spreadsheet (.xlsx / .csv)</h3>
-          <p class="text-xs text-slate-500">Unggah file Excel untuk append atau update langsung ke database Google Sheets</p>
+          <h3 class="text-base font-black text-slate-800"><i class="fas fa-file-excel text-emerald-700"></i> Sinkronisasi Data Excel / File Data (.xlsx / .csv)</h3>
+          <p class="text-xs text-slate-500">Unggah file Excel untuk append atau update langsung ke database website</p>
         </div>
         <button onclick="closeExcelSyncModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
       </div>
 
       <div class="space-y-3.5 text-xs">
         <div>
-          <label class="block font-bold text-slate-700 mb-1">Target Sheet Spreadsheet</label>
+          <label class="block font-bold text-slate-700 mb-1">Target Data Website</label>
           <select id="excelTargetSheet" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white text-slate-800">
-            <option value="pendaftaran">1. Data Pendaftaran (Sheet: Pendaftaran)</option>
-            <option value="jadwal">2. Jadwal Ujian (Sheet: Jadwal_Ujian)</option>
-            <option value="ruangan">3. Master Ruangan (Sheet: Master_Ruangan)</option>
+            <option value="pendaftaran">1. Data Pendaftaran</option>
+            <option value="jadwal">2. Jadwal Ujian</option>
+            <option value="ruangan">3. Master Ruangan</option>
           </select>
         </div>
 
@@ -1689,7 +1687,7 @@
 
         <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
           <button type="button" onclick="closeExcelSyncModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Tutup</button>
-          <button type="button" id="btnExecuteExcelSync" onclick="executeExcelSync()" disabled class="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 shadow-md">Mulai Sinkronisasi Sheet</button>
+          <button type="button" id="btnExecuteExcelSync" onclick="executeExcelSync()" disabled class="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 shadow-md">Mulai Sinkronisasi Data</button>
         </div>
       </div>
     </div>
@@ -1830,7 +1828,7 @@
         <div class="p-3.5 bg-purple-50/70 border border-purple-200 rounded-2xl flex items-center justify-between">
           <div>
             <p class="font-bold text-purple-950">Status Integritas Sistem:</p>
-            <p class="text-[11px] text-purple-800">Spreadsheet, Rules, Multi-Role, and Data Sync 100% Verified.</p>
+            <p class="text-[11px] text-purple-800">Database Website, Rules, Multi-Role, and Data Sync 100% Verified.</p>
           </div>
           <span class="px-3 py-1 bg-emerald-500 text-white rounded-full font-bold text-[10px] shadow-xs">NORMAL & SINKRON</span>
         </div>
@@ -1874,7 +1872,7 @@
             <i class="fas fa-eraser mr-1 text-slate-400"></i> Bersihkan Data Uji
           </button>
           <button type="button" onclick="handleInjectMockups()" class="px-5 py-2 rounded-xl font-bold bg-purple-700 text-white hover:bg-purple-800 shadow-md text-center flex items-center justify-center gap-1.5">
-            <i class="fas fa-flask"></i> <span>Suntik 5 Data Mockup ke Spreadsheet</span>
+            <i class="fas fa-flask"></i> <span>Suntik 5 Data Mockup ke Database Website</span>
           </button>
         </div>
       </div>
@@ -2321,12 +2319,22 @@
 
     function hideElem(id) {
       const el = document.getElementById(id);
-      if (el) el.classList.add('hidden');
+      if (el) {
+        el.classList.add('hidden');
+        el.style.setProperty('display', 'none', 'important');
+      }
     }
 
-    function showElem(id) {
+    function showElem(id, displayStyle = '') {
       const el = document.getElementById(id);
-      if (el) el.classList.remove('hidden');
+      if (el) {
+        el.classList.remove('hidden');
+        if (displayStyle) {
+          el.style.setProperty('display', displayStyle, 'important');
+        } else {
+          el.style.removeProperty('display');
+        }
+      }
     }
 
     function updateSidebarVisibility() {
@@ -2341,7 +2349,7 @@
       const labelPendaftaran = document.getElementById('tabLabelPendaftaran');
 
       // 1. Role MAHASISWA:
-      // SEMBUNYIKAN/HAPUS TOTAL: Dashboard Executive, Jadwal Periode, Invoice & Kwitansi, Master Data, Spreadsheet Live, Master Ruangan, Kelola & Alat, Source Code, Endpoint API GAS
+      // SEMBUNYIKAN/HAPUS TOTAL: Dashboard Executive, Jadwal Periode, Invoice & Kwitansi, Master Data, Database Website, Master Ruangan, Kelola & Alat, Source Code, Endpoint API GAS
       // HANYA TAMPILKAN (4 MENU): Pendaftaran & Cek Riwayat, Jadwal Ujian, Kartu Ujian Digital, Notifikasi
       if (isMhs) {
         hideElem('tabBtnExecutive');
@@ -2377,7 +2385,7 @@
       }
       // 2. Role KAPRODI & SEKPRODI:
       // Menu tampil: Dashboard Executive, Pendaftaran, Notifikasi
-      // Sembunyikan: Invoice & Kwitansi, Spreadsheet Live, Master Ruangan, Jadwal Ujian, Kartu Ujian, Jadwal Periode, Master Data, Kelola & Alat, Endpoint API GAS
+      // Sembunyikan: Invoice & Kwitansi, Database Website, Master Ruangan, Jadwal Ujian, Kartu Ujian, Jadwal Periode, Master Data, Kelola & Alat, Endpoint API GAS
       // Sembunyikan tombol aksi: [+ Tambah Pendaftaran], [Input Jadwal Ujian], [Hapus Notifikasi], [Terbitkan Notifikasi], [Tambah Periode Baru], [Tambah Tahun Akademik]
       else if (isKaprodiOrSekprodi) {
         showElem('tabBtnExecutive');
@@ -2443,7 +2451,6 @@
         if (subDekan) subDekan.innerText = 'Pengumuman resmi dan informasi penting terkait pendaftaran dan jadwal ujian.';
       }
       // 4. Role MASTER ADMIN & ADMIN TU:
-      // Seluruh Menu Tampil! Termasuk Endpoint API GAS & AI Diagnostics (Master)
       else {
         showElem('tabBtnExecutive');
         showElem('tabBtnPendaftaran');
@@ -2457,7 +2464,6 @@
         showElem('sectionAlatAdmin');
         showElem('btnMasterRuanganTop');
         showElem('btnExcelSyncTop');
-        showElem('btnEndpointApiGas');
         if (isMaster) showElem('btnAiDiagnostics'); else hideElem('btnAiDiagnostics');
 
         if (labelPendaftaran) labelPendaftaran.innerText = 'Pendaftaran';
@@ -2466,7 +2472,7 @@
         showElem('btnTambahJadwal');
         showElem('btnTambahPeriode');
         showElem('btnTambahTahunAkademik');
-        showElem('btnTambahNotifikasi'); // Master Admin & Admin TU dapat menerbitkan notifikasi
+        showElem('btnTambahNotifikasi');
 
         // Eksklusif Hapus Notifikasi: HANYA Master Admin
         if (isMaster) {
@@ -2482,6 +2488,17 @@
           const subAdminTU = document.getElementById('notifSubtitleText');
           if (subAdminTU) subAdminTU.innerText = 'Pusat pengumuman resmi dan informasi penting terkait pendaftaran dan jadwal ujian.';
         }
+      }
+
+      // ==========================================
+      // [ATURAN MUTLAK: ENDPOINT API GAS]
+      // Tombol Endpoint API GAS HANYA dan EKSKLUSIF untuk role Master Admin
+      // Seluruh role lain (Dekan, Wadek, Admin TU, Kaprodi, Sekprodi, Mahasiswa) DIKUNCI & DISEMBUNYIKAN TOTAL
+      // ==========================================
+      if (isMaster) {
+        showElem('btnEndpointApiGas', 'flex');
+      } else {
+        hideElem('btnEndpointApiGas');
       }
     }
 
@@ -2597,8 +2614,8 @@
         periode: 'Jadwal Periode',
         invoice: 'Invoice & Kwitansi',
         master: 'Master Data & Log Sistem',
-        spreadsheet: 'Spreadsheet Live',
-        };
+        spreadsheet: 'Database Website',
+      };
 
       const titleElem = document.getElementById('pageHeaderTitle');
       if (titleElem && tabTitles[tab]) titleElem.innerText = tabTitles[tab];
@@ -3563,7 +3580,7 @@
                   <i class="fas fa-history text-blue-900"></i>
                   <span>Log Aktivitas Sistem (Penyimpanan Persisten Anti-Hilang)</span>
                 </h4>
-                <p class="text-[11px] text-slate-500 mt-0.5">Struktur kolom sinkron presisi dengan sheet Log_Aktivitas pada Spreadsheet.</p>
+                <p class="text-[11px] text-slate-500 mt-0.5">Struktur kolom sinkron presisi dengan tabel Log Aktivitas pada database website.</p>
               </div>
               <div class="flex items-center gap-2">
                 <span class="text-xs font-bold bg-blue-50 text-blue-900 px-2.5 py-1 rounded-full border border-blue-200">${logs.length} Log Tersimpan</span>
@@ -3633,7 +3650,7 @@
 
       Swal.fire({
         title: 'Kosongkan Seluruh Log?',
-        text: 'Tindakan ini hanya dapat dilakukan oleh Master Admin. Seluruh riwayat log di sheet Log_Aktivitas dan persistent cache akan dibersihkan.',
+        text: 'Tindakan ini hanya dapat dilakukan oleh Master Admin. Seluruh riwayat log aktivitas dan persistent cache website akan dibersihkan.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Ya, Kosongkan Log',
@@ -3913,7 +3930,7 @@
     function deletePeriodeItem(id) {
       Swal.fire({
         title: 'Hapus Periode ' + id + '?',
-        text: 'Data periode ini akan dihapus dari sheet Master_Periode.',
+        text: 'Data periode ini akan dihapus dari database website.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Ya, Hapus',
@@ -4134,7 +4151,7 @@
     function deleteTahunAkademikItem(id) {
       Swal.fire({
         title: 'Hapus Tahun Akademik ' + id + '?',
-        text: 'Data ini akan dihapus dari sheet Master_Tahun_Akademik.',
+        text: 'Data ini akan dihapus dari database website.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Ya, Hapus',
@@ -4177,7 +4194,7 @@
     function handleInjectMockups() {
       Swal.fire({
         title: 'Suntik 5 Data Mockup?',
-        text: 'Sistem akan memasukkan 5 data sampel mahasiswa lengkap dengan status verifikasi & tagihan ke Spreadsheet.',
+        text: 'Sistem akan memasukkan 5 data sampel mahasiswa lengkap dengan status verifikasi & tagihan ke database website.',
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: 'Ya, Suntik Data',
@@ -4193,7 +4210,7 @@
           google.script.run
             .withSuccessHandler(res => {
               closeAiDiagnosticsModal();
-              Swal.fire('Berhasil Disuntik', res.message || '5 Data Mockup berhasil masuk ke Google Sheets!', 'success');
+              Swal.fire('Berhasil Disuntik', res.message || '5 Data Mockup berhasil masuk ke database website!', 'success');
               loadAppData();
             })
             .withFailureHandler(err => {
@@ -4207,7 +4224,7 @@
     function handleClearTestData() {
       Swal.fire({
         title: 'Bersihkan Data Uji?',
-        text: 'Data sampel pengujian akan dihapus dari sheet Pendaftaran.',
+        text: 'Data sampel pengujian akan dihapus dari database website.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Ya, Bersihkan',
@@ -5157,7 +5174,7 @@
         if (r.isConfirmed) {
           Swal.fire({
             title: 'Memproses Persetujuan Massal...',
-            html: `Memperbarui <b>${selected.length}</b> berkas secara batch ke Google Sheets...`,
+            html: `Memperbarui <b>${selected.length}</b> berkas secara batch ke database website...`,
             allowOutsideClick: false,
             didOpen: () => { Swal.showLoading(); }
           });
@@ -5512,7 +5529,7 @@
       const stats = document.getElementById('excelFileStats');
       const container = document.getElementById('excelPreviewContainer');
       const btn = document.getElementById('btnExecuteExcelSync');
-      if (stats) stats.innerText = `File Terpilih: ${file.name} (${Math.round(file.size / 1024)} KB) - Siap disinkronkan ke Google Sheets`;
+      if (stats) stats.innerText = `File Terpilih: ${file.name} (${Math.round(file.size / 1024)} KB) - Siap disinkronkan ke database website`;
       if (container) container.classList.remove('hidden');
       if (btn) btn.disabled = false;
     }
@@ -5532,10 +5549,10 @@
       setTimeout(() => {
         if (btn) {
           btn.disabled = false;
-          btn.innerHTML = 'Mulai Sinkronisasi Sheet';
+          btn.innerHTML = 'Mulai Sinkronisasi Data';
         }
         closeExcelSyncModal();
-        Swal.fire('Sinkronisasi Sukses', `File ${uploadedExcelFile.name} berhasil disinkronkan dengan target Sheet: ${targetSheet}!`, 'success');
+        Swal.fire('Sinkronisasi Sukses', `File ${uploadedExcelFile.name} berhasil disinkronkan ke database website!`, 'success');
         loadAppData();
       }, 1200);
     }
