@@ -843,7 +843,6 @@
                 <option value="Master_Matkul">Sheet: Master_Matkul</option>
                 <option value="Master_Kelas">Sheet: Master_Kelas</option>
                 <option value="Master_Dosen">Sheet: Master_Dosen</option>
-                <option value="Users">Sheet: Users</option>
                 <option value="Log_Aktivitas">Sheet: Log_Aktivitas</option>
               </select>
             </div>
@@ -5464,7 +5463,6 @@
       else if (sheetName === 'Master_Kelas') rows = master.kelas || [];
       else if (sheetName === 'Master_Dosen') rows = master.dosen || [];
       else if (sheetName === 'Master_Tahun_Akademik') rows = master.tahunAkademik || [];
-      else if (sheetName === 'Users') rows = appData.users || [];
       else if (sheetName === 'Log_Aktivitas') rows = master.logs || appData.activityLogs || [];
 
       if (!rows || rows.length === 0) {
@@ -5516,7 +5514,6 @@
       else if (sheetName === 'Master_Kelas') rows = master.kelas || [];
       else if (sheetName === 'Master_Dosen') rows = master.dosen || [];
       else if (sheetName === 'Master_Tahun_Akademik') rows = master.tahunAkademik || [];
-      else if (sheetName === 'Users') rows = appData.users || [];
       else if (sheetName === 'Log_Aktivitas') rows = master.logs || appData.activityLogs || [];
 
       if (!rows || rows.length === 0) {

@@ -13,7 +13,6 @@ function setupDatabase() {
   var sheetNames = [
     'User_Staff',
     'User_Mahasiswa',
-    'Users',
     'Master_Ruangan',
     'Jadwal_Ujian',
     'Master_Prodi',
@@ -39,6 +38,12 @@ function setupDatabase() {
   var defaultSheet = ss.getSheetByName("Sheet1");
   if (defaultSheet && ss.getSheets().length > 1) {
     try { ss.deleteSheet(defaultSheet); } catch(e) {}
+  }
+
+  // Hapus sheet legacy "Users" jika ada agar hanya ada User_Staff dan User_Mahasiswa
+  var legacyUsers = ss.getSheetByName("Users");
+  if (legacyUsers && ss.getSheets().length > 1) {
+    try { ss.deleteSheet(legacyUsers); } catch(e) {}
   }
 
   // 1. POPULATE SHEET: User_Staff (ID | Username | Password | Role | Nama Lengkap | NIK | Kode Prodi)
@@ -196,7 +201,14 @@ function setupDatabase() {
     props.setProperty('SIP_PERSISTENT_LOGS_V2', JSON.stringify(objLogs));
   } catch(e) {}
 
-  SpreadsheetApp.getUi().alert("Inisialisasi Database Berhasil! Seluruh Sheet terpisah User_Staff, User_Mahasiswa, Master_Ruangan, Jadwal_Ujian, Master Data, Notifikasi & Log Aktivitas (Persistent) FEB UIKA Bogor telah siap 100%.");
+  var successMsg = "Inisialisasi Database Berhasil! Seluruh Sheet terpisah User_Staff, User_Mahasiswa, Master_Ruangan, Jadwal_Ujian, Master Data, Notifikasi & Log Aktivitas (Persistent) FEB UIKA Bogor telah siap 100%.";
+  Logger.log(successMsg);
+  console.log(successMsg);
+  try {
+    SpreadsheetApp.getUi().alert(successMsg);
+  } catch(e) {
+    // getUi() dilewati jika script dijalankan langsung dari console/editor script.google.com
+  }
 }
 
 function populateSheetData(ss, sheetName, headers, rows) {

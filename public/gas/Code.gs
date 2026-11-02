@@ -261,8 +261,7 @@ function getOrCreateSheet(ss, sheetName) {
     'Master_Kelas': ["ID", "Nama Kelas", "Kategori", "Semester", "Kode Prodi"],
     'Master_Dosen': ["ID", "NIK/NIDN", "Nama Dosen", "Kode Prodi"],
     'Notifikasi': ["ID", "Waktu", "Judul", "Pesan", "Tipe", "TargetRole", "TargetNPM", "Dibaca"],
-    'Log_Aktivitas': ["ID", "Waktu", "Pengguna", "Role", "Aksi", "Target", "Keterangan"],
-    'Users': ["ID", "Username", "Password", "Role", "Nama Lengkap", "NPM/NIK", "Kode Prodi"]
+    'Log_Aktivitas': ["ID", "Waktu", "Pengguna", "Role", "Aksi", "Target", "Keterangan"]
   };
   var headers = defaultHeadersMap[sheetName] || ["ID", "Nama", "Keterangan"];
   try {
@@ -284,22 +283,6 @@ function getSheetDataRaw(ss, sheetName) {
   if (!ss) return [];
   var sheet = ss.getSheetByName(sheetName);
   if (!sheet) {
-    if (sheetName === 'Users') {
-      var staffSheet = ss.getSheetByName('User_Staff');
-      var mhsSheet = ss.getSheetByName('User_Mahasiswa');
-      if (staffSheet || mhsSheet) {
-        var combined = [];
-        if (staffSheet) {
-          try { combined = combined.concat(getSheetDataRaw(ss, 'User_Staff')); } catch(e) {}
-        }
-        if (mhsSheet) {
-          try { combined = combined.concat(getSheetDataRaw(ss, 'User_Mahasiswa')); } catch(e) {}
-        }
-        return combined;
-      }
-      return [];
-    }
-
     sheet = getOrCreateSheet(ss, sheetName);
     if (!sheet) return [];
     return [];
@@ -621,31 +604,7 @@ function loginUser(username, password) {
       };
     }
 
-    // 3. Fallback di Sheet Users
-    var users = [];
-    try { users = getSheetData('Users'); } catch(e) {}
-    var found = (users || []).find(function(u) {
-      var uName = String(u.Username || u.username || u.NPM || u.NIM || u.NIK || '').trim().toLowerCase();
-      var uPass = String(u.Password || u.password || '').trim();
-      return (uName === cleanUser || uName === emailPrefix || uName === simplePrefix) && (uPass === cleanPass || cleanPass === '123456');
-    });
-    
-    if (found) {
-      var actualUsername = found.Username || found.username || found.NPM || found.NIM || username;
-      return {
-        success: true,
-        user: {
-          username: String(actualUsername).trim(),
-          role: found.Role || found.role || 'User',
-          nama: found['Nama Lengkap'] || found.Nama || found.nama || actualUsername,
-          kodeProdi: found['Kode Prodi'] || found.kodeProdi || 'ALL',
-          prodi: found['Kode Prodi'] || found.kodeProdi || 'ALL',
-          npm: String(found.NPM || found.NIM || found['NPM/NIK'] || actualUsername).trim()
-        }
-      };
-    }
-
-    // 4. Default Emergency & Demo Fallback (Resilience for testing / initial deployment)
+    // 3. Default Emergency & Demo Fallback (Resilience for testing / initial deployment)
     var isAldiaz = (
       cleanUser === 'aldiaz' || 
       simplePrefix === 'aldiaz' || 
@@ -802,7 +761,7 @@ function changePassword(username, oldPassword, newPassword) {
 
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var targetSheet = null;
-    var candidateSheets = ['User_Staff', 'User_Mahasiswa', 'Users'];
+    var candidateSheets = ['User_Staff', 'User_Mahasiswa'];
     var colPass = -1;
     var targetRowIndex = -1;
 
@@ -868,7 +827,6 @@ function changePassword(username, oldPassword, newPassword) {
 
     try {
       var cache = CacheService.getScriptCache();
-      cache.remove('SIP_MASTER_CACHE_V4_Users');
       cache.remove('SIP_MASTER_CACHE_V4_User_Staff');
       cache.remove('SIP_MASTER_CACHE_V4_User_Mahasiswa');
     } catch(e) {}
@@ -980,10 +938,7 @@ function getInitialData(userRole, username, userProdi) {
 
     var usersList = [];
     if (['Master Admin', 'Admin TU'].indexOf(userRole) !== -1) {
-      try { usersList = getSheetData('Users'); } catch(e) {}
-      if (!usersList || usersList.length === 0) {
-        usersList = (staffList || []).concat(mhsList || []);
-      }
+      usersList = (staffList || []).concat(mhsList || []);
     }
     
     // Menu 1: Riwayat Pendaftaran Mahasiswa
