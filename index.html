@@ -3,6 +3,8 @@
 <head>
   <script type="module" src="/@vite/client"></script>
 
+  <script type="module" src="/@vite/client"></script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Pendaftaran & Reporting Akademik - FEB UIKA Bogor</title>
@@ -147,7 +149,7 @@
       }
     }
   </style>
-<script src="/_aistudio-iframe.js?v=1f94f900"></script></head>
+<script src="/_aistudio-iframe.js?v=1f94f900"></script><script src="/_aistudio-iframe.js?v=1f94f900"></script></head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased">
 
   <!-- LOGIN CONTAINER -->
@@ -916,10 +918,18 @@
             <h3 class="font-bold text-slate-800 mb-1">Master Data Referensi Sistem & Log Aktivitas (Anti-Hilang)</h3>
             <p class="text-xs text-slate-500">Mencatat Log Aktivitas Real-Time yang tersimpan aman pada database sistem website.</p>
           </div>
-          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            Persistent Synced
-          </span>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" onclick="openAddMahasiswaModal()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+              <i class="fas fa-user-plus text-xs"></i> <span>+ Tambah Mahasiswa</span>
+            </button>
+            <button type="button" onclick="openExcelSyncModalWithTarget('User_Mahasiswa')" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+              <i class="fas fa-file-excel text-xs"></i> <span>Upload Excel Mahasiswa</span>
+            </button>
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Persistent Synced
+            </span>
+          </div>
         </div>
 
         <div id="masterActivityLogContainer" class="space-y-4"></div>
@@ -1329,7 +1339,7 @@
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block font-bold text-slate-600 mb-1">NPM Mahasiswa <span id="badgeNpmLock" class="text-[10px] text-blue-800 font-bold"></span></label>
-            <input type="text" id="pendaftaranNim" required class="w-full border border-slate-300 rounded-xl px-3 py-2 font-mono focus:ring-2 focus:ring-blue-900">
+            <input type="text" id="pendaftaranNim" required oninput="onPendaftaranNimInput(this.value)" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-mono focus:ring-2 focus:ring-blue-900">
           </div>
           <div>
             <label class="block font-bold text-slate-600 mb-1">Nama Mahasiswa <span id="badgeNamaLock" class="text-[10px] text-blue-800 font-bold"></span></label>
@@ -1337,7 +1347,7 @@
           </div>
         </div>
 
-        <!-- Bagian Program Studi & Kelas (POIN 3: PRODI TERKUNCI UNTUK MAHASISWA) -->
+        <!-- Bagian Program Studi, Kelas, dan Kategori -->
         <div class="grid grid-cols-3 gap-3">
           <div>
             <label class="block font-bold text-slate-600 mb-1">Program Studi <span id="badgeProdiLock" class="text-[10px] text-blue-800 font-bold"></span></label>
@@ -1355,6 +1365,18 @@
               <option value="Karyawan">Karyawan</option>
               <option value="Reguler & Karyawan">Reguler & Karyawan</option>
             </select>
+          </div>
+        </div>
+
+        <!-- Bagian Angkatan & Semester Aktif (OTOMASI SINKRON DATA MAHASISWA & TAHUN AKADEMIK) -->
+        <div class="grid grid-cols-2 gap-3 bg-blue-50/50 p-3 rounded-2xl border border-blue-100">
+          <div>
+            <label class="block font-bold text-blue-950 mb-1">Tahun Angkatan <span id="badgeAngkatanLock" class="text-[10px] text-blue-800 font-bold"></span></label>
+            <input type="number" id="pendaftaranAngkatan" min="2015" max="2035" placeholder="Contoh: 2024" oninput="onAngkatanInputChange()" class="w-full border border-blue-200 rounded-xl px-3 py-2 font-mono font-bold focus:ring-2 focus:ring-blue-900 bg-white text-xs">
+          </div>
+          <div>
+            <label class="block font-bold text-emerald-950 mb-1">Semester Aktif <span class="text-[10px] text-emerald-700 font-bold">(Otomatis Terhitung)</span></label>
+            <input type="text" id="pendaftaranSemesterKalkulasi" readonly class="w-full bg-emerald-50 text-emerald-900 border border-emerald-300 rounded-xl px-3 py-2 font-bold cursor-not-allowed select-none text-xs">
           </div>
         </div>
 
@@ -1769,6 +1791,9 @@
           <div class="flex-1">
             <label class="block font-bold text-slate-700 mb-1">Target Data Master / Website</label>
             <select id="excelTargetSheet" onchange="handleTargetSheetChange()" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white text-slate-800 focus:ring-2 focus:ring-blue-900">
+              <optgroup label="Data Pengguna & Mahasiswa">
+                <option value="User_Mahasiswa">Data User Mahasiswa (User_Mahasiswa)</option>
+              </optgroup>
               <optgroup label="Data Master Akademik (Eksklusif Master Admin & TU)">
                 <option value="Master_Matkul" selected>Master Mata Kuliah (Master_Matkul)</option>
                 <option value="Master_Kelas">Master Kelas (Master_Kelas)</option>
@@ -1817,6 +1842,76 @@
           </button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: TAMBAH MAHASISWA BARU (INPUT MANUAL DENGAN KALKULASI SEMESTER OTOMATIS) -->
+  <div id="modalAddMahasiswa" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+            <i class="fas fa-user-graduate text-blue-900"></i> Tambah Data Mahasiswa Baru
+          </h3>
+          <p class="text-xs text-slate-500">Semester akan terhitung otomatis berdasarkan Tahun Angkatan & Tahun Akademik aktif.</p>
+        </div>
+        <button onclick="closeAddMahasiswaModal()" class="text-slate-400 hover:text-slate-600 cursor-pointer"><i class="fas fa-times text-base"></i></button>
+      </div>
+
+      <form id="formAddMahasiswa" onsubmit="handleSaveMahasiswa(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Nama Lengkap Mahasiswa <span class="text-rose-500">*</span></label>
+          <input type="text" id="addMhsNama" required placeholder="Contoh: Muhammad Farhan Ramadhan" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">NPM Mahasiswa <span class="text-rose-500">*</span></label>
+            <input type="text" id="addMhsNpm" required placeholder="Contoh: 2411030019" oninput="onAddMhsNpmInput(this.value)" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-mono font-bold">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Program Studi <span class="text-rose-500">*</span></label>
+            <select id="addMhsProdi" required class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold"></select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Kelas <span class="text-rose-500">*</span></label>
+            <select id="addMhsKelas" required class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold"></select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Tahun Angkatan <span class="text-rose-500">*</span></label>
+            <input type="number" id="addMhsAngkatan" required min="2015" max="2035" placeholder="Contoh: 2024" oninput="onAddMhsAngkatanInput(this.value)" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-mono font-bold">
+          </div>
+        </div>
+
+        <!-- Box Kalkulasi Semester Otomatis Live -->
+        <div class="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-1">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-xs text-emerald-900 flex items-center gap-1.5">
+              <i class="fas fa-calculator text-emerald-700"></i> Hasil Perhitungan Semester Otomatis
+            </span>
+            <span id="badgeActiveTaName" class="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">TA Aktif: 2026/2027 Ganjil</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="text" id="addMhsSemester" readonly class="w-full bg-white text-emerald-800 font-black text-sm border border-emerald-300 rounded-xl px-3 py-1.5 select-none" value="Semester 1">
+          </div>
+          <p class="text-[10px] text-emerald-700 italic">* Dihitung otomatis: Tahun Akademik Berjalan dikurangi Tahun Angkatan dan status semester (Ganjil/Genap).</p>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Password Akun (Default: 123456)</label>
+          <input type="password" id="addMhsPassword" placeholder="123456" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white">
+        </div>
+
+        <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+          <button type="button" onclick="closeAddMahasiswaModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Batal</button>
+          <button type="submit" id="btnSaveAddMhs" class="px-5 py-2 rounded-xl text-xs font-bold bg-blue-900 text-white hover:bg-blue-800 shadow-md flex items-center gap-1.5">
+            <i class="fas fa-save"></i> <span>Simpan Mahasiswa</span>
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -2134,6 +2229,16 @@
       ],
       activityLogs: [
         { ID: 'LOG-001', Waktu: '2026-10-16 09:30:15', Pengguna: 'Aldiaz Varado', Role: 'Master Admin', Aksi: 'LOGIN', Target: 'Sistem SIP-Akademik', Keterangan: 'Sesi aktif terotentikasi' }
+      ],
+      users_staff: [
+        { ID: 'STF-001', Username: 'aldiaz', Role: 'Master Admin', 'Nama Lengkap': 'Aldiaz Varado', 'Kode Prodi': 'ALL' },
+        { ID: 'STF-002', Username: '410100242', Role: 'Admin TU', 'Nama Lengkap': 'Wawan Setiawan, M.Pd.', 'Kode Prodi': 'ALL' }
+      ],
+      users_mahasiswa: [
+        { ID: 'MHS-001', Username: '2311010012', Role: 'Mahasiswa', 'Nama Lengkap': 'Rizky Pratama Putra', NPM: '2311010012', 'Kode Prodi': 'MNJ', Kelas: 'Reguler 3A', Angkatan: 2023, Semester: 'Semester 7' },
+        { ID: 'MHS-002', Username: '2311020045', Role: 'Mahasiswa', 'Nama Lengkap': 'Siti Nurhaliza Zahra', NPM: '2311020045', 'Kode Prodi': 'AKT', Kelas: 'Reguler 5B', Angkatan: 2023, Semester: 'Semester 7' },
+        { ID: 'MHS-003', Username: '2411030019', Role: 'Mahasiswa', 'Nama Lengkap': 'M. Farhan Ramadhan', NPM: '2411030019', 'Kode Prodi': 'BD', Kelas: 'Reguler 1A', Angkatan: 2024, Semester: 'Semester 5' },
+        { ID: 'MHS-004', Username: '2411040008', Role: 'Mahasiswa', 'Nama Lengkap': 'Nabila Putri Maharani', NPM: '2411040008', 'Kode Prodi': 'PI', Kelas: 'Reguler 1B', Angkatan: 2024, Semester: 'Semester 5' }
       ]
     };
 
@@ -2364,13 +2469,36 @@
         fallbackNpm = cleanU === '123' ? '2311010012' : cleanU;
       }
 
+      let fallbackKelas = '';
+      let fallbackAngkatan = null;
+      let fallbackSemester = '';
+      if (fallbackRole === 'Mahasiswa') {
+        const mhsList = (appData.users_mahasiswa || []);
+        const found = mhsList.find(m => String(m.NPM || m.Username || '').toLowerCase() === cleanU || String(m.NPM || m.Username || '') === fallbackNpm);
+        if (found) {
+          fallbackName = found['Nama Lengkap'] || found.Nama || fallbackName;
+          fallbackProdi = found['Kode Prodi'] || fallbackProdi;
+          fallbackKelas = found['Kelas'] || found.Kelas || 'Reguler 3A';
+          fallbackAngkatan = parseInt(found['Angkatan'] || found.Angkatan || '2023', 10);
+          fallbackSemester = found['Semester'] || found.Semester || calculateSemesterFromAngkatan(fallbackAngkatan);
+        } else {
+          const matchAngkatan = fallbackNpm.match(/^(\d{2})/);
+          fallbackAngkatan = matchAngkatan ? (2000 + parseInt(matchAngkatan[1], 10)) : 2023;
+          fallbackKelas = 'Reguler 3A';
+          fallbackSemester = calculateSemesterFromAngkatan(fallbackAngkatan);
+        }
+      }
+
       currentUser = {
         username: username || 'aldiaz',
         role: fallbackRole,
         nama: fallbackName,
         kodeProdi: fallbackProdi,
         prodi: fallbackProdi,
-        npm: fallbackNpm
+        npm: fallbackNpm,
+        kelas: fallbackKelas,
+        angkatan: fallbackAngkatan,
+        semester: fallbackSemester
       };
       localStorage.setItem('sip_user', JSON.stringify(currentUser));
       initUserUI();
@@ -3028,8 +3156,111 @@
     }
 
     // ==========================================
-    // [REVISI POIN 3]: KUNCI INPUT FORM MAHASISWA
-    // Nama, NPM, dan Prodi dikunci otomatis (readonly/disabled)
+    // [KALKULASI SEMESTER OTOMATIS]: Berdasarkan Angkatan & Tahun Akademik Aktif
+    // ==========================================
+    function calculateSemesterFromAngkatan(angkatanInput, customTaYear, customTaSem) {
+      if (!angkatanInput) return 'Semester 1';
+      let angkatan = parseInt(angkatanInput, 10);
+      if (isNaN(angkatan) || angkatan <= 0) return 'Semester 1';
+      if (angkatan < 100) angkatan = 2000 + angkatan;
+
+      let taYear = customTaYear;
+      let taSem = customTaSem;
+
+      if (!taYear || !taSem) {
+        const listTa = (appData && appData.master && appData.master.tahunAkademik) || [];
+        const activeTa = listTa.find(t => String(t.Status || t.status || '').toLowerCase() === 'aktif') || listTa[0];
+        if (activeTa) {
+          taYear = activeTa['Tahun Akademik'] || activeTa.Tahun || '2026/2027';
+          taSem = activeTa.Semester || (String(activeTa['Tahun Akademik'] || activeTa.Tahun || '').toLowerCase().includes('genap') ? 'Genap' : 'Ganjil');
+        } else {
+          const periodes = (appData && appData.master && appData.master.periode) || [];
+          const activePrd = periodes.find(p => String(p.Status || '').toLowerCase() === 'aktif') || periodes[0];
+          if (activePrd) {
+            taYear = activePrd['Tahun Akademik'] || '2026/2027';
+            taSem = activePrd.Semester || (String(activePrd['Tahun Akademik'] || '').toLowerCase().includes('genap') ? 'Genap' : 'Ganjil');
+          }
+        }
+      }
+
+      if (!taYear) taYear = '2026/2027';
+      if (!taSem) taSem = 'Ganjil';
+
+      let startYear = 2026;
+      const match = String(taYear).match(/\d{4}/);
+      if (match) startYear = parseInt(match[0], 10);
+      const isGanjil = !String(taSem).toLowerCase().includes('genap');
+
+      const diffYears = startYear - angkatan;
+      let semNum = 1;
+      if (diffYears >= 0) {
+        semNum = isGanjil ? (diffYears * 2 + 1) : (diffYears * 2 + 2);
+      } else {
+        semNum = 1;
+      }
+      return 'Semester ' + semNum;
+    }
+
+    function onAngkatanInputChange() {
+      const angkatanVal = document.getElementById('pendaftaranAngkatan')?.value;
+      const semInput = document.getElementById('pendaftaranSemesterKalkulasi');
+      if (semInput) {
+        semInput.value = calculateSemesterFromAngkatan(angkatanVal);
+      }
+    }
+
+    function onPendaftaranNimInput(val) {
+      if (!val) return;
+      const clean = String(val).trim();
+      const mhsList = (appData && appData.users_mahasiswa) || [];
+      const found = mhsList.find(m => String(m.NPM || m.Username || m.ID || '').toLowerCase() === clean.toLowerCase());
+      
+      const namaInput = document.getElementById('pendaftaranNama');
+      const prodiSelect = document.getElementById('pendaftaranProdi');
+      const kelasSelect = document.getElementById('pendaftaranKelas');
+      const angkatanInput = document.getElementById('pendaftaranAngkatan');
+      const semInput = document.getElementById('pendaftaranSemesterKalkulasi');
+
+      if (found) {
+        if (namaInput && (!namaInput.value || namaInput.dataset.autoFilled === 'true')) {
+          namaInput.value = found['Nama Lengkap'] || found.Nama || '';
+          namaInput.dataset.autoFilled = 'true';
+        }
+        if (prodiSelect && found['Kode Prodi']) {
+          prodiSelect.value = found['Kode Prodi'];
+          onProdiSelectionChange();
+        }
+        if (kelasSelect && found.Kelas) {
+          kelasSelect.value = found.Kelas;
+        }
+        let angkatan = found.Angkatan;
+        if (!angkatan) {
+          const match = clean.match(/^(\d{2})/);
+          if (match) angkatan = 2000 + parseInt(match[1], 10);
+        }
+        if (angkatan && angkatanInput) {
+          angkatanInput.value = angkatan;
+          if (semInput) {
+            semInput.value = found.Semester || calculateSemesterFromAngkatan(angkatan);
+          }
+        }
+      } else {
+        const match = clean.match(/^(\d{2})/);
+        if (match && angkatanInput && (!angkatanInput.value || angkatanInput.dataset.autoFilled === 'true')) {
+          const yr = 2000 + parseInt(match[1], 10);
+          if (yr >= 2015 && yr <= 2035) {
+            angkatanInput.value = yr;
+            angkatanInput.dataset.autoFilled = 'true';
+            if (semInput) {
+              semInput.value = calculateSemesterFromAngkatan(yr);
+            }
+          }
+        }
+      }
+    }
+
+    // ==========================================
+    // [FORM PENDAFTARAN MAHASISWA & AUTOFILL KUNCI]
     // ==========================================
     function openPendaftaranModal(id = null) {
       const modal = document.getElementById('modalPendaftaran');
@@ -3042,12 +3273,17 @@
       const nimInput = document.getElementById('pendaftaranNim');
       const namaInput = document.getElementById('pendaftaranNama');
       const prodiSelect = document.getElementById('pendaftaranProdi');
+      const angkatanInput = document.getElementById('pendaftaranAngkatan');
+      const semKalkulasiInput = document.getElementById('pendaftaranSemesterKalkulasi');
+      const kelasSelect = document.getElementById('pendaftaranKelas');
+
       const badgeNpm = document.getElementById('badgeNpmLock');
       const badgeNama = document.getElementById('badgeNamaLock');
       const badgeProdi = document.getElementById('badgeProdiLock');
+      const badgeAngkatan = document.getElementById('badgeAngkatanLock');
 
       if (isMhs) {
-        // [POIN 3]: Kunci input Nama, NPM, dan Program Studi (readonly / disabled)
+        // [POIN 3 & POIN 7]: Kunci input Nama, NPM, Program Studi, Angkatan, dan Semester
         nimInput.value = currentUser.npm || currentUser.username || '';
         nimInput.readOnly = true;
         nimInput.className = 'w-full bg-slate-100 text-slate-700 font-bold font-mono border border-slate-300 rounded-xl px-3 py-2 cursor-not-allowed select-none';
@@ -3064,6 +3300,24 @@
         prodiSelect.disabled = true;
         prodiSelect.className = 'w-full bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl px-3 py-2 cursor-not-allowed select-none';
         if (badgeProdi) badgeProdi.innerText = '(Terkunci)';
+
+        let userAngkatan = currentUser.angkatan;
+        if (!userAngkatan) {
+          const matchAngkatan = String(nimInput.value).match(/^(\d{2})/);
+          if (matchAngkatan) userAngkatan = 2000 + parseInt(matchAngkatan[1], 10);
+          else userAngkatan = 2024;
+        }
+        if (angkatanInput) {
+          angkatanInput.value = userAngkatan;
+          angkatanInput.readOnly = true;
+          angkatanInput.className = 'w-full bg-slate-100 text-slate-700 font-bold font-mono border border-slate-300 rounded-xl px-3 py-2 cursor-not-allowed select-none text-xs';
+          if (badgeAngkatan) badgeAngkatan.innerText = '(Terkunci Akun)';
+        }
+
+        const calculatedSemester = calculateSemesterFromAngkatan(userAngkatan);
+        if (semKalkulasiInput) {
+          semKalkulasiInput.value = currentUser.semester || calculatedSemester;
+        }
       } else {
         nimInput.readOnly = false;
         nimInput.className = 'w-full border border-slate-300 rounded-xl px-3 py-2 font-mono focus:ring-2 focus:ring-blue-900';
@@ -3076,9 +3330,23 @@
         prodiSelect.disabled = false;
         prodiSelect.className = 'w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold focus:ring-2 focus:ring-blue-900';
         if (badgeProdi) badgeProdi.innerText = '';
+
+        if (angkatanInput) {
+          angkatanInput.readOnly = false;
+          angkatanInput.className = 'w-full border border-blue-200 rounded-xl px-3 py-2 font-mono font-bold focus:ring-2 focus:ring-blue-900 bg-white text-xs';
+          angkatanInput.value = 2024;
+          if (badgeAngkatan) badgeAngkatan.innerText = '(Otomatis Terhitung)';
+        }
+        if (semKalkulasiInput) {
+          semKalkulasiInput.value = calculateSemesterFromAngkatan(2024);
+        }
       }
 
       onProdiSelectionChange();
+
+      if (isMhs && currentUser.kelas && kelasSelect) {
+        kelasSelect.value = currentUser.kelas;
+      }
 
       if (id) {
         const item = (appData.pendaftaran || []).find(d => String(d.ID) === String(id));
@@ -3087,10 +3355,20 @@
           namaInput.value = item['Nama Mahasiswa'] || '';
           prodiSelect.value = item['Kode Prodi'] || 'MNJ';
           onProdiSelectionChange();
-          document.getElementById('pendaftaranKelas').value = item.Kelas || '';
+          if (kelasSelect) kelasSelect.value = item.Kelas || '';
           document.getElementById('pendaftaranMatkul').value = item['Mata Kuliah'] || '';
           document.getElementById('pendaftaranDosen').value = item['Dosen Pengampu'] || '';
           document.getElementById('pendaftaranAlasan').value = item.Alasan || '';
+
+          let itemAngkatan = item.Angkatan;
+          if (!itemAngkatan) {
+            const m = String(nimInput.value).match(/^(\d{2})/);
+            if (m) itemAngkatan = 2000 + parseInt(m[1], 10);
+          }
+          if (itemAngkatan && angkatanInput) angkatanInput.value = itemAngkatan;
+          if (semKalkulasiInput) {
+            semKalkulasiInput.value = item.Semester || calculateSemesterFromAngkatan(itemAngkatan || 2024);
+          }
         }
       }
 
@@ -3108,6 +3386,8 @@
       const prodiSel = document.getElementById('pendaftaranProdi');
       const kodeProdi = prodiSel.value;
       const namaProdi = prodiSel.options[prodiSel.selectedIndex]?.getAttribute('data-nama') || kodeProdi;
+      const semCalculated = document.getElementById('pendaftaranSemesterKalkulasi')?.value || document.getElementById('pendaftaranSemester')?.value || 'Semester 1';
+      const angkatanVal = document.getElementById('pendaftaranAngkatan')?.value || '';
 
       const payload = {
         id: document.getElementById('pendaftaranId').value,
@@ -3118,7 +3398,8 @@
         kelas: document.getElementById('pendaftaranKelas').value,
         kategoriKelas: document.getElementById('pendaftaranKategoriKelas').value,
         tahunAkademik: document.getElementById('pendaftaranTahunAkademik').value,
-        semester: document.getElementById('pendaftaranSemester').value,
+        semester: semCalculated,
+        angkatan: angkatanVal,
         mataKuliah: document.getElementById('pendaftaranMatkul').value,
         dosenPengampu: document.getElementById('pendaftaranDosen').value,
         jenisLayanan: document.getElementById('pendaftaranLayanan').value,
@@ -3128,16 +3409,190 @@
       };
 
       const fn = payload.id ? 'updatePendaftaran' : 'addPendaftaran';
-      google.script.run
-        .withSuccessHandler(res => {
-          if (res && res.success) {
-            closePendaftaranModal();
-            Swal.fire('Berhasil', res.message, 'success');
-            loadAppData();
-          } else {
-            Swal.fire('Gagal', res.message, 'error');
-          }
-        })[fn](payload);
+      const onSaveSuccess = function(res) {
+        if (res && res.success) {
+          closePendaftaranModal();
+          Swal.fire('Berhasil', res.message, 'success');
+          loadAppData();
+        } else {
+          Swal.fire('Gagal', (res && res.message) || 'Terjadi kesalahan sistem saat menyimpan pendaftaran.', 'error');
+        }
+      };
+      const onSaveError = function(err) {
+        Swal.fire('Error Sistem', err?.message || String(err), 'error');
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(onSaveSuccess)
+          .withFailureHandler(onSaveError)[fn](payload);
+      } else {
+        callGasApi(fn, [payload], onSaveSuccess, onSaveError);
+      }
+    }
+
+    // ==========================================
+    // [MANAJEMEN MASTER USER MAHASISWA]
+    // ==========================================
+    function openAddMahasiswaModal() {
+      const modal = document.getElementById('modalAddMahasiswa');
+      const form = document.getElementById('formAddMahasiswa');
+      if (form) form.reset();
+
+      const prodiSelect = document.getElementById('addMhsProdi');
+      if (prodiSelect) {
+        const prodis = (appData.master && appData.master.prodi) || [];
+        prodiSelect.innerHTML = prodis.map(p => `<option value="${p['Kode Prodi']}" data-nama="${p['Nama Prodi'] || p['Kode Prodi']}">${p['Kode Prodi']} - ${p['Nama Prodi'] || p['Kode Prodi']}</option>`).join('');
+      }
+
+      const kelasSelect = document.getElementById('addMhsKelas');
+      if (kelasSelect) {
+        const kelasList = (appData.master && appData.master.kelas) || [];
+        if (kelasList.length > 0) {
+          kelasSelect.innerHTML = kelasList.map(k => `<option value="${k['Nama Kelas'] || k.Kelas}">${k['Nama Kelas'] || k.Kelas} (${k['Kode Prodi'] || ''})</option>`).join('');
+        } else {
+          kelasSelect.innerHTML = `
+            <option value="Reguler 1A">Reguler 1A</option>
+            <option value="Reguler 1B">Reguler 1B</option>
+            <option value="Reguler 3A">Reguler 3A</option>
+            <option value="Reguler 3B">Reguler 3B</option>
+            <option value="Reguler 5A">Reguler 5A</option>
+            <option value="Reguler 5B">Reguler 5B</option>
+            <option value="Karyawan 1A">Karyawan 1A</option>
+            <option value="Karyawan 3A">Karyawan 3A</option>
+          `;
+        }
+      }
+
+      const angkatanInput = document.getElementById('addMhsAngkatan');
+      const currentYear = new Date().getFullYear();
+      if (angkatanInput) {
+        angkatanInput.value = currentYear;
+      }
+
+      const badgeTa = document.getElementById('badgeActiveTaName');
+      const listTa = (appData.master && appData.master.tahunAkademik) || [];
+      const activeTa = listTa.find(t => String(t.Status || '').toLowerCase() === 'aktif') || listTa[0] || { 'Tahun Akademik': '2026/2027', Semester: 'Ganjil' };
+      if (badgeTa) {
+        badgeTa.innerText = `TA Aktif: ${activeTa['Tahun Akademik'] || activeTa.Tahun || '2026/2027'} ${activeTa.Semester || 'Ganjil'}`;
+      }
+
+      onAddMhsAngkatanInput(currentYear);
+
+      if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+    }
+
+    function closeAddMahasiswaModal() {
+      const modal = document.getElementById('modalAddMahasiswa');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      }
+    }
+
+    function onAddMhsNpmInput(val) {
+      if (!val) return;
+      const clean = String(val).trim();
+      const angkatanInput = document.getElementById('addMhsAngkatan');
+      const match = clean.match(/^(\d{2})/);
+      if (match && angkatanInput && (!angkatanInput.value || angkatanInput.dataset.autoFilled === 'true')) {
+        const yr = 2000 + parseInt(match[1], 10);
+        if (yr >= 2015 && yr <= 2035) {
+          angkatanInput.value = yr;
+          angkatanInput.dataset.autoFilled = 'true';
+          onAddMhsAngkatanInput(yr);
+        }
+      }
+    }
+
+    function onAddMhsAngkatanInput(val) {
+      const semInput = document.getElementById('addMhsSemester');
+      if (semInput) {
+        semInput.value = calculateSemesterFromAngkatan(val);
+      }
+    }
+
+    function handleSaveMahasiswa(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSaveAddMhs');
+      const nama = document.getElementById('addMhsNama')?.value?.trim();
+      const npm = document.getElementById('addMhsNpm')?.value?.trim();
+      const prodiSel = document.getElementById('addMhsProdi');
+      const kodeProdi = prodiSel?.value || 'MNJ';
+      const prodi = prodiSel?.options[prodiSel.selectedIndex]?.getAttribute('data-nama') || kodeProdi;
+      const kelas = document.getElementById('addMhsKelas')?.value?.trim() || 'Reguler 1A';
+      const angkatan = parseInt(document.getElementById('addMhsAngkatan')?.value || '2024', 10);
+      const semester = document.getElementById('addMhsSemester')?.value || calculateSemesterFromAngkatan(angkatan);
+      const password = document.getElementById('addMhsPassword')?.value?.trim() || '123456';
+
+      if (!nama || !npm) {
+        Swal.fire('Data Tidak Lengkap', 'Nama Lengkap dan NPM mahasiswa wajib diisi.', 'warning');
+        return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...';
+      }
+
+      const actor = currentUser ? (currentUser.nama || currentUser.username || 'Admin TU') : 'Admin TU';
+      const payload = {
+        nama: nama,
+        npm: npm,
+        kodeProdi: kodeProdi,
+        prodi: prodi,
+        kelas: kelas,
+        angkatan: angkatan,
+        semester: semester,
+        password: password
+      };
+
+      const onSaveSuccess = function(res) {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-save"></i> <span>Simpan Mahasiswa</span>';
+        }
+        if (res && res.success) {
+          closeAddMahasiswaModal();
+          Swal.fire({
+            icon: 'success',
+            title: 'Mahasiswa Berhasil Ditambahkan!',
+            text: res.message || `Mahasiswa ${nama} (NPM: ${npm}) berhasil didaftarkan ke sistem dengan ${semester}.`,
+            confirmButtonColor: '#1e3a8a'
+          });
+          loadAppData();
+        } else {
+          Swal.fire('Gagal Menyimpan', (res && res.message) || 'Terjadi kesalahan sistem saat menyimpan data mahasiswa.', 'error');
+        }
+      };
+
+      const onSaveError = function(err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-save"></i> <span>Simpan Mahasiswa</span>';
+        }
+        Swal.fire('Error Sistem', err?.message || String(err), 'error');
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(onSaveSuccess)
+          .withFailureHandler(onSaveError)
+          .addUserMahasiswa(payload, actor);
+      } else {
+        callGasApi('addUserMahasiswa', [payload, actor], onSaveSuccess, onSaveError);
+      }
+    }
+
+    function openExcelSyncModalWithTarget(targetSheet) {
+      const select = document.getElementById('excelTargetSheet');
+      if (select && targetSheet) {
+        select.value = targetSheet;
+      }
+      openExcelSyncModal();
     }
 
     // ==========================================
@@ -3778,7 +4233,48 @@
 
       if (container) {
         const master = appData.master || {};
+        const mhsList = appData.users_mahasiswa || [];
+        const kelasList = master.kelas || [];
+        const dosenList = master.dosen || [];
         container.innerHTML = `
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2 md:col-span-2">
+            <div class="flex justify-between items-center">
+              <h4 class="font-bold text-xs uppercase text-slate-800 flex items-center gap-2">
+                <i class="fas fa-user-graduate text-blue-900"></i>
+                <span>Master Data Mahasiswa (${mhsList.length} Terdaftar)</span>
+              </h4>
+              <span class="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                <i class="fas fa-calculator mr-1"></i> Semester Terhitung Otomatis
+              </span>
+            </div>
+            <div class="overflow-x-auto max-h-56">
+              <table class="w-full text-xs text-left">
+                <thead class="bg-slate-100 text-slate-700 uppercase font-bold sticky top-0">
+                  <tr>
+                    <th class="p-2">NPM</th>
+                    <th class="p-2">Nama Lengkap</th>
+                    <th class="p-2">Prodi</th>
+                    <th class="p-2">Kelas</th>
+                    <th class="p-2">Angkatan</th>
+                    <th class="p-2">Semester Aktif</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${mhsList.length === 0 ? '<tr><td colspan="6" class="p-3 text-center text-slate-400">Belum ada data mahasiswa</td></tr>' : mhsList.map(m => `
+                    <tr class="hover:bg-blue-50/30">
+                      <td class="p-2 font-mono font-bold text-blue-900">${m.NPM || m.Username || '-'}</td>
+                      <td class="p-2 font-bold text-slate-800">${m['Nama Lengkap'] || m.Nama || '-'}</td>
+                      <td class="p-2"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-900">${m['Kode Prodi'] || m.Prodi || '-'}</span></td>
+                      <td class="p-2 text-slate-600">${m.Kelas || '-'}</td>
+                      <td class="p-2 font-mono font-semibold">${m.Angkatan || '-'}</td>
+                      <td class="p-2"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">${m.Semester || calculateSemesterFromAngkatan(m.Angkatan)}</span></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
           <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
             <h4 class="font-bold text-xs uppercase text-slate-700"><i class="fas fa-graduation-cap text-blue-900"></i> Master Program Studi</h4>
             <div class="overflow-x-auto max-h-48">
@@ -3790,7 +4286,21 @@
             <h4 class="font-bold text-xs uppercase text-slate-700"><i class="fas fa-book text-emerald-600"></i> Master Mata Kuliah</h4>
             <div class="overflow-x-auto max-h-48">
               <table class="w-full text-xs text-left"><thead class="bg-slate-100"><tr><th class="p-2">Kode</th><th class="p-2">Matkul</th></tr></thead>
-              <tbody>${(master.matkul || []).map(m => `<tr><td class="p-2 font-mono">${m['Kode Matkul']}</td><td class="p-2">${m['Nama Mata Kuliah']}</td></tr>`).join('')}</tbody></table>
+              <tbody>${(master.matkul || []).map(m => `<tr><td class="p-2 font-mono">${m['Kode Matkul'] || m.Kode || '-'}</td><td class="p-2">${m['Nama Mata Kuliah'] || m.Nama || '-'}</td></tr>`).join('')}</tbody></table>
+            </div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+            <h4 class="font-bold text-xs uppercase text-slate-700"><i class="fas fa-chalkboard-user text-indigo-600"></i> Master Kelas</h4>
+            <div class="overflow-x-auto max-h-48">
+              <table class="w-full text-xs text-left"><thead class="bg-slate-100"><tr><th class="p-2">Kelas</th><th class="p-2">Kategori</th><th class="p-2">Prodi</th></tr></thead>
+              <tbody>${kelasList.map(k => `<tr><td class="p-2 font-bold">${k['Nama Kelas'] || k.Kelas}</td><td class="p-2">${k.Kategori || '-'}</td><td class="p-2 font-mono">${k['Kode Prodi'] || '-'}</td></tr>`).join('')}</tbody></table>
+            </div>
+          </div>
+          <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-2">
+            <h4 class="font-bold text-xs uppercase text-slate-700"><i class="fas fa-user-tie text-purple-600"></i> Master Dosen</h4>
+            <div class="overflow-x-auto max-h-48">
+              <table class="w-full text-xs text-left"><thead class="bg-slate-100"><tr><th class="p-2">Nama Dosen</th><th class="p-2">Prodi</th></tr></thead>
+              <tbody>${dosenList.map(d => `<tr><td class="p-2 font-semibold">${d['Nama Dosen'] || d.Nama}</td><td class="p-2 font-mono">${d['Kode Prodi'] || '-'}</td></tr>`).join('')}</tbody></table>
             </div>
           </div>
         `;
@@ -5740,6 +6250,15 @@
         sampleData = [
           ['2026-10-20', '08:00', '09:30', 'R.101', 'MNJ', 'Manajemen', 'Semester 3', 'Reguler 3A', 'Manajemen Keuangan', 'Dr. Agung Wibowo, S.E., M.M.', 'UTS Susulan', 'Membawa kartu ujian']
         ];
+      } else if (target === 'User_Mahasiswa') {
+        headers = ['Nama Lengkap', 'NPM', 'Kelas', 'Angkatan', 'Program Studi', 'Password'];
+        sampleData = [
+          ['Rizky Pratama Putra', '2311010012', 'Reguler 3A', 2023, 'Manajemen', '123456'],
+          ['Siti Nurhaliza Zahra', '2311020045', 'Reguler 5B', 2023, 'Akuntansi', '123456'],
+          ['M. Farhan Ramadhan', '2411030019', 'Reguler 1A', 2024, 'Bisnis Digital', '123456'],
+          ['Nabila Putri Maharani', '2411040008', 'Reguler 1B', 2024, 'Perdagangan Internasional', '123456'],
+          ['Denia Ayu Wardani', '2411050022', 'Reguler 1A', 2024, 'Perbankan Digital', '123456']
+        ];
       } else {
         headers = ['Tanggal', 'NPM', 'Nama Mahasiswa', 'Program Studi', 'Kelas', 'Semester', 'Layanan', 'Mata Kuliah', 'Dosen Pengampu', 'Nominal', 'Status Bayar', 'Status Persetujuan'];
         sampleData = [
@@ -5794,6 +6313,30 @@
             const btn = document.getElementById('btnExecuteExcelSync');
             if (btn) btn.disabled = true;
             return;
+          }
+
+          const targetSelect = document.getElementById('excelTargetSheet');
+          const target = targetSelect ? targetSelect.value : '';
+
+          // [OTOMASI KALKULASI SEMESTER UNTUK EXCEL USER MAHASISWA]
+          if (target === 'User_Mahasiswa') {
+            json.forEach((row, idx) => {
+              let angkatanVal = row['Angkatan'] || row['angkatan'] || row['Tahun Angkatan'];
+              const npmVal = String(row['NPM'] || row['npm'] || row['NIM'] || row['nim'] || '').trim();
+              if (!angkatanVal && npmVal) {
+                const m = npmVal.match(/^(\d{2})/);
+                if (m) angkatanVal = 2000 + parseInt(m[1], 10);
+              }
+              if (angkatanVal) {
+                row['Angkatan'] = parseInt(angkatanVal, 10);
+                row['Semester'] = calculateSemesterFromAngkatan(angkatanVal);
+              } else {
+                row['Semester'] = row['Semester'] || 'Semester 1';
+              }
+              if (!row['Role'] && !row['role']) {
+                row['Role'] = 'Mahasiswa';
+              }
+            });
           }
 
           uploadedParsedData = json;
