@@ -1752,21 +1752,39 @@
   <div id="modalExcelSync" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
     <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
-        <div>
-          <h3 class="text-base font-black text-slate-800"><i class="fas fa-file-excel text-emerald-700"></i> Sinkronisasi Data Excel / File Data (.xlsx / .csv)</h3>
-          <p class="text-xs text-slate-500">Unggah file Excel untuk append atau update langsung ke database website</p>
+        <div class="flex items-center space-x-2.5">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-lg">
+            <i class="fas fa-file-excel"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-black text-slate-800">Upload & Smart Sync Data Master / Spreadsheet</h3>
+            <p class="text-xs text-slate-500">Unggah file Excel untuk append atau update langsung ke database website</p>
+          </div>
         </div>
-        <button onclick="closeExcelSyncModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
+        <button onclick="closeExcelSyncModal()" class="text-slate-400 hover:text-slate-600 p-1.5 cursor-pointer"><i class="fas fa-times text-base"></i></button>
       </div>
 
-      <div class="space-y-3.5 text-xs">
-        <div>
-          <label class="block font-bold text-slate-700 mb-1">Target Data Website</label>
-          <select id="excelTargetSheet" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white text-slate-800">
-            <option value="pendaftaran">1. Data Pendaftaran</option>
-            <option value="jadwal">2. Jadwal Ujian</option>
-            <option value="ruangan">3. Master Ruangan</option>
-          </select>
+      <div class="space-y-4 text-xs">
+        <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-2.5">
+          <div class="flex-1">
+            <label class="block font-bold text-slate-700 mb-1">Target Data Master / Website</label>
+            <select id="excelTargetSheet" onchange="handleTargetSheetChange()" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-bold bg-white text-slate-800 focus:ring-2 focus:ring-blue-900">
+              <optgroup label="Data Master Akademik (Eksklusif Master Admin & TU)">
+                <option value="Master_Matkul" selected>Master Mata Kuliah (Master_Matkul)</option>
+                <option value="Master_Kelas">Master Kelas (Master_Kelas)</option>
+                <option value="Master_Dosen">Master Dosen (Master_Dosen)</option>
+                <option value="Master_Ruangan">Master Ruangan (Master_Ruangan)</option>
+              </optgroup>
+              <optgroup label="Data Operasional Akademik">
+                <option value="Jadwal_Ujian">Jadwal Ujian (Jadwal_Ujian)</option>
+                <option value="Pendaftaran">Data Pendaftaran (Pendaftaran)</option>
+              </optgroup>
+            </select>
+          </div>
+          <button type="button" onclick="downloadMasterTemplate()" class="shrink-0 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 transition shadow-2xs cursor-pointer">
+            <i class="fas fa-download text-emerald-600"></i>
+            <span>Unduh Template Excel</span>
+          </button>
         </div>
 
         <div class="border-2 border-dashed border-slate-300 rounded-2xl p-6 text-center hover:border-emerald-600 transition-colors bg-slate-50/50">
@@ -1776,17 +1794,27 @@
               <i class="fas fa-cloud-arrow-up"></i>
             </div>
             <p class="font-bold text-slate-800">Pilih File Excel (.xlsx, .xls) atau CSV</p>
-            <p class="text-[11px] text-slate-500">Sistem memvalidasi baris data secara otomatis</p>
+            <p class="text-[11px] text-slate-500">Sistem memvalidasi dan mempratinjau baris data secara otomatis di memori browser</p>
           </label>
         </div>
 
         <div id="excelPreviewContainer" class="hidden space-y-2 border border-slate-200 rounded-2xl p-3 bg-white">
-          <span id="excelFileStats" class="font-bold text-emerald-800 text-xs">File siap disinkronkan</span>
+          <div id="excelFileStats" class="font-bold text-emerald-800 text-xs">File siap disinkronkan</div>
+          <div class="overflow-x-auto max-h-48 border border-slate-200 rounded-xl">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead id="excelPreviewTableHead" class="sticky top-0 bg-slate-100"></thead>
+              <tbody id="excelPreviewTableBody" class="divide-y divide-slate-100 font-medium"></tbody>
+            </table>
+          </div>
+          <p class="text-[10px] text-slate-400 italic">* Menampilkan pratinjau 4 baris data pertama dari file yang dipilih.</p>
         </div>
 
         <div class="flex justify-end space-x-2 pt-2 border-t border-slate-100">
           <button type="button" onclick="closeExcelSyncModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100">Tutup</button>
-          <button type="button" id="btnExecuteExcelSync" onclick="executeExcelSync()" disabled class="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 shadow-md">Mulai Sinkronisasi Data</button>
+          <button type="button" id="btnExecuteExcelSync" onclick="executeExcelSync()" disabled class="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-50 shadow-md flex items-center gap-1.5 cursor-pointer">
+            <i class="fas fa-cloud-arrow-up"></i>
+            <span>Mulai Sinkronisasi Data</span>
+          </button>
         </div>
       </div>
     </div>
@@ -5629,9 +5657,10 @@
     }
 
     // ==========================================
-    // [UPLOAD & SYNC EXCEL]
+    // [UPLOAD & SMART SYNC DATA MASTER / EXCEL]
     // ==========================================
     let uploadedExcelFile = null;
+    let uploadedParsedData = [];
 
     function openExcelSyncModal() {
       const modal = document.getElementById('modalExcelSync');
@@ -5640,8 +5669,15 @@
         modal.classList.add('flex');
         const prev = document.getElementById('excelPreviewContainer');
         if (prev) prev.classList.add('hidden');
+        const fileInput = document.getElementById('excelFileInput');
+        if (fileInput) fileInput.value = '';
+        uploadedExcelFile = null;
+        uploadedParsedData = [];
         const btn = document.getElementById('btnExecuteExcelSync');
-        if (btn) btn.disabled = true;
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<i class="fas fa-cloud-arrow-up"></i><span>Mulai Sinkronisasi Data</span>';
+        }
       }
     }
 
@@ -5653,39 +5689,220 @@
       }
     }
 
+    function handleTargetSheetChange() {
+      if (uploadedExcelFile && uploadedParsedData.length > 0) {
+        renderExcelUploadPreview(uploadedExcelFile, uploadedParsedData);
+      }
+    }
+
+    function downloadMasterTemplate() {
+      const select = document.getElementById('excelTargetSheet');
+      const target = select ? select.value : 'Master_Matkul';
+      let headers = [];
+      let sampleData = [];
+      let filename = `Template_${target}_FEB_UIKA.xlsx`;
+
+      if (target === 'Master_Matkul') {
+        headers = ['Kode Matkul', 'Nama Mata Kuliah', 'SKS', 'Kode Prodi'];
+        sampleData = [
+          ['MNJ-101', 'Pengantar Manajemen', 3, 'MNJ'],
+          ['AKT-201', 'Akuntansi Keuangan Menengah', 3, 'AKT'],
+          ['BD-102', 'Dasar Pemrograman Bisnis Digital', 3, 'BD'],
+          ['PI-105', 'Hukum Perdagangan Internasional', 3, 'PI'],
+          ['PKD-103', 'Manajemen Perbankan Digital', 3, 'PKD']
+        ];
+      } else if (target === 'Master_Kelas') {
+        headers = ['Nama Kelas', 'Kategori', 'Semester', 'Kode Prodi'];
+        sampleData = [
+          ['Reguler 1A', 'Reguler', 'Semester 1', 'MNJ'],
+          ['Reguler 3B', 'Reguler', 'Semester 3', 'AKT'],
+          ['Reguler 5A', 'Reguler', 'Semester 5', 'BD'],
+          ['Karyawan 3A', 'Karyawan', 'Semester 3', 'PI'],
+          ['Reguler 3A', 'Reguler', 'Semester 3', 'PKD']
+        ];
+      } else if (target === 'Master_Dosen') {
+        headers = ['NIK/NIDN', 'Nama Dosen', 'Kode Prodi'];
+        sampleData = [
+          ['198501012010121001', 'Dr. Muhamad Azis Firdaus, S.E., M.M.', 'MNJ'],
+          ['197911042006042001', 'Dr. Desmy Riani, S.E., M.Ak.', 'AKT'],
+          ['198207192008011004', 'Hendri Maulana, S.E., M.M.', 'BD'],
+          ['198403152010121002', 'Hurriyaturrohman, S.E., M.M.', 'PI'],
+          ['198302172008122002', 'Denia Maulani, S.E., M.M.', 'PKD']
+        ];
+      } else if (target === 'Master_Ruangan') {
+        headers = ['Kode Ruangan', 'Nama Ruangan', 'Kapasitas', 'Gedung', 'Keterangan'];
+        sampleData = [
+          ['R.301', 'Ruang Teori 301', 40, 'Gedung FEB Lt. 3', 'AC, Proyektor LCD, Whiteboard'],
+          ['LAB-KOM-3', 'Laboratorium Komputer 3', 35, 'Gedung FEB Lt. 3', '35 Unit PC Core i7, LAN, AC']
+        ];
+      } else if (target === 'Jadwal_Ujian') {
+        headers = ['Tanggal Ujian', 'Jam Mulai', 'Jam Selesai', 'Ruangan', 'Kode Prodi', 'Program Studi', 'Semester', 'Kelas', 'Mata Kuliah', 'Dosen Pengampu', 'Jenis Ujian', 'Keterangan'];
+        sampleData = [
+          ['2026-10-20', '08:00', '09:30', 'R.101', 'MNJ', 'Manajemen', 'Semester 3', 'Reguler 3A', 'Manajemen Keuangan', 'Dr. Agung Wibowo, S.E., M.M.', 'UTS Susulan', 'Membawa kartu ujian']
+        ];
+      } else {
+        headers = ['Tanggal', 'NPM', 'Nama Mahasiswa', 'Program Studi', 'Kelas', 'Semester', 'Layanan', 'Mata Kuliah', 'Dosen Pengampu', 'Nominal', 'Status Bayar', 'Status Persetujuan'];
+        sampleData = [
+          ['2026-10-15', '2311010012', 'Rizky Pratama Putra', 'Manajemen', 'Reguler 3A', 'Semester 3', 'UTS Susulan', 'Manajemen Keuangan', 'Dr. Agung Wibowo, S.E., M.M.', 0, 'Gratis (Tepat Waktu)', 'Disetujui']
+        ];
+      }
+
+      if (typeof XLSX === 'undefined') {
+        Swal.fire('Error', 'Pustaka pembuat file Excel belum siap.', 'error');
+        return;
+      }
+
+      try {
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...sampleData]);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, target.slice(0, 31));
+        XLSX.writeFile(wb, filename);
+
+        Swal.fire({
+          title: 'Template Berhasil Diunduh!',
+          text: `Template Excel resmi (${filename}) telah diunduh. Silakan lengkapi data dan unggah kembali pada menu ini.`,
+          icon: 'success',
+          timer: 2500,
+          showConfirmButton: false
+        });
+      } catch (err) {
+        Swal.fire('Gagal Mengunduh', err.message || String(err), 'error');
+      }
+    }
+
     function handleExcelFileSelect(e) {
       const file = e.target.files && e.target.files[0];
       if (!file) return;
       uploadedExcelFile = file;
-      const stats = document.getElementById('excelFileStats');
+
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          if (typeof XLSX === 'undefined') {
+            throw new Error('Pustaka XLSX belum tersedia.');
+          }
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+          if (!json || json.length === 0) {
+            Swal.fire('File Kosong', 'File Excel yang dipilih tidak memiliki baris data.', 'warning');
+            const prev = document.getElementById('excelPreviewContainer');
+            if (prev) prev.classList.add('hidden');
+            const btn = document.getElementById('btnExecuteExcelSync');
+            if (btn) btn.disabled = true;
+            return;
+          }
+
+          uploadedParsedData = json;
+          renderExcelUploadPreview(file, json);
+        } catch (err) {
+          Swal.fire('Format Tidak Didukung', 'Gagal membaca file Excel/CSV: ' + err.message, 'error');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function renderExcelUploadPreview(file, rows) {
       const container = document.getElementById('excelPreviewContainer');
+      const stats = document.getElementById('excelFileStats');
+      const tableHead = document.getElementById('excelPreviewTableHead');
+      const tableBody = document.getElementById('excelPreviewTableBody');
       const btn = document.getElementById('btnExecuteExcelSync');
-      if (stats) stats.innerText = `File Terpilih: ${file.name} (${Math.round(file.size / 1024)} KB) - Siap disinkronkan ke database website`;
-      if (container) container.classList.remove('hidden');
-      if (btn) btn.disabled = false;
+      const targetSelect = document.getElementById('excelTargetSheet');
+      const targetName = targetSelect ? targetSelect.options[targetSelect.selectedIndex].text : 'Data Master';
+
+      if (!container) return;
+      container.classList.remove('hidden');
+
+      if (stats) {
+        stats.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200">
+            <div class="flex items-center gap-2">
+              <i class="fas fa-file-excel text-emerald-600 text-xl"></i>
+              <div>
+                <b class="text-slate-800 text-xs block">${file.name}</b>
+                <span class="text-[11px] text-slate-500">${(file.size / 1024).toFixed(1)} KB · <b>${rows.length}</b> baris terdeteksi</span>
+              </div>
+            </div>
+            <span class="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-1 rounded-lg">
+              <i class="fas fa-check-circle"></i> Siap disinkronkan ke ${targetName}
+            </span>
+          </div>
+        `;
+      }
+
+      if (rows.length > 0 && tableHead && tableBody) {
+        const sample = rows[0];
+        const keys = Object.keys(sample);
+        tableHead.innerHTML = '<tr><th class="p-2 border border-slate-200 bg-slate-100 text-center text-[10px] w-8">#</th>' + 
+          keys.map(k => `<th class="p-2 border border-slate-200 bg-slate-100 text-left font-bold text-[11px] whitespace-nowrap text-slate-700">${k}</th>`).join('') + '</tr>';
+
+        const previewRows = rows.slice(0, 4);
+        tableBody.innerHTML = previewRows.map((r, idx) => {
+          const cells = keys.map(k => `<td class="p-2 border border-slate-200 text-[11px] whitespace-nowrap text-slate-700">${r[k] !== undefined ? r[k] : ''}</td>`).join('');
+          return `<tr class="hover:bg-slate-50"><td class="p-2 border border-slate-200 text-center text-slate-400 font-mono text-[10px]">${idx + 1}</td>${cells}</tr>`;
+        }).join('');
+      }
+
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fas fa-cloud-arrow-up"></i><span>Mulai Sinkronisasi (${rows.length} Baris Data)</span>`;
+      }
     }
 
     function executeExcelSync() {
-      if (!uploadedExcelFile) {
-        Swal.fire('Info', 'Silakan pilih file Excel terlebih dahulu.', 'info');
+      if (!uploadedParsedData || uploadedParsedData.length === 0) {
+        Swal.fire('Info', 'Silakan pilih dan muat file Excel terlebih dahulu.', 'info');
         return;
       }
-      const targetSheet = document.getElementById('excelTargetSheet')?.value || 'pendaftaran';
+
+      const targetSheet = document.getElementById('excelTargetSheet')?.value || 'Master_Matkul';
       const btn = document.getElementById('btnExecuteExcelSync');
+      const actor = currentUser ? (currentUser.nama || currentUser.username || 'Admin TU') : 'Admin TU';
+
       if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Menyinkronkan...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i> Menyinkronkan ke Database...';
       }
 
-      setTimeout(() => {
+      const onSyncSuccess = function(res) {
         if (btn) {
           btn.disabled = false;
-          btn.innerHTML = 'Mulai Sinkronisasi Data';
+          btn.innerHTML = `<i class="fas fa-cloud-arrow-up"></i><span>Mulai Sinkronisasi (${uploadedParsedData.length} Baris Data)</span>`;
         }
-        closeExcelSyncModal();
-        Swal.fire('Sinkronisasi Sukses', `File ${uploadedExcelFile.name} berhasil disinkronkan ke database website!`, 'success');
-        loadAppData();
-      }, 1200);
+        if (res && res.success) {
+          closeExcelSyncModal();
+          Swal.fire({
+            title: 'Sinkronisasi Berhasil!',
+            text: res.message || `Data ${targetSheet} (${uploadedParsedData.length} baris) berhasil disinkronkan ke database website.`,
+            icon: 'success',
+            confirmButtonColor: '#1e3a8a'
+          });
+          loadAppData();
+        } else {
+          Swal.fire('Sinkronisasi Gagal', (res && res.message) || 'Terjadi kesalahan sistem saat menyimpan data.', 'error');
+        }
+      };
+
+      const onSyncError = function(err) {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<i class="fas fa-cloud-arrow-up"></i><span>Mulai Sinkronisasi (${uploadedParsedData.length} Baris Data)</span>`;
+        }
+        Swal.fire('Error Sistem', err?.message || String(err), 'error');
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(onSyncSuccess)
+          .withFailureHandler(onSyncError)
+          .batchSyncMasterData(targetSheet, uploadedParsedData, actor);
+      } else {
+        callGasApi('batchSyncMasterData', [targetSheet, uploadedParsedData, actor], onSyncSuccess, onSyncError);
+      }
     }
 
     // ==========================================
