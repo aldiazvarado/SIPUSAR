@@ -152,13 +152,36 @@ function setupDatabase() {
 
   // 5.c POPULATE SHEET: Master_Matkul
   populateSheetData(ss, 'Master_Matkul',
-    ["ID", "Kode Matkul", "Nama Mata Kuliah", "SKS", "Kode Prodi"],
+    ["ID", "Kode Matkul", "Nama Mata Kuliah", "SKS", "Kode Prodi", "Dosen Pengampu"],
     [
-      ["MKL-001", "MNJ-101", "Pengantar Manajemen", 3, "MNJ"],
-      ["MKL-002", "AKT-201", "Akuntansi Keuangan Menengah", 3, "AKT"],
-      ["MKL-003", "BD-102", "Dasar Pemrograman Bisnis Digital", 3, "BD"],
-      ["MKL-004", "PI-105", "Hukum Perdagangan Internasional", 3, "PI"],
-      ["MKL-005", "PKD-103", "Manajemen Perbankan Digital", 3, "PKD"]
+      // MNJ
+      ["MKL-001", "MNJ-101", "Pengantar Manajemen", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M."],
+      ["MKL-002", "MNJ-201", "Manajemen Keuangan", 3, "MNJ", "Dr. Agung Wibowo, S.E., M.M."],
+      ["MKL-003", "MNJ-202", "Manajemen Pemasaran", 3, "MNJ", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M."],
+      ["MKL-004", "MNJ-203", "Manajemen Operasional", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M."],
+      ["MKL-005", "MNJ-204", "Matematika Bisnis", 3, "MNJ", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M."],
+      ["MKL-006", "MNJ-301", "Manajemen Strategik", 3, "MNJ", "Dr. Agung Wibowo, S.E., M.M."],
+      ["MKL-007", "MNJ-302", "Perilaku Organisasi", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M."],
+      // AKT
+      ["MKL-008", "AKT-101", "Pengantar Akuntansi I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak."],
+      ["MKL-009", "AKT-102", "Pengantar Akuntansi II", 3, "AKT", "Siti Aisyah, S.E., M.Ak., Ak., CA."],
+      ["MKL-010", "AKT-201", "Akuntansi Keuangan Menengah I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak."],
+      ["MKL-011", "AKT-202", "Akuntansi Keuangan Menengah II", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak."],
+      ["MKL-012", "AKT-203", "Akuntansi Biaya", 3, "AKT", "Siti Aisyah, S.E., M.Ak., Ak., CA."],
+      ["MKL-013", "AKT-301", "Perpajakan & Auditing I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak."],
+      // BD
+      ["MKL-014", "BD-101", "Dasar Pemrograman Bisnis Digital", 3, "BD", "Hendri Maulana, S.E., M.M."],
+      ["MKL-015", "BD-201", "Big Data untuk Bisnis", 3, "BD", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom."],
+      ["MKL-016", "BD-202", "E-Commerce & Digital Marketing", 3, "BD", "Hendri Maulana, S.E., M.M."],
+      ["MKL-017", "BD-301", "Fintech & Blockchain Business", 3, "BD", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom."],
+      // PI
+      ["MKL-018", "PI-101", "Hukum Perdagangan Internasional", 3, "PI", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB."],
+      ["MKL-019", "PI-201", "Ekspor Impor & Kepabeanan", 3, "PI", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB."],
+      ["MKL-020", "PI-202", "Logistik & Supply Chain Global", 3, "PI", "Dr. Bambang Wahyudi, S.E., M.M."],
+      // PKD
+      ["MKL-021", "PKD-101", "Manajemen Perbankan Digital", 3, "PKD", "Denia Maulani, S.E., M.M."],
+      ["MKL-022", "PKD-201", "Analisis Kredit & Risiko Finansial", 3, "PKD", "Denia Maulani, S.E., M.M."],
+      ["MKL-023", "PKD-202", "Operasional Lembaga Keuangan Syariah", 3, "PKD", "Ahmad Fauzi, S.E., M.E.Sy."]
     ]
   );
 
@@ -167,10 +190,16 @@ function setupDatabase() {
     ["ID", "NIK/NIDN", "Nama Dosen", "Kode Prodi"],
     [
       ["DSN-001", "198501012010121001", "Dr. Muhamad Azis Firdaus, S.E., M.M.", "MNJ"],
-      ["DSN-002", "197911042006042001", "Dr. Desmy Riani, S.E., M.Ak.", "AKT"],
-      ["DSN-003", "198207192008011004", "Hendri Maulana, S.E., M.M.", "BD"],
-      ["DSN-004", "198403152010121002", "Hurriyaturrohman, S.E., M.M.", "PI"],
-      ["DSN-005", "198302172008122002", "Denia Maulani, S.E., M.M.", "PKD"]
+      ["DSN-002", "198004122005011002", "Dr. Agung Wibowo, S.E., M.M.", "MNJ"],
+      ["DSN-003", "197008151996032001", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.", "MNJ"],
+      ["DSN-004", "197911042006042001", "Dr. Desmy Riani, S.E., M.Ak.", "AKT"],
+      ["DSN-005", "198602282012122003", "Siti Aisyah, S.E., M.Ak., Ak., CA.", "AKT"],
+      ["DSN-006", "198207192008011004", "Hendri Maulana, S.E., M.M.", "BD"],
+      ["DSN-007", "198811102014041002", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.", "BD"],
+      ["DSN-008", "198403152010121002", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.", "PI"],
+      ["DSN-009", "197509202002121001", "Dr. Bambang Wahyudi, S.E., M.M.", "PI"],
+      ["DSN-010", "198302172008122002", "Denia Maulani, S.E., M.M.", "PKD"],
+      ["DSN-011", "198705142015031003", "Ahmad Fauzi, S.E., M.E.Sy.", "PKD"]
     ]
   );
 
