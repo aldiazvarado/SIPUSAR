@@ -86,6 +86,9 @@ function handleApiRequest(action, args) {
     addTahunAkademik: addTahunAkademik,
     updateTahunAkademik: updateTahunAkademik,
     deleteTahunAkademik: deleteTahunAkademik,
+    batchSyncMasterData: batchSyncMasterData,
+    addUserMahasiswa: addUserMahasiswa,
+    normalizeExistingClassesInSheet: normalizeExistingClassesInSheet,
     clearAllCache: clearAllCache,
     invalidateCache: invalidateCache,
     seedMockupData: seedMockupData
@@ -253,7 +256,7 @@ function getOrCreateSheet(ss, sheetName) {
     'Pendaftaran': ["ID", "Tanggal", "Tahun Akademik", "Semester", "NPM", "Nama Mahasiswa", "Kode Prodi", "Program Studi", "Kelas", "Kategori Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Layanan", "Alasan", "Bukti Foto", "Status Jadwal", "Nominal", "Status Pembayaran", "Status Persetujuan"],
     'Periode_Pendaftaran': ["ID", "Tahun Akademik", "Semester", "Jenis Layanan", "Kategori Kelas", "Tanggal & Jam Mulai", "Tanggal & Jam Selesai", "Mulai Terlambat", "Selesai Terlambat", "Biaya Keterlambatan", "Status"],
     'User_Staff': ["ID", "Username", "Password", "Role", "Nama Lengkap", "NIK", "Kode Prodi"],
-    'User_Mahasiswa': ["ID", "Username", "Password", "Role", "Nama Lengkap", "NPM", "Kode Prodi"],
+    'User_Mahasiswa': ["ID", "Username", "Password", "Role", "Nama Lengkap", "NPM", "Kode Prodi", "Kelas", "Angkatan", "Semester"],
     'Master_Ruangan': ["ID", "Kode Ruangan", "Nama Ruangan", "Kapasitas", "Gedung", "Keterangan"],
     'Jadwal_Ujian': ["ID", "Tanggal Ujian", "Jam Mulai", "Jam Selesai", "Ruangan", "Kode Prodi", "Program Studi", "Semester", "Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Ujian", "Keterangan"],
     'Master_Prodi': ["ID", "Kode Prodi", "Nama Prodi", "Jenjang"],
@@ -515,6 +518,168 @@ function getSheetData(sheetName) {
   }
 }
 
+// =========================================================================
+// [KALKULASI SEMESTER OTOMATIS]: Berdasarkan Angkatan & Tahun Akademik Aktif
+// =========================================================================
+function calculateSemesterFromAngkatanBackend(angkatanInput) {
+  try {
+    var angkatan = parseInt(angkatanInput, 10);
+    if (!angkatan || isNaN(angkatan)) return 'Semester 1';
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var taData = [];
+    try { taData = getSheetData('Master_Tahun_Akademik'); } catch(e) {}
+    var activeTA = (taData || []).find(function(t) {
+      return String(t.Status || t.status || '').toLowerCase() === 'aktif';
+    }) || (taData && taData[0]) || { 'Tahun Akademik': '2026/2027', 'Semester': 'Ganjil' };
+
+    var yearSource = activeTA['Tahun Akademik'] || '2026/2027';
+    var semSource = activeTA.Semester || 'Ganjil';
+
+    var startYear = 2026;
+    var matchYear = String(yearSource).match(/\d{4}/);
+    if (matchYear) startYear = parseInt(matchYear[0], 10);
+    var isGanjil = String(semSource).toLowerCase().indexOf('genap') === -1;
+
+    var diffYears = startYear - angkatan;
+    var semNum = 1;
+    if (diffYears >= 0) {
+      semNum = isGanjil ? (diffYears * 2 + 1) : (diffYears * 2 + 2);
+    } else {
+      semNum = 1;
+    }
+    return 'Semester ' + semNum;
+  } catch(e) {
+    return 'Semester 1';
+  }
+}
+
+// =========================================================================
+// [STANDARISASI & NORMALISASI KELAS]: Hapus Angka Semester (e.g. Reguler 3A -> Reguler A)
+// =========================================================================
+function normalizeClassName(cls) {
+  if (!cls) return 'Reguler A';
+  var str = String(cls).trim();
+  // Mengubah "Reguler 3A", "Reguler 1A", "Reguler 5B" -> "Reguler A", "Reguler B"
+  str = str.replace(/^(Reguler|Karyawan)\s*\d+([A-Za-z]+)/i, function(m, p1, p2) {
+    var cat = p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase();
+    return cat + ' ' + p2.toUpperCase();
+  });
+  // Mengubah "3A", "5B" -> "Reguler A", "Reguler B"
+  str = str.replace(/^\d+([A-Za-z]+)$/, function(m, p) {
+    return 'Reguler ' + p.toUpperCase();
+  });
+  // Memastikan format huruf kapital standar (e.g. "reguler a" -> "Reguler A")
+  str = str.replace(/^(Reguler|Karyawan)\s+([A-Za-z]+)$/i, function(m, p1, p2) {
+    var cat = p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase();
+    return cat + ' ' + p2.toUpperCase();
+  });
+  return str;
+}
+
+function detectCategoryFromClass(cls) {
+  if (!cls) return 'Reguler';
+  var str = String(cls).toLowerCase();
+  if (str.indexOf('karyawan') !== -1) return 'Karyawan';
+  return 'Reguler';
+}
+
+function normalizeExistingClassesInSheet() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) return { success: false, message: 'Spreadsheet tidak ditemukan.' };
+
+    var totalUpdated = 0;
+
+    // 1. Normalisasi User_Mahasiswa
+    var mhsSheet = ss.getSheetByName('User_Mahasiswa');
+    if (mhsSheet) {
+      var mhsData = mhsSheet.getDataRange().getValues();
+      if (mhsData.length > 1) {
+        var headers = mhsData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+        var colKelas = headers.indexOf('kelas');
+        if (colKelas !== -1) {
+          var updated = false;
+          for (var i = 1; i < mhsData.length; i++) {
+            var raw = String(mhsData[i][colKelas] || '');
+            var cleaned = normalizeClassName(raw);
+            if (raw !== cleaned) {
+              mhsData[i][colKelas] = cleaned;
+              updated = true;
+              totalUpdated++;
+            }
+          }
+          if (updated) {
+            mhsSheet.getDataRange().setValues(mhsData);
+          }
+        }
+      }
+    }
+
+    // 2. Normalisasi Master_Kelas
+    var klsSheet = ss.getSheetByName('Master_Kelas');
+    if (klsSheet) {
+      var klsData = klsSheet.getDataRange().getValues();
+      if (klsData.length > 1) {
+        var kHeaders = klsData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+        var colNama = kHeaders.indexOf('nama kelas');
+        if (colNama === -1) colNama = kHeaders.indexOf('kelas');
+        var colKat = kHeaders.indexOf('kategori');
+        if (colNama !== -1) {
+          var kUpdated = false;
+          for (var j = 1; j < klsData.length; j++) {
+            var rawKls = String(klsData[j][colNama] || '');
+            var cleanKls = normalizeClassName(rawKls);
+            if (rawKls !== cleanKls) {
+              klsData[j][colNama] = cleanKls;
+              if (colKat !== -1) klsData[j][colKat] = detectCategoryFromClass(cleanKls);
+              kUpdated = true;
+              totalUpdated++;
+            }
+          }
+          if (kUpdated) {
+            klsSheet.getDataRange().setValues(klsData);
+          }
+        }
+      }
+    }
+
+    // 3. Normalisasi Pendaftaran
+    var regSheet = ss.getSheetByName('Pendaftaran');
+    if (regSheet) {
+      var regData = regSheet.getDataRange().getValues();
+      if (regData.length > 1) {
+        var rHeaders = regData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+        var rColKelas = rHeaders.indexOf('kelas');
+        var rColKat = rHeaders.indexOf('kategori kelas');
+        if (rColKelas !== -1) {
+          var rUpdated = false;
+          for (var r = 1; r < regData.length; r++) {
+            var rRaw = String(regData[r][rColKelas] || '');
+            var rClean = normalizeClassName(rRaw);
+            if (rRaw !== rClean) {
+              regData[r][rColKelas] = rClean;
+              if (rColKat !== -1 && !regData[r][rColKat]) regData[r][rColKat] = detectCategoryFromClass(rClean);
+              rUpdated = true;
+              totalUpdated++;
+            }
+          }
+          if (rUpdated) {
+            regSheet.getDataRange().setValues(regData);
+          }
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Berhasil menormalisasi ' + totalUpdated + ' baris nama kelas di spreadsheet (Reguler 3A -> Reguler A).'
+    };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
 function loginUser(username, password) {
   try {
     var rawUser = String(username || '').trim();
@@ -591,6 +756,14 @@ function loginUser(username, password) {
     });
 
     if (foundMhs) {
+      var mhsAngkatan = foundMhs.Angkatan || foundMhs.angkatan || '';
+      var mhsSemester = foundMhs.Semester || foundMhs.semester || '';
+      if (!mhsSemester && mhsAngkatan) {
+        mhsSemester = calculateSemesterFromAngkatanBackend(mhsAngkatan);
+      }
+      var rawKelas = foundMhs.Kelas || foundMhs.kelas || 'Reguler A';
+      var cleanKls = normalizeClassName(rawKelas);
+      var mhsKatKelas = detectCategoryFromClass(cleanKls);
       return {
         success: true,
         user: {
@@ -599,7 +772,11 @@ function loginUser(username, password) {
           nama: foundMhs['Nama Lengkap'] || foundMhs.Username,
           kodeProdi: foundMhs['Kode Prodi'] || 'MNJ',
           prodi: foundMhs['Kode Prodi'] || 'MNJ',
-          npm: String(foundMhs.NPM || foundMhs.Username).trim()
+          npm: String(foundMhs.NPM || foundMhs.Username).trim(),
+          kelas: cleanKls,
+          kategoriKelas: mhsKatKelas,
+          angkatan: mhsAngkatan || 2024,
+          semester: mhsSemester || 'Semester 5'
         }
       };
     }
@@ -710,15 +887,24 @@ function loginUser(username, password) {
     }
 
     if (cleanUser === '123' || cleanUser === '2311010012' || cleanUser === 'mahasiswa' || /^\d{7,14}$/.test(cleanUser)) {
+      var npmVal = cleanUser === '123' ? '2311010012' : cleanUser;
+      var angkatanVal = 2023;
+      var matchA = npmVal.match(/^(\d{2})/);
+      if (matchA) angkatanVal = 2000 + parseInt(matchA[1], 10);
+      var semVal = calculateSemesterFromAngkatanBackend(angkatanVal);
       return {
         success: true,
         user: {
-          username: cleanUser === '123' ? '2311010012' : cleanUser,
+          username: npmVal,
           role: 'Mahasiswa',
           nama: 'Rizky Pratama Putra',
           kodeProdi: 'MNJ',
           prodi: 'Manajemen',
-          npm: cleanUser === '123' ? '2311010012' : cleanUser
+          npm: npmVal,
+          kelas: 'Reguler A',
+          kategoriKelas: 'Reguler',
+          angkatan: angkatanVal,
+          semester: semVal
         }
       };
     }
@@ -902,6 +1088,27 @@ function getInitialData(userRole, username, userProdi) {
     try { masterMatkul = getSheetData('Master_Matkul'); } catch(e) {}
     var masterKelas = [];
     try { masterKelas = getSheetData('Master_Kelas'); } catch(e) {}
+    if (!masterKelas || masterKelas.length === 0) {
+      masterKelas = [
+        { ID: 'KLS-001', 'Nama Kelas': 'Reguler A', Kategori: 'Reguler', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+        { ID: 'KLS-002', 'Nama Kelas': 'Reguler B', Kategori: 'Reguler', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+        { ID: 'KLS-003', 'Nama Kelas': 'Reguler C', Kategori: 'Reguler', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+        { ID: 'KLS-004', 'Nama Kelas': 'Karyawan A', Kategori: 'Karyawan', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+        { ID: 'KLS-005', 'Nama Kelas': 'Karyawan B', Kategori: 'Karyawan', Semester: 'Semua', 'Kode Prodi': 'ALL' }
+      ];
+    } else {
+      masterKelas = masterKelas.map(function(k) {
+        var cleanName = normalizeClassName(k['Nama Kelas'] || k.Kelas || '');
+        return {
+          ID: k.ID || 'KLS-00',
+          'Nama Kelas': cleanName,
+          Kategori: k.Kategori || detectCategoryFromClass(cleanName),
+          Semester: k.Semester || 'Semua',
+          'Kode Prodi': k['Kode Prodi'] || 'ALL'
+        };
+      });
+    }
+
     var masterDosen = [];
     try { masterDosen = getSheetData('Master_Dosen'); } catch(e) {}
     var periode = [];
@@ -922,6 +1129,14 @@ function getInitialData(userRole, username, userProdi) {
     }
     var pendaftaran = [];
     try { pendaftaran = getSheetData('Pendaftaran'); } catch(e) {}
+    if (pendaftaran && pendaftaran.length > 0) {
+      pendaftaran = pendaftaran.map(function(p) {
+        if (p.Kelas) p.Kelas = normalizeClassName(p.Kelas);
+        if (!p['Kategori Kelas'] && p.Kelas) p['Kategori Kelas'] = detectCategoryFromClass(p.Kelas);
+        return p;
+      });
+    }
+
     var activityLogs = [];
     try { activityLogs = getSheetData('Log_Aktivitas'); } catch(e) {}
 
@@ -929,12 +1144,28 @@ function getInitialData(userRole, username, userProdi) {
     try { ruangan = getSheetData('Master_Ruangan'); } catch(e) {}
     var jadwal = [];
     try { jadwal = getSheetData('Jadwal_Ujian'); } catch(e) {}
+    if (jadwal && jadwal.length > 0) {
+      jadwal = jadwal.map(function(j) {
+        if (j.Kelas) j.Kelas = normalizeClassName(j.Kelas);
+        return j;
+      });
+    }
+
     var notifikasi = [];
     try { notifikasi = getSheetData('Notifikasi'); } catch(e) {}
     var staffList = [];
     try { staffList = getSheetData('User_Staff'); } catch(e) {}
     var mhsList = [];
     try { mhsList = getSheetData('User_Mahasiswa'); } catch(e) {}
+    if (mhsList && mhsList.length > 0) {
+      mhsList = mhsList.map(function(m) {
+        if (m.Kelas) m.Kelas = normalizeClassName(m.Kelas);
+        return m;
+      });
+    }
+
+    // Jalankan normalisasi background ke sheet jika ada baris lama yang masih berformat "Reguler 3A"
+    try { normalizeExistingClassesInSheet(); } catch(e) {}
 
     var usersList = [];
     if (['Master Admin', 'Admin TU'].indexOf(userRole) !== -1) {
@@ -1220,6 +1451,9 @@ function addPendaftaran(payload) {
     var rowData = new Array(maxCol).fill('');
 
     var mhsNpm = payload.npm || payload.nim || '';
+    var cleanKelas = normalizeClassName(payload.kelas || 'Reguler A');
+    var cleanKategori = payload.kategoriKelas || detectCategoryFromClass(cleanKelas);
+
     rowData[0] = newId;
     rowData[1] = nowStr;
     rowData[2] = payload.tahunAkademik || '2026/2027';
@@ -1228,8 +1462,8 @@ function addPendaftaran(payload) {
     rowData[5] = payload.namaMahasiswa;
     rowData[6] = payload.kodeProdi || payload.prodi || 'MNJ';
     rowData[7] = payload.prodi || 'Manajemen';
-    rowData[8] = payload.kelas;
-    rowData[9] = payload.kategoriKelas || 'Reguler';
+    rowData[8] = cleanKelas;
+    rowData[9] = cleanKategori;
     rowData[10] = payload.mataKuliah;
     rowData[11] = payload.dosenPengampu;
     rowData[12] = payload.jenisLayanan;
@@ -1250,8 +1484,8 @@ function addPendaftaran(payload) {
     if (headerMap['Nama Mahasiswa']) rowData[headerMap['Nama Mahasiswa'] - 1] = payload.namaMahasiswa;
     if (headerMap['Kode Prodi']) rowData[headerMap['Kode Prodi'] - 1] = payload.kodeProdi || payload.prodi || 'MNJ';
     if (headerMap['Program Studi']) rowData[headerMap['Program Studi'] - 1] = payload.prodi || 'Manajemen';
-    if (headerMap['Kelas']) rowData[headerMap['Kelas'] - 1] = payload.kelas;
-    if (headerMap['Kategori Kelas']) rowData[headerMap['Kategori Kelas'] - 1] = payload.kategoriKelas || 'Reguler';
+    if (headerMap['Kelas']) rowData[headerMap['Kelas'] - 1] = cleanKelas;
+    if (headerMap['Kategori Kelas']) rowData[headerMap['Kategori Kelas'] - 1] = cleanKategori;
     if (headerMap['Mata Kuliah']) rowData[headerMap['Mata Kuliah'] - 1] = payload.mataKuliah;
     if (headerMap['Dosen Pengampu']) rowData[headerMap['Dosen Pengampu'] - 1] = payload.dosenPengampu;
     if (headerMap['Jenis Layanan']) rowData[headerMap['Jenis Layanan'] - 1] = payload.jenisLayanan;
@@ -1303,13 +1537,16 @@ function updatePendaftaran(payload) {
     }
 
     var mhsNpm = payload.npm || payload.nim;
+    var cleanUpKelas = normalizeClassName(payload.kelas);
+    var cleanUpKategori = payload.kategoriKelas || detectCategoryFromClass(cleanUpKelas);
+
     setCol('NPM', mhsNpm);
     setCol('NIM', mhsNpm);
     setCol('Nama Mahasiswa', payload.namaMahasiswa);
     setCol('Kode Prodi', payload.kodeProdi);
     setCol('Program Studi', payload.prodi);
-    setCol('Kelas', payload.kelas);
-    setCol('Kategori Kelas', payload.kategoriKelas || 'Reguler');
+    setCol('Kelas', cleanUpKelas);
+    setCol('Kategori Kelas', cleanUpKategori);
     setCol('Semester', payload.semester);
     setCol('Tahun Akademik', payload.tahunAkademik || '2026/2027');
     setCol('Mata Kuliah', payload.mataKuliah);
@@ -1993,6 +2230,265 @@ function deleteRuangan(id) {
     return { success: false, message: err.message };
   } finally {
     lock.releaseLock();
+  }
+}
+
+// =========================================================================
+// [SMART SYNC DATA MASTER]: Master_Matkul, Master_Kelas, Master_Dosen, Master_Ruangan
+// Sinkronisasi Cerdas: Update data jika cocok, Tambah baris baru jika unik
+// =========================================================================
+function batchSyncMasterData(sheetName, rows, actor) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return { success: false, message: 'Tidak ada baris data untuk disinkronkan.' };
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = getOrCreateSheet(ss, sheetName);
+    if (!sheet) throw new Error('Sheet ' + sheetName + ' tidak dapat diakses atau dibuat.');
+
+    var existingValues = sheet.getDataRange().getValues();
+    if (existingValues.length === 0) {
+      return { success: false, message: 'Header sheet belum terbentuk.' };
+    }
+
+    var headerRow = existingValues[0];
+    var headerMap = {};
+    for (var h = 0; h < headerRow.length; h++) {
+      var colName = String(headerRow[h] || '').trim().toLowerCase();
+      headerMap[colName] = h;
+    }
+
+    // Tentukan kolom identitas unik utama untuk mendeteksi data yang sudah ada (Key Column)
+    var keyColNames = [];
+    var prefix = 'DATA-';
+    if (sheetName === 'Master_Matkul') {
+      keyColNames = ['kode matkul', 'kodematkul', 'kode mata kuliah', 'id'];
+      prefix = 'MKL-';
+    } else if (sheetName === 'Master_Kelas') {
+      keyColNames = ['nama kelas', 'namakelas', 'kelas', 'id'];
+      prefix = 'KLS-';
+    } else if (sheetName === 'Master_Dosen') {
+      keyColNames = ['nik/nidn', 'nik', 'nidn', 'nama dosen', 'namadosen', 'id'];
+      prefix = 'DSN-';
+    } else if (sheetName === 'Master_Ruangan') {
+      keyColNames = ['kode ruangan', 'koderuangan', 'nama ruangan', 'id'];
+      prefix = 'RNG-';
+    } else if (sheetName === 'User_Mahasiswa') {
+      keyColNames = ['npm', 'username', 'nim', 'id'];
+      prefix = 'MHS-';
+    } else if (sheetName === 'Jadwal_Ujian') {
+      keyColNames = ['id'];
+      prefix = 'JDW-';
+    } else {
+      keyColNames = ['id'];
+      prefix = 'REC-';
+    }
+
+    // Cari indeks kolom kunci di sheet
+    var primaryKeyIndex = -1;
+    for (var k = 0; k < keyColNames.length; k++) {
+      if (headerMap[keyColNames[k]] !== undefined) {
+        primaryKeyIndex = headerMap[keyColNames[k]];
+        break;
+      }
+    }
+    if (primaryKeyIndex === -1) primaryKeyIndex = 0; // fallback ke kolom ID
+
+    // Petakan baris yang sudah ada berdasarkan primary key (lowercase, trimmed)
+    var existingRowMap = {};
+    for (var r = 1; r < existingValues.length; r++) {
+      var keyVal = String(existingValues[r][primaryKeyIndex] || '').trim().toLowerCase();
+      if (keyVal) {
+        existingRowMap[keyVal] = r + 1; // 1-indexed row number
+      }
+    }
+
+    var updatedCount = 0;
+    var insertedCount = 0;
+    var newRowsToAppend = [];
+    var maxIdNum = 1;
+
+    // Scan max numeric ID jika berformat PREFIX-000
+    for (var r = 1; r < existingValues.length; r++) {
+      var idVal = String(existingValues[r][0] || '').trim();
+      var match = idVal.match(/\d+$/);
+      if (match) {
+        var num = parseInt(match[0], 10);
+        if (num >= maxIdNum) maxIdNum = num + 1;
+      }
+    }
+
+    // Proses setiap baris data input
+    for (var i = 0; i < rows.length; i++) {
+      var item = rows[i];
+      if (!item || typeof item !== 'object') continue;
+
+      // Temukan nilai kunci baris ini
+      var itemKeyVal = '';
+      for (var k = 0; k < keyColNames.length; k++) {
+        var propKey = keyColNames[k];
+        for (var objKey in item) {
+          if (String(objKey).trim().toLowerCase() === propKey) {
+            itemKeyVal = String(item[objKey] || '').trim().toLowerCase();
+            break;
+          }
+        }
+        if (itemKeyVal) break;
+      }
+
+      // Khusus Master_Kelas: Otomasi standardisasi nama kelas tanpa angka dan kategori
+      if (sheetName === 'Master_Kelas') {
+        var rawKls = item['Nama Kelas'] || item['nama kelas'] || item['Kelas'] || item['kelas'] || 'Reguler A';
+        var cleanKls = normalizeClassName(rawKls);
+        var cleanKat = item['Kategori'] || item['kategori'] || detectCategoryFromClass(cleanKls);
+        item['Nama Kelas'] = cleanKls;
+        item['Kategori'] = cleanKat;
+        item['Semester'] = item['Semester'] || item['semester'] || 'Semua';
+        item['Kode Prodi'] = item['Kode Prodi'] || item['kode prodi'] || 'ALL';
+        if (!itemKeyVal) itemKeyVal = String(cleanKls).trim().toLowerCase();
+      }
+
+      // Khusus User_Mahasiswa: Otomasi kalkulasi field sebelum pemetaan kolom
+      if (sheetName === 'User_Mahasiswa') {
+        var rawNpm = item['NPM'] || item['npm'] || item['NIM'] || item['nim'] || item['Username'] || item['username'] || '';
+        var rawNama = item['Nama Lengkap'] || item['nama lengkap'] || item['Nama Mahasiswa'] || item['nama mahasiswa'] || item['Nama'] || item['nama'] || '';
+        var rawProdi = item['Kode Prodi'] || item['kode prodi'] || item['Program Studi'] || item['program studi'] || item['Prodi'] || item['prodi'] || 'MNJ';
+        var rawKelas = normalizeClassName(item['Kelas'] || item['kelas'] || 'Reguler A');
+        var rawAngkatan = item['Angkatan'] || item['angkatan'] || '';
+        if (!rawAngkatan && rawNpm && String(rawNpm).length >= 2) {
+          var firstTwo = String(rawNpm).substring(0, 2);
+          if (/^\d{2}$/.test(firstTwo)) rawAngkatan = '20' + firstTwo;
+        }
+        var rawSemester = item['Semester'] || item['semester'] || '';
+        if (!rawSemester && rawAngkatan) {
+          rawSemester = calculateSemesterFromAngkatanBackend(rawAngkatan);
+        }
+
+        item['Username'] = item['Username'] || item['username'] || rawNpm;
+        item['Password'] = item['Password'] || item['password'] || '123456';
+        item['Role'] = 'Mahasiswa';
+        item['Nama Lengkap'] = rawNama;
+        item['NPM'] = rawNpm;
+        item['Kode Prodi'] = rawProdi;
+        item['Kelas'] = rawKelas;
+        item['Angkatan'] = rawAngkatan;
+        item['Semester'] = rawSemester || 'Semester 1';
+        if (!itemKeyVal && rawNpm) itemKeyVal = String(rawNpm).trim().toLowerCase();
+      }
+
+      // Normalisasi nilai ke array sesuai urutan kolom header sheet
+      var mappedRow = new Array(headerRow.length);
+      for (var colIdx = 0; colIdx < headerRow.length; colIdx++) {
+        var hName = String(headerRow[colIdx] || '').trim();
+        var hNameLower = hName.toLowerCase();
+        var val = '';
+
+        for (var objKey in item) {
+          if (String(objKey).trim().toLowerCase() === hNameLower) {
+            val = item[objKey];
+            break;
+          }
+        }
+        if (val === undefined || val === null) val = '';
+        mappedRow[colIdx] = val;
+      }
+
+      // Cek apakah data ini sudah ada (Update) atau baru (Insert)
+      if (itemKeyVal && existingRowMap[itemKeyVal]) {
+        var targetSheetRowNum = existingRowMap[itemKeyVal];
+        // Pertahankan ID asli di kolom 0 jika input tidak menyediakannya
+        if (!mappedRow[0] && existingValues[targetSheetRowNum - 1][0]) {
+          mappedRow[0] = existingValues[targetSheetRowNum - 1][0];
+        }
+        sheet.getRange(targetSheetRowNum, 1, 1, mappedRow.length).setValues([mappedRow]);
+        updatedCount++;
+      } else {
+        // Baris baru (Insert)
+        if (!mappedRow[0]) {
+          mappedRow[0] = prefix + ('00' + maxIdNum).slice(-3);
+          maxIdNum++;
+        }
+        newRowsToAppend.push(mappedRow);
+        if (itemKeyVal) {
+          existingRowMap[itemKeyVal] = existingValues.length + newRowsToAppend.length;
+        }
+        insertedCount++;
+      }
+    }
+
+    // Append batch baris baru jika ada
+    if (newRowsToAppend.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, newRowsToAppend.length, headerRow.length).setValues(newRowsToAppend);
+    }
+
+    SpreadsheetApp.flush();
+    invalidateCache(sheetName);
+    bumpSyncVersion(actor || 'Admin', 'Sync ' + sheetName + ' (' + rows.length + ' data)');
+    addActivityLog(actor || 'Admin', 'Upload & Sync Data Master', sheetName, 'Berhasil menyinkronkan ' + rows.length + ' baris data (Diperbarui: ' + updatedCount + ', Baru: ' + insertedCount + ')', 'Admin');
+
+    return {
+      success: true,
+      message: 'Sinkronisasi berhasil! ' + updatedCount + ' data diperbarui, ' + insertedCount + ' data baru ditambahkan.',
+      sheetName: sheetName,
+      total: rows.length,
+      updatedCount: updatedCount,
+      insertedCount: insertedCount
+    };
+  } catch (err) {
+    return { success: false, message: 'Gagal menyinkronkan data: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+// =========================================================================
+// [MANAJEMEN PENGGUNA]: Tambah / Registrasi Mahasiswa Tunggal dari Admin
+// Otomatis menghitung semester berjalan berdasarkan Angkatan dan Tahun Akademik
+// =========================================================================
+function addUserMahasiswa(payload, actor) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var rawNpm = String(payload.npm || payload.username || '').trim();
+    if (!rawNpm) throw new Error('NPM Mahasiswa wajib diisi.');
+
+    var rawAngkatan = payload.angkatan;
+    if (!rawAngkatan && rawNpm.length >= 2) {
+      var prefixYear = rawNpm.substring(0, 2);
+      if (/^\d{2}$/.test(prefixYear)) rawAngkatan = '20' + prefixYear;
+    }
+    if (!rawAngkatan) rawAngkatan = '2024';
+
+    var rawSemester = payload.semester || calculateSemesterFromAngkatanBackend(rawAngkatan);
+
+    var studentRow = {
+      'Nama Lengkap': payload.nama || payload.namaMahasiswa || 'Mahasiswa FEB UIKA',
+      'NPM': rawNpm,
+      'Username': rawNpm,
+      'Password': payload.password || '123456',
+      'Role': 'Mahasiswa',
+      'Kode Prodi': payload.kodeProdi || payload.prodi || 'MNJ',
+      'Kelas': normalizeClassName(payload.kelas || 'Reguler A'),
+      'Angkatan': rawAngkatan,
+      'Semester': rawSemester
+    };
+
+    var syncRes = batchSyncMasterData('User_Mahasiswa', [studentRow], actor || 'Admin TU');
+    if (syncRes && syncRes.success) {
+      return {
+        success: true,
+        message: 'Mahasiswa ' + studentRow['Nama Lengkap'] + ' (' + rawNpm + ') berhasil disimpan dengan ' + rawSemester + '!',
+        data: studentRow
+      };
+    }
+    return syncRes;
+  } catch(err) {
+    return { success: false, message: 'Gagal menambah data mahasiswa: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
   }
 }
 

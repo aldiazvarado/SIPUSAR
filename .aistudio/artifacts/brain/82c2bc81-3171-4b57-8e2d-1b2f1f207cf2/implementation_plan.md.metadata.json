@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi integrasi dropdown Semester (Ganjil & Genap) pada Master Tahun Akademik dan penggantian opsi kelas 'Eksekutif' menjadi 'Reguler & Karyawan' (sehingga terdapat 3 opsi: Reguler, Karyawan, Reguler & Karyawan) yang tersinkronisasi 100% pada antarmuka pengguna, Google Apps Script, dan Google Spreadsheet.",
-  "updatedAt":  "2026-10-29T04:59:00.540488170Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "Rencana implementasi standardisasi nama kelas tanpa angka semester (Reguler A, B, C dan Karyawan A, B), pembersihan/normalisasi otomatis data kelas lama di spreadsheet, serta integrasi dan sinkronisasi dua arah antara Kelas (Master Data) dan Kategori Kelas pada form pendaftaran (termasuk autofill dan autolock untuk role Mahasiswa).",
+  "updatedAt": "2026-11-03T10:54:15.638779187Z",
+  "requestFeedback": true,
+  "userFacing": true
 }

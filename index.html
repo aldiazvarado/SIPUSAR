@@ -3,8 +3,6 @@
 <head>
   <script type="module" src="/@vite/client"></script>
 
-  <script type="module" src="/@vite/client"></script>
-
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Pendaftaran & Reporting Akademik - FEB UIKA Bogor</title>
@@ -149,7 +147,7 @@
       }
     }
   </style>
-<script src="/_aistudio-iframe.js?v=1f94f900"></script><script src="/_aistudio-iframe.js?v=1f94f900"></script></head>
+<script src="/_aistudio-iframe.js?v=1f94f900"></script></head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased">
 
   <!-- LOGIN CONTAINER -->
@@ -1355,11 +1353,11 @@
             </select>
           </div>
           <div>
-            <label id="labelKelasMaster" class="block font-bold text-slate-600 mb-1">Kelas (Master Data)</label>
+            <label id="labelKelasMaster" class="block font-bold text-slate-600 mb-1">Kelas (Master Data) <span id="badgeKelasLock" class="text-[10px] text-blue-800 font-bold"></span></label>
             <select id="pendaftaranKelas" required onchange="onKelasSelectionChange()" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold focus:ring-2 focus:ring-blue-900"></select>
           </div>
           <div>
-            <label class="block font-bold text-slate-600 mb-1">Kategori Kelas</label>
+            <label class="block font-bold text-slate-600 mb-1">Kategori Kelas <span id="badgeKategoriLock" class="text-[10px] text-blue-800 font-bold"></span></label>
             <select id="pendaftaranKategoriKelas" required onchange="onKategoriKelasChange()" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold focus:ring-2 focus:ring-blue-900">
               <option value="Reguler">Reguler</option>
               <option value="Karyawan">Karyawan</option>
@@ -2135,6 +2133,13 @@
           { 'ID': 'TA-01', 'Tahun': '2026/2027 Ganjil', 'Status': 'Aktif' },
           { 'ID': 'TA-02', 'Tahun': '2025/2026 Genap', 'Status': 'Selesai' }
         ],
+        kelas: [
+          { 'Nama Kelas': 'Reguler A', Kategori: 'Reguler', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+          { 'Nama Kelas': 'Reguler B', Kategori: 'Reguler', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+          { 'Nama Kelas': 'Reguler C', Kategori: 'Reguler', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+          { 'Nama Kelas': 'Karyawan A', Kategori: 'Karyawan', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+          { 'Nama Kelas': 'Karyawan B', Kategori: 'Karyawan', Semester: 'Semua', 'Kode Prodi': 'ALL' }
+        ],
         logs: [
           { ID: 'LOG-001', Waktu: '2026-10-16 09:30:15', Pengguna: 'Aldiaz Varado', Role: 'Master Admin', Aksi: 'LOGIN', Target: 'Sistem SIP-Akademik', Keterangan: 'Sesi aktif terotentikasi' }
         ]
@@ -2147,8 +2152,9 @@
           'Nama Mahasiswa': 'Rizky Pratama Putra',
           'Kode Prodi': 'MNJ',
           'Program Studi': 'Manajemen',
-          'Semester': 'Semester 3',
-          'Kelas': 'Reguler 3A',
+          'Semester': 'Semester 7',
+          'Kelas': 'Reguler A',
+          'Kategori Kelas': 'Reguler',
           'Mata Kuliah': 'Manajemen Keuangan',
           'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.',
           'Jenis Layanan': 'Susulan',
@@ -2166,8 +2172,9 @@
           'Nama Mahasiswa': 'Siti Nurhaliza',
           'Kode Prodi': 'AKT',
           'Program Studi': 'Akuntansi',
-          'Semester': 'Semester 5',
-          'Kelas': 'Reguler 5B',
+          'Semester': 'Semester 7',
+          'Kelas': 'Reguler B',
+          'Kategori Kelas': 'Reguler',
           'Mata Kuliah': 'Akuntansi Biaya Lanjutan',
           'Dosen Pengampu': 'Prof. Dr. Hendro Sasongko, M.M.',
           'Jenis Layanan': 'Remedial',
@@ -2185,8 +2192,9 @@
           'Nama Mahasiswa': 'Fajar Ramadhan',
           'Kode Prodi': 'EKS',
           'Program Studi': 'Ekonomi Syariah',
-          'Semester': 'Semester 3',
-          'Kelas': 'Reguler 3C',
+          'Semester': 'Semester 7',
+          'Kelas': 'Reguler C',
+          'Kategori Kelas': 'Reguler',
           'Mata Kuliah': 'Fiqih Muamalah Kontemporer',
           'Dosen Pengampu': 'Dr. Ahmad Fauzi, M.E.I.',
           'Jenis Layanan': 'Susulan',
@@ -2204,7 +2212,7 @@
           'Kode Prodi': 'MNJ',
           'Program Studi': 'Manajemen',
           'Semester': 'Semester 3',
-          'Kelas': 'Reguler 3A',
+          'Kelas': 'Reguler A',
           'Mata Kuliah': 'Manajemen Keuangan',
           'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.',
           'Tanggal Ujian': '2026-10-25',
@@ -2235,10 +2243,10 @@
         { ID: 'STF-002', Username: '410100242', Role: 'Admin TU', 'Nama Lengkap': 'Wawan Setiawan, M.Pd.', 'Kode Prodi': 'ALL' }
       ],
       users_mahasiswa: [
-        { ID: 'MHS-001', Username: '2311010012', Role: 'Mahasiswa', 'Nama Lengkap': 'Rizky Pratama Putra', NPM: '2311010012', 'Kode Prodi': 'MNJ', Kelas: 'Reguler 3A', Angkatan: 2023, Semester: 'Semester 7' },
-        { ID: 'MHS-002', Username: '2311020045', Role: 'Mahasiswa', 'Nama Lengkap': 'Siti Nurhaliza Zahra', NPM: '2311020045', 'Kode Prodi': 'AKT', Kelas: 'Reguler 5B', Angkatan: 2023, Semester: 'Semester 7' },
-        { ID: 'MHS-003', Username: '2411030019', Role: 'Mahasiswa', 'Nama Lengkap': 'M. Farhan Ramadhan', NPM: '2411030019', 'Kode Prodi': 'BD', Kelas: 'Reguler 1A', Angkatan: 2024, Semester: 'Semester 5' },
-        { ID: 'MHS-004', Username: '2411040008', Role: 'Mahasiswa', 'Nama Lengkap': 'Nabila Putri Maharani', NPM: '2411040008', 'Kode Prodi': 'PI', Kelas: 'Reguler 1B', Angkatan: 2024, Semester: 'Semester 5' }
+        { ID: 'MHS-001', Username: '2311010012', Role: 'Mahasiswa', 'Nama Lengkap': 'Rizky Pratama Putra', NPM: '2311010012', 'Kode Prodi': 'MNJ', Kelas: 'Reguler A', Angkatan: 2023, Semester: 'Semester 7' },
+        { ID: 'MHS-002', Username: '2311020045', Role: 'Mahasiswa', 'Nama Lengkap': 'Siti Nurhaliza Zahra', NPM: '2311020045', 'Kode Prodi': 'AKT', Kelas: 'Reguler B', Angkatan: 2023, Semester: 'Semester 7' },
+        { ID: 'MHS-003', Username: '2411030019', Role: 'Mahasiswa', 'Nama Lengkap': 'M. Farhan Ramadhan', NPM: '2411030019', 'Kode Prodi': 'BD', Kelas: 'Reguler A', Angkatan: 2024, Semester: 'Semester 5' },
+        { ID: 'MHS-004', Username: '2411040008', Role: 'Mahasiswa', 'Nama Lengkap': 'Nabila Putri Maharani', NPM: '2411040008', 'Kode Prodi': 'PI', Kelas: 'Reguler A', Angkatan: 2024, Semester: 'Semester 5' }
       ]
     };
 
@@ -2470,6 +2478,7 @@
       }
 
       let fallbackKelas = '';
+      let fallbackKategori = 'Reguler';
       let fallbackAngkatan = null;
       let fallbackSemester = '';
       if (fallbackRole === 'Mahasiswa') {
@@ -2478,13 +2487,15 @@
         if (found) {
           fallbackName = found['Nama Lengkap'] || found.Nama || fallbackName;
           fallbackProdi = found['Kode Prodi'] || fallbackProdi;
-          fallbackKelas = found['Kelas'] || found.Kelas || 'Reguler 3A';
+          fallbackKelas = normalizeClassNameClient(found['Kelas'] || found.Kelas || 'Reguler A');
+          fallbackKategori = detectCategoryFromClassClient(fallbackKelas);
           fallbackAngkatan = parseInt(found['Angkatan'] || found.Angkatan || '2023', 10);
           fallbackSemester = found['Semester'] || found.Semester || calculateSemesterFromAngkatan(fallbackAngkatan);
         } else {
           const matchAngkatan = fallbackNpm.match(/^(\d{2})/);
           fallbackAngkatan = matchAngkatan ? (2000 + parseInt(matchAngkatan[1], 10)) : 2023;
-          fallbackKelas = 'Reguler 3A';
+          fallbackKelas = 'Reguler A';
+          fallbackKategori = 'Reguler';
           fallbackSemester = calculateSemesterFromAngkatan(fallbackAngkatan);
         }
       }
@@ -2497,6 +2508,7 @@
         prodi: fallbackProdi,
         npm: fallbackNpm,
         kelas: fallbackKelas,
+        kategoriKelas: fallbackKategori,
         angkatan: fallbackAngkatan,
         semester: fallbackSemester
       };
@@ -3121,28 +3133,150 @@
       onProdiSelectionChange();
     }
 
+    // ==========================================
+    // [HELPER NORMALISASI KELAS & KATEGORI CLIENT-SIDE]
+    // ==========================================
+    function normalizeClassNameClient(cls) {
+      if (!cls) return 'Reguler A';
+      var s = String(cls).trim();
+      var regMatch = s.match(/^(Reguler|Karyawan)\s*\d+([A-Za-z]+)/i);
+      if (regMatch) {
+        var prefix = regMatch[1].charAt(0).toUpperCase() + regMatch[1].slice(1).toLowerCase();
+        return prefix + ' ' + regMatch[2].toUpperCase();
+      }
+      var numPrefixMatch = s.match(/^\d+([A-Za-z]+)$/);
+      if (numPrefixMatch) {
+        return 'Reguler ' + numPrefixMatch[1].toUpperCase();
+      }
+      return s;
+    }
+
+    function detectCategoryFromClassClient(cls) {
+      if (!cls) return 'Reguler';
+      var s = String(cls).toLowerCase();
+      if (s.indexOf('karyawan') !== -1) return 'Karyawan';
+      return 'Reguler';
+    }
+
+    function populateKelasDropdown(prodiCode, filterCategory, targetValue) {
+      const kSel = document.getElementById('pendaftaranKelas');
+      if (!kSel) return;
+      const master = appData.master || {};
+      let allKelas = master.kelas || [];
+      if (!allKelas || allKelas.length === 0) {
+        allKelas = [
+          { 'Nama Kelas': 'Reguler A', Kategori: 'Reguler', 'Kode Prodi': 'MNJ' },
+          { 'Nama Kelas': 'Reguler B', Kategori: 'Reguler', 'Kode Prodi': 'MNJ' },
+          { 'Nama Kelas': 'Reguler C', Kategori: 'Reguler', 'Kode Prodi': 'MNJ' },
+          { 'Nama Kelas': 'Karyawan A', Kategori: 'Karyawan', 'Kode Prodi': 'MNJ' },
+          { 'Nama Kelas': 'Karyawan B', Kategori: 'Karyawan', 'Kode Prodi': 'MNJ' }
+        ];
+      }
+
+      // Filter berdasarkan prodi (jika item master kelas menyertakan kode prodi spesifik)
+      let list = allKelas.filter(k => {
+        const kp = String(k['Kode Prodi'] || '').toUpperCase();
+        return !kp || kp === 'ALL' || kp === String(prodiCode || '').toUpperCase();
+      });
+      if (list.length === 0) list = allKelas;
+
+      // Filter berdasarkan Kategori Kelas (Reguler vs Karyawan)
+      if (filterCategory) {
+        const catTarget = String(filterCategory).toLowerCase();
+        const filteredByCat = list.filter(k => {
+          const cat = String(k.Kategori || detectCategoryFromClassClient(k['Nama Kelas'] || k.Kelas)).toLowerCase();
+          return cat === catTarget;
+        });
+        if (filteredByCat.length > 0) list = filteredByCat;
+      }
+
+      // Hilangkan duplikasi penamaan kelas
+      const uniqueMap = {};
+      const uniqueList = [];
+      list.forEach(k => {
+        const rawName = k['Nama Kelas'] || k.Kelas || '';
+        const cleanName = normalizeClassNameClient(rawName);
+        if (cleanName && !uniqueMap[cleanName]) {
+          uniqueMap[cleanName] = true;
+          uniqueList.push({
+            name: cleanName,
+            kategori: k.Kategori || detectCategoryFromClassClient(cleanName)
+          });
+        }
+      });
+
+      kSel.innerHTML = uniqueList.map(k => `<option value="${k.name}" data-kategori="${k.kategori}">${k.name}</option>`).join('');
+
+      if (targetValue) {
+        const cleanTarget = normalizeClassNameClient(targetValue);
+        let foundOption = Array.from(kSel.options).find(o => o.value === cleanTarget);
+        if (foundOption) {
+          kSel.value = cleanTarget;
+        } else {
+          const opt = document.createElement('option');
+          opt.value = cleanTarget;
+          opt.text = cleanTarget;
+          opt.setAttribute('data-kategori', detectCategoryFromClassClient(cleanTarget));
+          kSel.appendChild(opt);
+          kSel.value = cleanTarget;
+        }
+      }
+    }
+
     function onProdiSelectionChange() {
       const prodiCode = document.getElementById('pendaftaranProdi')?.value || 'MNJ';
       const master = appData.master || {};
-      const allKelas = master.kelas || [];
       const allMatkul = master.matkul || [];
 
-      const filteredKelas = allKelas.filter(k => String(k['Kode Prodi'] || '').toUpperCase() === prodiCode.toUpperCase());
-      const kSel = document.getElementById('pendaftaranKelas');
-      if (kSel) {
-        kSel.innerHTML = (filteredKelas.length > 0 ? filteredKelas : allKelas).map(k => `<option value="${k['Nama Kelas']}">${k['Nama Kelas']}</option>`).join('');
-      }
-
+      // Filter matkul berdasarkan prodi
       const filteredMatkul = allMatkul.filter(m => String(m['Kode Prodi'] || '').toUpperCase() === prodiCode.toUpperCase());
       const mSel = document.getElementById('pendaftaranMatkul');
       if (mSel) {
         mSel.innerHTML = (filteredMatkul.length > 0 ? filteredMatkul : allMatkul).map(m => `<option value="${m['Nama Mata Kuliah']}">${m['Nama Mata Kuliah']}</option>`).join('');
       }
+
+      // Sinkronkan dropdown kelas dengan kategori kelas yang aktif
+      const katSel = document.getElementById('pendaftaranKategoriKelas');
+      const currKat = katSel ? katSel.value : 'Reguler';
+      const kSel = document.getElementById('pendaftaranKelas');
+      const currKelas = kSel ? kSel.value : '';
+      populateKelasDropdown(prodiCode, currKat, currKelas);
+
       syncPeriodeToPendaftaran();
     }
 
-    function onKategoriKelasChange() { syncPeriodeToPendaftaran(); }
-    function onKelasSelectionChange() { syncPeriodeToPendaftaran(); }
+    function onKategoriKelasChange() {
+      const prodiCode = document.getElementById('pendaftaranProdi')?.value || 'MNJ';
+      const katSel = document.getElementById('pendaftaranKategoriKelas');
+      const selectedKat = katSel ? katSel.value : 'Reguler';
+      const kSel = document.getElementById('pendaftaranKelas');
+      const currentKelas = kSel ? kSel.value : '';
+
+      // Muat ulang dropdown kelas sesuai kategori yang dipilih
+      populateKelasDropdown(prodiCode, selectedKat, currentKelas);
+
+      // Verifikasi apakah kelas saat ini sesuai kategori, jika tidak sesuaikan ke opsi pertama
+      if (kSel && kSel.options.length > 0) {
+        const detectedOfCurrent = detectCategoryFromClassClient(kSel.value);
+        if (detectedOfCurrent !== selectedKat) {
+          kSel.selectedIndex = 0;
+        }
+      }
+      syncPeriodeToPendaftaran();
+    }
+
+    function onKelasSelectionChange() {
+      const kSel = document.getElementById('pendaftaranKelas');
+      const katSel = document.getElementById('pendaftaranKategoriKelas');
+      if (kSel && katSel && kSel.value) {
+        const chosenClass = kSel.value;
+        const autoCat = detectCategoryFromClassClient(chosenClass);
+        if (katSel.value !== autoCat) {
+          katSel.value = autoCat;
+        }
+      }
+      syncPeriodeToPendaftaran();
+    }
 
     function syncPeriodeToPendaftaran() {
       const periodes = (appData.master && appData.master.periode) ? appData.master.periode : [];
@@ -3217,9 +3351,9 @@
       
       const namaInput = document.getElementById('pendaftaranNama');
       const prodiSelect = document.getElementById('pendaftaranProdi');
-      const kelasSelect = document.getElementById('pendaftaranKelas');
       const angkatanInput = document.getElementById('pendaftaranAngkatan');
       const semInput = document.getElementById('pendaftaranSemesterKalkulasi');
+      const katSelect = document.getElementById('pendaftaranKategoriKelas');
 
       if (found) {
         if (namaInput && (!namaInput.value || namaInput.dataset.autoFilled === 'true')) {
@@ -3228,11 +3362,13 @@
         }
         if (prodiSelect && found['Kode Prodi']) {
           prodiSelect.value = found['Kode Prodi'];
-          onProdiSelectionChange();
         }
-        if (kelasSelect && found.Kelas) {
-          kelasSelect.value = found.Kelas;
-        }
+
+        const cleanKelas = normalizeClassNameClient(found.Kelas || 'Reguler A');
+        const autoKat = detectCategoryFromClassClient(cleanKelas);
+        if (katSelect) katSelect.value = autoKat;
+        populateKelasDropdown(prodiSelect ? prodiSelect.value : 'MNJ', autoKat, cleanKelas);
+
         let angkatan = found.Angkatan;
         if (!angkatan) {
           const match = clean.match(/^(\d{2})/);
@@ -3276,14 +3412,17 @@
       const angkatanInput = document.getElementById('pendaftaranAngkatan');
       const semKalkulasiInput = document.getElementById('pendaftaranSemesterKalkulasi');
       const kelasSelect = document.getElementById('pendaftaranKelas');
+      const kategoriSelect = document.getElementById('pendaftaranKategoriKelas');
 
       const badgeNpm = document.getElementById('badgeNpmLock');
       const badgeNama = document.getElementById('badgeNamaLock');
       const badgeProdi = document.getElementById('badgeProdiLock');
       const badgeAngkatan = document.getElementById('badgeAngkatanLock');
+      const badgeKelas = document.getElementById('badgeKelasLock');
+      const badgeKategori = document.getElementById('badgeKategoriLock');
 
       if (isMhs) {
-        // [POIN 3 & POIN 7]: Kunci input Nama, NPM, Program Studi, Angkatan, dan Semester
+        // [POIN 3 & POIN 7]: Kunci input Nama, NPM, Program Studi, Angkatan, Kelas, dan Kategori Kelas
         nimInput.value = currentUser.npm || currentUser.username || '';
         nimInput.readOnly = true;
         nimInput.className = 'w-full bg-slate-100 text-slate-700 font-bold font-mono border border-slate-300 rounded-xl px-3 py-2 cursor-not-allowed select-none';
@@ -3318,7 +3457,28 @@
         if (semKalkulasiInput) {
           semKalkulasiInput.value = currentUser.semester || calculatedSemester;
         }
+
+        // Kunci Kelas dan Kategori Kelas untuk Mahasiswa
+        const studentCleanClass = normalizeClassNameClient(currentUser.kelas || 'Reguler A');
+        const studentCategory = detectCategoryFromClassClient(studentCleanClass);
+
+        if (kategoriSelect) {
+          kategoriSelect.value = studentCategory;
+          kategoriSelect.disabled = true;
+          kategoriSelect.className = 'w-full bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl px-3 py-2 cursor-not-allowed select-none';
+        }
+        if (badgeKategori) badgeKategori.innerText = '(Terkunci Akun Aktif)';
+
+        populateKelasDropdown(currentUser.kodeProdi || 'MNJ', studentCategory, studentCleanClass);
+
+        if (kelasSelect) {
+          kelasSelect.value = studentCleanClass;
+          kelasSelect.disabled = true;
+          kelasSelect.className = 'w-full bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl px-3 py-2 cursor-not-allowed select-none';
+        }
+        if (badgeKelas) badgeKelas.innerText = '(Terkunci Akun Aktif)';
       } else {
+        // Mode Admin: Buka kunci seluruh field
         nimInput.readOnly = false;
         nimInput.className = 'w-full border border-slate-300 rounded-xl px-3 py-2 font-mono focus:ring-2 focus:ring-blue-900';
         if (badgeNpm) badgeNpm.innerText = '';
@@ -3340,13 +3500,24 @@
         if (semKalkulasiInput) {
           semKalkulasiInput.value = calculateSemesterFromAngkatan(2024);
         }
+
+        if (kategoriSelect) {
+          kategoriSelect.disabled = false;
+          kategoriSelect.className = 'w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold focus:ring-2 focus:ring-blue-900';
+          kategoriSelect.value = 'Reguler';
+        }
+        if (badgeKategori) badgeKategori.innerText = '';
+
+        populateKelasDropdown(prodiSelect ? prodiSelect.value : 'MNJ', 'Reguler', 'Reguler A');
+
+        if (kelasSelect) {
+          kelasSelect.disabled = false;
+          kelasSelect.className = 'w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold focus:ring-2 focus:ring-blue-900';
+        }
+        if (badgeKelas) badgeKelas.innerText = '';
       }
 
       onProdiSelectionChange();
-
-      if (isMhs && currentUser.kelas && kelasSelect) {
-        kelasSelect.value = currentUser.kelas;
-      }
 
       if (id) {
         const item = (appData.pendaftaran || []).find(d => String(d.ID) === String(id));
@@ -3354,8 +3525,11 @@
           nimInput.value = item.NPM || item.NIM || '';
           namaInput.value = item['Nama Mahasiswa'] || '';
           prodiSelect.value = item['Kode Prodi'] || 'MNJ';
-          onProdiSelectionChange();
-          if (kelasSelect) kelasSelect.value = item.Kelas || '';
+          const itemCleanClass = normalizeClassNameClient(item.Kelas || 'Reguler A');
+          const itemCategory = item['Kategori Kelas'] || detectCategoryFromClassClient(itemCleanClass);
+          if (kategoriSelect) kategoriSelect.value = itemCategory;
+          populateKelasDropdown(prodiSelect.value, itemCategory, itemCleanClass);
+          if (kelasSelect) kelasSelect.value = itemCleanClass;
           document.getElementById('pendaftaranMatkul').value = item['Mata Kuliah'] || '';
           document.getElementById('pendaftaranDosen').value = item['Dosen Pengampu'] || '';
           document.getElementById('pendaftaranAlasan').value = item.Alasan || '';
@@ -3388,6 +3562,10 @@
       const namaProdi = prodiSel.options[prodiSel.selectedIndex]?.getAttribute('data-nama') || kodeProdi;
       const semCalculated = document.getElementById('pendaftaranSemesterKalkulasi')?.value || document.getElementById('pendaftaranSemester')?.value || 'Semester 1';
       const angkatanVal = document.getElementById('pendaftaranAngkatan')?.value || '';
+      const rawKelas = document.getElementById('pendaftaranKelas')?.value || 'Reguler A';
+      const cleanKelas = normalizeClassNameClient(rawKelas);
+      const rawKategori = document.getElementById('pendaftaranKategoriKelas')?.value;
+      const cleanKategori = rawKategori || detectCategoryFromClassClient(cleanKelas);
 
       const payload = {
         id: document.getElementById('pendaftaranId').value,
@@ -3395,8 +3573,8 @@
         namaMahasiswa: document.getElementById('pendaftaranNama').value,
         kodeProdi: kodeProdi,
         prodi: namaProdi,
-        kelas: document.getElementById('pendaftaranKelas').value,
-        kategoriKelas: document.getElementById('pendaftaranKategoriKelas').value,
+        kelas: cleanKelas,
+        kategoriKelas: cleanKategori,
         tahunAkademik: document.getElementById('pendaftaranTahunAkademik').value,
         semester: semCalculated,
         angkatan: angkatanVal,
@@ -3447,19 +3625,26 @@
 
       const kelasSelect = document.getElementById('addMhsKelas');
       if (kelasSelect) {
-        const kelasList = (appData.master && appData.master.kelas) || [];
-        if (kelasList.length > 0) {
-          kelasSelect.innerHTML = kelasList.map(k => `<option value="${k['Nama Kelas'] || k.Kelas}">${k['Nama Kelas'] || k.Kelas} (${k['Kode Prodi'] || ''})</option>`).join('');
+        const rawKelasList = (appData.master && appData.master.kelas) || [];
+        const uniqueKelasMap = {};
+        const cleanKelasList = [];
+        rawKelasList.forEach(k => {
+          const cName = normalizeClassNameClient(k['Nama Kelas'] || k.Kelas || '');
+          if (cName && !uniqueKelasMap[cName]) {
+            uniqueKelasMap[cName] = true;
+            cleanKelasList.push({ name: cName, prodi: k['Kode Prodi'] || '' });
+          }
+        });
+
+        if (cleanKelasList.length > 0) {
+          kelasSelect.innerHTML = cleanKelasList.map(k => `<option value="${k.name}">${k.name}${k.prodi ? ` (${k.prodi})` : ''}</option>`).join('');
         } else {
           kelasSelect.innerHTML = `
-            <option value="Reguler 1A">Reguler 1A</option>
-            <option value="Reguler 1B">Reguler 1B</option>
-            <option value="Reguler 3A">Reguler 3A</option>
-            <option value="Reguler 3B">Reguler 3B</option>
-            <option value="Reguler 5A">Reguler 5A</option>
-            <option value="Reguler 5B">Reguler 5B</option>
-            <option value="Karyawan 1A">Karyawan 1A</option>
-            <option value="Karyawan 3A">Karyawan 3A</option>
+            <option value="Reguler A">Reguler A</option>
+            <option value="Reguler B">Reguler B</option>
+            <option value="Reguler C">Reguler C</option>
+            <option value="Karyawan A">Karyawan A</option>
+            <option value="Karyawan B">Karyawan B</option>
           `;
         }
       }
@@ -3523,7 +3708,8 @@
       const prodiSel = document.getElementById('addMhsProdi');
       const kodeProdi = prodiSel?.value || 'MNJ';
       const prodi = prodiSel?.options[prodiSel.selectedIndex]?.getAttribute('data-nama') || kodeProdi;
-      const kelas = document.getElementById('addMhsKelas')?.value?.trim() || 'Reguler 1A';
+      const rawKelas = document.getElementById('addMhsKelas')?.value?.trim() || 'Reguler A';
+      const kelas = normalizeClassNameClient(rawKelas);
       const angkatan = parseInt(document.getElementById('addMhsAngkatan')?.value || '2024', 10);
       const semester = document.getElementById('addMhsSemester')?.value || calculateSemesterFromAngkatan(angkatan);
       const password = document.getElementById('addMhsPassword')?.value?.trim() || '123456';
@@ -6222,13 +6408,13 @@
           ['PKD-103', 'Manajemen Perbankan Digital', 3, 'PKD']
         ];
       } else if (target === 'Master_Kelas') {
-        headers = ['Nama Kelas', 'Kategori', 'Semester', 'Kode Prodi'];
+        headers = ['Nama Kelas', 'Kategori', 'Kode Prodi'];
         sampleData = [
-          ['Reguler 1A', 'Reguler', 'Semester 1', 'MNJ'],
-          ['Reguler 3B', 'Reguler', 'Semester 3', 'AKT'],
-          ['Reguler 5A', 'Reguler', 'Semester 5', 'BD'],
-          ['Karyawan 3A', 'Karyawan', 'Semester 3', 'PI'],
-          ['Reguler 3A', 'Reguler', 'Semester 3', 'PKD']
+          ['Reguler A', 'Reguler', 'MNJ'],
+          ['Reguler B', 'Reguler', 'AKT'],
+          ['Reguler C', 'Reguler', 'BD'],
+          ['Karyawan A', 'Karyawan', 'PI'],
+          ['Karyawan B', 'Karyawan', 'PKD']
         ];
       } else if (target === 'Master_Dosen') {
         headers = ['NIK/NIDN', 'Nama Dosen', 'Kode Prodi'];
@@ -6248,21 +6434,21 @@
       } else if (target === 'Jadwal_Ujian') {
         headers = ['Tanggal Ujian', 'Jam Mulai', 'Jam Selesai', 'Ruangan', 'Kode Prodi', 'Program Studi', 'Semester', 'Kelas', 'Mata Kuliah', 'Dosen Pengampu', 'Jenis Ujian', 'Keterangan'];
         sampleData = [
-          ['2026-10-20', '08:00', '09:30', 'R.101', 'MNJ', 'Manajemen', 'Semester 3', 'Reguler 3A', 'Manajemen Keuangan', 'Dr. Agung Wibowo, S.E., M.M.', 'UTS Susulan', 'Membawa kartu ujian']
+          ['2026-10-20', '08:00', '09:30', 'R.101', 'MNJ', 'Manajemen', 'Semester 3', 'Reguler A', 'Manajemen Keuangan', 'Dr. Agung Wibowo, S.E., M.M.', 'UTS Susulan', 'Membawa kartu ujian']
         ];
       } else if (target === 'User_Mahasiswa') {
         headers = ['Nama Lengkap', 'NPM', 'Kelas', 'Angkatan', 'Program Studi', 'Password'];
         sampleData = [
-          ['Rizky Pratama Putra', '2311010012', 'Reguler 3A', 2023, 'Manajemen', '123456'],
-          ['Siti Nurhaliza Zahra', '2311020045', 'Reguler 5B', 2023, 'Akuntansi', '123456'],
-          ['M. Farhan Ramadhan', '2411030019', 'Reguler 1A', 2024, 'Bisnis Digital', '123456'],
-          ['Nabila Putri Maharani', '2411040008', 'Reguler 1B', 2024, 'Perdagangan Internasional', '123456'],
-          ['Denia Ayu Wardani', '2411050022', 'Reguler 1A', 2024, 'Perbankan Digital', '123456']
+          ['Rizky Pratama Putra', '2311010012', 'Reguler A', 2023, 'Manajemen', '123456'],
+          ['Siti Nurhaliza Zahra', '2311020045', 'Reguler B', 2023, 'Akuntansi', '123456'],
+          ['M. Farhan Ramadhan', '2411030019', 'Reguler A', 2024, 'Bisnis Digital', '123456'],
+          ['Nabila Putri Maharani', '2411040008', 'Reguler B', 2024, 'Perdagangan Internasional', '123456'],
+          ['Denia Ayu Wardani', '2411050022', 'Karyawan A', 2024, 'Perbankan Digital', '123456']
         ];
       } else {
         headers = ['Tanggal', 'NPM', 'Nama Mahasiswa', 'Program Studi', 'Kelas', 'Semester', 'Layanan', 'Mata Kuliah', 'Dosen Pengampu', 'Nominal', 'Status Bayar', 'Status Persetujuan'];
         sampleData = [
-          ['2026-10-15', '2311010012', 'Rizky Pratama Putra', 'Manajemen', 'Reguler 3A', 'Semester 3', 'UTS Susulan', 'Manajemen Keuangan', 'Dr. Agung Wibowo, S.E., M.M.', 0, 'Gratis (Tepat Waktu)', 'Disetujui']
+          ['2026-10-15', '2311010012', 'Rizky Pratama Putra', 'Manajemen', 'Reguler A', 'Semester 3', 'UTS Susulan', 'Manajemen Keuangan', 'Dr. Agung Wibowo, S.E., M.M.', 0, 'Gratis (Tepat Waktu)', 'Disetujui']
         ];
       }
 
@@ -6318,7 +6504,7 @@
           const targetSelect = document.getElementById('excelTargetSheet');
           const target = targetSelect ? targetSelect.value : '';
 
-          // [OTOMASI KALKULASI SEMESTER UNTUK EXCEL USER MAHASISWA]
+          // [OTOMASI NORMALISASI KELAS & KALKULASI SEMESTER UNTUK EXCEL]
           if (target === 'User_Mahasiswa') {
             json.forEach((row, idx) => {
               let angkatanVal = row['Angkatan'] || row['angkatan'] || row['Tahun Angkatan'];
@@ -6335,6 +6521,28 @@
               }
               if (!row['Role'] && !row['role']) {
                 row['Role'] = 'Mahasiswa';
+              }
+              // Bersihkan angka semester dari nama kelas
+              const rawK = row['Kelas'] || row['kelas'] || 'Reguler A';
+              row['Kelas'] = normalizeClassNameClient(rawK);
+            });
+          } else if (target === 'Master_Kelas') {
+            json.forEach((row) => {
+              const rawName = row['Nama Kelas'] || row['Kelas'] || row['nama kelas'] || 'Reguler A';
+              row['Nama Kelas'] = normalizeClassNameClient(rawName);
+              if (!row['Kategori']) {
+                row['Kategori'] = detectCategoryFromClassClient(row['Nama Kelas']);
+              }
+            });
+          } else if (target === 'Jadwal_Ujian') {
+            json.forEach((row) => {
+              if (row['Kelas']) row['Kelas'] = normalizeClassNameClient(row['Kelas']);
+            });
+          } else if (target === 'Pendaftaran') {
+            json.forEach((row) => {
+              if (row['Kelas']) row['Kelas'] = normalizeClassNameClient(row['Kelas']);
+              if (!row['Kategori Kelas'] && row['Kelas']) {
+                row['Kategori Kelas'] = detectCategoryFromClassClient(row['Kelas']);
               }
             });
           }

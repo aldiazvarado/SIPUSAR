@@ -80,22 +80,22 @@ function setupDatabase() {
     ]
   );
 
-  // 2. POPULATE SHEET: User_Mahasiswa (ID | Username | Password | Role | Nama Lengkap | NPM | Kode Prodi)
+  // 2. POPULATE SHEET: User_Mahasiswa (ID | Username | Password | Role | Nama Lengkap | NPM | Kode Prodi | Kelas | Angkatan | Semester)
   populateSheetData(ss, 'User_Mahasiswa', 
-    ["ID", "Username", "Password", "Role", "Nama Lengkap", "NPM", "Kode Prodi"], 
+    ["ID", "Username", "Password", "Role", "Nama Lengkap", "NPM", "Kode Prodi", "Kelas", "Angkatan", "Semester"], 
     [
-      ["MHS-001", "123", "123", "Mahasiswa", "Test Mahasiswa", "123", "MNJ"],
-      ["MHS-002", "2311010012", "123456", "Mahasiswa", "Rizky Pratama Putra", "2311010012", "MNJ"],
-      ["MHS-003", "2311020045", "123456", "Mahasiswa", "Siti Nurhaliza Zahra", "2311020045", "AKT"],
-      ["MHS-004", "2411030019", "123456", "Mahasiswa", "Muhammad Farhan Ramadhan", "2411030019", "BD"],
-      ["MHS-005", "2311040008", "123456", "Mahasiswa", "Nabila Putri Maharani", "2311040008", "PI"],
-      ["MHS-006", "2411050031", "123456", "Mahasiswa", "Aditya Pratama Wijaya", "2411050031", "PKD"],
-      ["MHS-007", "2311010088", "123456", "Mahasiswa", "Dimas Anggara Saputra", "2311010088", "MNJ"],
-      ["MHS-008", "2311020064", "123456", "Mahasiswa", "Aulia Rahmawati", "2311020064", "AKT"],
-      ["MHS-009", "2211030015", "123456", "Mahasiswa", "Fajar Siddiq Pratama", "2211030015", "BD"],
-      ["MHS-010", "2211040021", "123456", "Mahasiswa", "Nadira Syifa Azzahra", "2211040021", "PI"],
-      ["MHS-011", "2311010001", "123456", "Mahasiswa", "Fajar Pratama", "2311010001", "MNJ"],
-      ["MHS-012", "2311020014", "123456", "Mahasiswa", "Siti Aisyah", "2311020014", "AKT"]
+      ["MHS-001", "123", "123", "Mahasiswa", "Test Mahasiswa", "123", "MNJ", "Reguler A", 2024, "Semester 5"],
+      ["MHS-002", "2311010012", "123456", "Mahasiswa", "Rizky Pratama Putra", "2311010012", "MNJ", "Reguler A", 2023, "Semester 7"],
+      ["MHS-003", "2311020045", "123456", "Mahasiswa", "Siti Nurhaliza Zahra", "2311020045", "AKT", "Reguler B", 2023, "Semester 7"],
+      ["MHS-004", "2411030019", "123456", "Mahasiswa", "Muhammad Farhan Ramadhan", "2411030019", "BD", "Reguler A", 2024, "Semester 5"],
+      ["MHS-005", "2311040008", "123456", "Mahasiswa", "Nabila Putri Maharani", "2311040008", "PI", "Reguler A", 2023, "Semester 7"],
+      ["MHS-006", "2411050031", "123456", "Mahasiswa", "Aditya Pratama Wijaya", "2411050031", "PKD", "Reguler A", 2024, "Semester 5"],
+      ["MHS-007", "2311010088", "123456", "Mahasiswa", "Dimas Anggara Saputra", "2311010088", "MNJ", "Reguler A", 2023, "Semester 7"],
+      ["MHS-008", "2311020064", "123456", "Mahasiswa", "Aulia Rahmawati", "2311020064", "AKT", "Reguler B", 2023, "Semester 7"],
+      ["MHS-009", "2211030015", "123456", "Mahasiswa", "Fajar Siddiq Pratama", "2211030015", "BD", "Reguler A", 2022, "Semester 9"],
+      ["MHS-010", "2211040021", "123456", "Mahasiswa", "Nadira Syifa Azzahra", "2211040021", "PI", "Reguler A", 2022, "Semester 9"],
+      ["MHS-011", "2311010001", "123456", "Mahasiswa", "Fajar Pratama", "2311010001", "MNJ", "Reguler A", 2023, "Semester 7"],
+      ["MHS-012", "2311020014", "123456", "Mahasiswa", "Siti Aisyah", "2311020014", "AKT", "Reguler B", 2023, "Semester 7"]
     ]
   );
 
@@ -117,12 +117,12 @@ function setupDatabase() {
   populateSheetData(ss, 'Jadwal_Ujian', 
     ["ID", "Tanggal Ujian", "Jam Mulai", "Jam Selesai", "Ruangan", "Kode Prodi", "Program Studi", "Semester", "Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Ujian", "Keterangan"], 
     [
-      ["JDW-001", "2026-10-15", "08:00", "09:30", "R.101", "MNJ", "Manajemen", "Semester 3", "Reguler 3A", "Manajemen Keuangan", "Dr. Agung Wibowo, S.E., M.M.", "UTS Susulan", "Membawa kartu ujian dan kartu mahasiswa"],
-      ["JDW-002", "2026-10-15", "10:00", "11:30", "R.102", "AKT", "Akuntansi", "Semester 3", "Reguler 3B", "Akuntansi Keuangan Menengah II", "Dr. Desmy Riani, S.E., M.Ak.", "UTS Susulan", "Kalkulator diperbolehkan"],
-      ["JDW-003", "2026-10-16", "08:30", "10:00", "LAB-KOM-1", "BD", "Bisnis Digital", "Semester 3", "Reguler 3A", "Big Data untuk Bisnis", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.", "UTS Susulan", "Praktikum di Lab Komputer 1"],
-      ["JDW-004", "2026-10-16", "13:00", "14:30", "R.201", "PI", "Perdagangan Internasional", "Semester 3", "Reguler 3A", "Hukum Perdagangan Internasional", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.", "UTS Susulan", "Ujian tertulis"],
-      ["JDW-005", "2026-10-17", "09:00", "10:30", "R.202", "PKD", "Perbankan dan Keuangan Digital", "Semester 3", "Reguler 3A", "Manajemen Perbankan", "Denia Maulani, S.E., M.M.", "UTS Susulan", "Studi kasus perbankan"],
-      ["JDW-006", "2026-10-17", "11:00", "12:30", "R.101", "MNJ", "Manajemen", "Semester 3", "Reguler 3A", "Matematika Bisnis", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.", "UTS Susulan", "Tutup buku (Closed Book)"]
+      ["JDW-001", "2026-10-15", "08:00", "09:30", "R.101", "MNJ", "Manajemen", "Semester 3", "Reguler A", "Manajemen Keuangan", "Dr. Agung Wibowo, S.E., M.M.", "UTS Susulan", "Membawa kartu ujian dan kartu mahasiswa"],
+      ["JDW-002", "2026-10-15", "10:00", "11:30", "R.102", "AKT", "Akuntansi", "Semester 3", "Reguler B", "Akuntansi Keuangan Menengah II", "Dr. Desmy Riani, S.E., M.Ak.", "UTS Susulan", "Kalkulator diperbolehkan"],
+      ["JDW-003", "2026-10-16", "08:30", "10:00", "LAB-KOM-1", "BD", "Bisnis Digital", "Semester 3", "Reguler A", "Big Data untuk Bisnis", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.", "UTS Susulan", "Praktikum di Lab Komputer 1"],
+      ["JDW-004", "2026-10-16", "13:00", "14:30", "R.201", "PI", "Perdagangan Internasional", "Semester 3", "Reguler A", "Hukum Perdagangan Internasional", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.", "UTS Susulan", "Ujian tertulis"],
+      ["JDW-005", "2026-10-17", "09:00", "10:30", "R.202", "PKD", "Perbankan dan Keuangan Digital", "Semester 3", "Reguler A", "Manajemen Perbankan", "Denia Maulani, S.E., M.M.", "UTS Susulan", "Studi kasus perbankan"],
+      ["JDW-006", "2026-10-17", "11:00", "12:30", "R.101", "MNJ", "Manajemen", "Semester 3", "Reguler A", "Matematika Bisnis", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.", "UTS Susulan", "Tutup buku (Closed Book)"]
     ]
   );
 
@@ -135,6 +135,42 @@ function setupDatabase() {
       ["PRD-003", "BD", "Bisnis Digital", "S1"],
       ["PRD-004", "PI", "Perdagangan Internasional", "S1"],
       ["PRD-005", "PKD", "Perbankan dan Keuangan Digital", "D4"]
+    ]
+  );
+
+  // 5.b POPULATE SHEET: Master_Kelas (STANDARISASI TANPA ANGKA SEMESTER)
+  populateSheetData(ss, 'Master_Kelas',
+    ["ID", "Nama Kelas", "Kategori", "Semester", "Kode Prodi"],
+    [
+      ["KLS-001", "Reguler A", "Reguler", "Semua", "ALL"],
+      ["KLS-002", "Reguler B", "Reguler", "Semua", "ALL"],
+      ["KLS-003", "Reguler C", "Reguler", "Semua", "ALL"],
+      ["KLS-004", "Karyawan A", "Karyawan", "Semua", "ALL"],
+      ["KLS-005", "Karyawan B", "Karyawan", "Semua", "ALL"]
+    ]
+  );
+
+  // 5.c POPULATE SHEET: Master_Matkul
+  populateSheetData(ss, 'Master_Matkul',
+    ["ID", "Kode Matkul", "Nama Mata Kuliah", "SKS", "Kode Prodi"],
+    [
+      ["MKL-001", "MNJ-101", "Pengantar Manajemen", 3, "MNJ"],
+      ["MKL-002", "AKT-201", "Akuntansi Keuangan Menengah", 3, "AKT"],
+      ["MKL-003", "BD-102", "Dasar Pemrograman Bisnis Digital", 3, "BD"],
+      ["MKL-004", "PI-105", "Hukum Perdagangan Internasional", 3, "PI"],
+      ["MKL-005", "PKD-103", "Manajemen Perbankan Digital", 3, "PKD"]
+    ]
+  );
+
+  // 5.d POPULATE SHEET: Master_Dosen
+  populateSheetData(ss, 'Master_Dosen',
+    ["ID", "NIK/NIDN", "Nama Dosen", "Kode Prodi"],
+    [
+      ["DSN-001", "198501012010121001", "Dr. Muhamad Azis Firdaus, S.E., M.M.", "MNJ"],
+      ["DSN-002", "197911042006042001", "Dr. Desmy Riani, S.E., M.Ak.", "AKT"],
+      ["DSN-003", "198207192008011004", "Hendri Maulana, S.E., M.M.", "BD"],
+      ["DSN-004", "198403152010121002", "Hurriyaturrohman, S.E., M.M.", "PI"],
+      ["DSN-005", "198302172008122002", "Denia Maulani, S.E., M.M.", "PKD"]
     ]
   );
 
