@@ -1444,7 +1444,7 @@ function addPendaftaran(payload) {
     }
 
     var lastRow = sheet.getLastRow();
-    var newId = 'REG-' + (1000 + (lastRow > 1 ? lastRow : 1));
+    var newId = payload.id || payload.ID || ('REG-' + (1000 + (lastRow > 1 ? lastRow : 1)));
     var nowStr = formatDateToString(new Date());
 
     var maxCol = Math.max(sheet.getLastColumn(), 19);
@@ -1814,24 +1814,36 @@ function clearAITestData() {
     lock.waitLock(10000);
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var pSheet = ss.getSheetByName('Pendaftaran');
+    if (!pSheet) return { success: true, message: 'Lembar Pendaftaran tidak ditemukan.' };
     var data = pSheet.getDataRange().getValues();
     if (data.length <= 1) return { success: true, message: 'Tidak ada data pendaftaran.' };
 
+    var testIds = ['REG-1001', 'REG-1002', 'REG-1003', 'REG-1004', 'REG-1005', 'REG-1006', 'REG-1007', 'REG-1008', 'REG-1009', 'REG-1010'];
     var cleanRows = [data[0]];
     var deletedCount = 0;
     for (var i = 1; i < data.length; i++) {
-      var alasan = String(data[i].join(' '));
-      if (alasan.indexOf('Simulasi Trial') !== -1 || String(data[i][0]).indexOf('REG-TEST-') === 0) {
+      var rowStr = String(data[i].join(' '));
+      var idStr = String(data[i][0] || '').trim();
+      var isTest = (
+        testIds.indexOf(idStr) !== -1 ||
+        idStr.indexOf('REG-TEST-') === 0 ||
+        rowStr.indexOf('Simulasi Trial') !== -1 ||
+        rowStr.indexOf('Pengujian Diagnostik AI') !== -1
+      );
+      if (isTest) {
         deletedCount++;
       } else {
         cleanRows.push(data[i]);
       }
     }
     pSheet.clearContents();
-    pSheet.getRange(1, 1, cleanRows.length, cleanRows[0].length).setValues(cleanRows);
+    if (cleanRows.length > 0) {
+      pSheet.getRange(1, 1, cleanRows.length, cleanRows[0].length).setValues(cleanRows);
+    }
     SpreadsheetApp.flush();
-    bumpSyncVersion('Admin', 'Bersihkan data uji');
-    return { success: true, message: deletedCount + ' data uji coba berhasil dibersihkan.' };
+    bumpSyncVersion('Admin', 'Bersihkan 10 data uji coba');
+    logActivity('Admin TU', 'Admin TU', 'Bersihkan Data Uji AI', 'Pendaftaran', 'Menghapus ' + deletedCount + ' data uji/sampel dari sistem.');
+    return { success: true, message: deletedCount + ' data uji coba & sampel mockup berhasil dibersihkan dari spreadsheet.' };
   } catch (err) {
     return { success: false, message: err.message };
   } finally {
@@ -1840,7 +1852,7 @@ function clearAITestData() {
 }
 
 // =========================================================================
-// [AI DIAGNOSTICS]: SUNTIK 5 MOCKUP CONTOH SAMPEL DATA LENGKAP
+// [AI DIAGNOSTICS]: SUNTIK 10 MOCKUP CONTOH SAMPEL DATA LENGKAP PROPORSIONAL
 // =========================================================================
 function seedMockupData() {
   var lock = LockService.getScriptLock();
@@ -1852,13 +1864,14 @@ function seedMockupData() {
 
     var mockups = [
       {
+        id: 'REG-1001',
         nim: '2311010012',
         namaMahasiswa: 'Rizky Pratama Putra',
         kodeProdi: 'MNJ',
         prodi: 'Manajemen',
         kelas: 'Reguler 3A',
         kategoriKelas: 'Reguler',
-        tahunAkademik: '2026/2027',
+        tahunAkademik: '2026/2027 Ganjil',
         semester: 'Semester 3',
         mataKuliah: 'Manajemen Keuangan',
         dosenPengampu: 'Dr. Agung Wibowo, S.E., M.M.',
@@ -1869,39 +1882,55 @@ function seedMockupData() {
         nominal: 0,
         statusPembayaran: 'Gratis (Tepat Waktu)',
         statusPersetujuan: 'Disetujui',
-        statusDenda: 'Tepat Waktu'
+        statusDenda: 'Tepat Waktu',
+        mataKuliahList: [
+          { nama: 'Manajemen Keuangan', mataKuliah: 'Manajemen Keuangan', dosen: 'Dr. Agung Wibowo, S.E., M.M.', dosenPengampu: 'Dr. Agung Wibowo, S.E., M.M.', sks: 3 }
+        ]
       },
       {
+        id: 'REG-1002',
         nim: '2311020045',
         namaMahasiswa: 'Siti Nurhaliza Zahra',
         kodeProdi: 'AKT',
         prodi: 'Akuntansi',
         kelas: 'Reguler 3B',
         kategoriKelas: 'Reguler',
-        tahunAkademik: '2026/2027',
+        tahunAkademik: '2026/2027 Ganjil',
         semester: 'Semester 3',
-        mataKuliah: 'Akuntansi Keuangan Menengah II',
-        dosenPengampu: 'Dr. Desmy Riani, S.E., M.Ak.',
-        jenisLayanan: 'UTS Susulan',
-        alasan: 'Dispensasi dinas organisasi mahasiswa BEM FEB UIKA',
+        mataKuliah: 'Akuntansi Biaya Lanjutan [Nilai Asal: CD]',
+        dosenPengampu: 'Prof. Dr. Hendro Sasongko, M.M. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)',
+        jenisLayanan: 'Remedial Teaching',
+        alasan: 'Perbaikan nilai mata kuliah prasyarat skripsi',
         buktiFoto: '',
-        statusJadwal: 'Terlambat',
-        nominal: 50000,
+        statusJadwal: 'Tepat Waktu',
+        nominal: 150000,
         statusPembayaran: 'Lunas',
-        statusPersetujuan: 'Disetujui',
-        statusDenda: 'Terlambat'
+        statusPersetujuan: 'Pending',
+        statusDenda: 'Tepat Waktu',
+        mataKuliahList: [
+          {
+            nama: 'Akuntansi Biaya Lanjutan',
+            mataKuliah: 'Akuntansi Biaya Lanjutan',
+            dosen: 'Prof. Dr. Hendro Sasongko, M.M.',
+            dosenPengampu: 'Prof. Dr. Hendro Sasongko, M.M.',
+            sks: 3,
+            nilaiHuruf: 'CD',
+            dosenLalu: 'Dra. Hj. Sri Mulyati, M.Ak.'
+          }
+        ]
       },
       {
+        id: 'REG-1003',
         nim: '2411030019',
         namaMahasiswa: 'Muhammad Farhan Ramadhan',
         kodeProdi: 'BD',
         prodi: 'Bisnis Digital',
-        kelas: 'Reguler 3A',
+        kelas: 'Reguler 1A',
         kategoriKelas: 'Reguler',
-        tahunAkademik: '2026/2027',
-        semester: 'Semester 3',
-        mataKuliah: 'Big Data untuk Bisnis',
-        dosenPengampu: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.',
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 1',
+        mataKuliah: '1. Big Data untuk Bisnis (3 SKS)\n2. Riset Operasi Bisnis (3 SKS)',
+        dosenPengampu: '1. Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.\n2. Dr. Hendra Suhendra, M.M.',
         jenisLayanan: 'UTS Susulan',
         alasan: 'Terkendala jaringan saat pendaftaran periode normal',
         buktiFoto: '',
@@ -1909,47 +1938,206 @@ function seedMockupData() {
         nominal: 50000,
         statusPembayaran: 'Belum Bayar',
         statusPersetujuan: 'Pending',
-        statusDenda: 'Terlambat'
+        statusDenda: 'Terlambat',
+        mataKuliahList: [
+          { nama: 'Big Data untuk Bisnis', mataKuliah: 'Big Data untuk Bisnis', dosen: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', dosenPengampu: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', sks: 3 },
+          { nama: 'Riset Operasi Bisnis', mataKuliah: 'Riset Operasi Bisnis', dosen: 'Dr. Hendra Suhendra, M.M.', dosenPengampu: 'Dr. Hendra Suhendra, M.M.', sks: 3 }
+        ]
       },
       {
+        id: 'REG-1004',
         nim: '2311040008',
         namaMahasiswa: 'Nabila Putri Maharani',
         kodeProdi: 'PI',
         prodi: 'Perdagangan Internasional',
         kelas: 'Reguler 3A',
         kategoriKelas: 'Reguler',
-        tahunAkademik: '2026/2027',
+        tahunAkademik: '2026/2027 Ganjil',
         semester: 'Semester 3',
         mataKuliah: 'Hukum Perdagangan Internasional',
         dosenPengampu: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.',
         jenisLayanan: 'UAS Susulan',
-        alasan: 'Kedukaan keluarga inti di luar kota',
+        alasan: 'Kedukaan keluarga inti di luar kota (Surat keterangan RT terlampir)',
         buktiFoto: '',
         statusJadwal: 'Tepat Waktu',
         nominal: 0,
         statusPembayaran: 'Gratis (Tepat Waktu)',
         statusPersetujuan: 'Disetujui',
-        statusDenda: 'Tepat Waktu'
+        statusDenda: 'Tepat Waktu',
+        mataKuliahList: [
+          { nama: 'Hukum Perdagangan Internasional', mataKuliah: 'Hukum Perdagangan Internasional', dosen: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', dosenPengampu: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', sks: 3 }
+        ]
       },
       {
+        id: 'REG-1005',
         nim: '2411050031',
         namaMahasiswa: 'Aditya Pratama Wijaya',
         kodeProdi: 'PKD',
         prodi: 'Perbankan dan Keuangan Digital',
-        kelas: 'Reguler 3A',
+        kelas: 'Reguler 1A',
         kategoriKelas: 'Reguler',
-        tahunAkademik: '2026/2027',
-        semester: 'Semester 3',
-        mataKuliah: 'Manajemen Perbankan',
-        dosenPengampu: 'Denia Maulani, S.E., M.M.',
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 1',
+        mataKuliah: 'Manajemen Perbankan [Nilai Asal: D]',
+        dosenPengampu: 'Denia Maulani, S.E., M.M. (Dosen Lalu: Dr. H. Hendra Suhendra, M.M.)',
         jenisLayanan: 'Remedial Teaching',
-        alasan: 'Perbaikan nilai mata kuliah syarat magang perbankan',
+        alasan: 'Perbaikan nilai mata kuliah syarat magang di Bank Syariah',
         buktiFoto: '',
         statusJadwal: 'Terlambat',
         nominal: 75000,
         statusPembayaran: 'Lunas',
         statusPersetujuan: 'Pending',
-        statusDenda: 'Terlambat'
+        statusDenda: 'Terlambat',
+        mataKuliahList: [
+          {
+            nama: 'Manajemen Perbankan',
+            mataKuliah: 'Manajemen Perbankan',
+            dosen: 'Denia Maulani, S.E., M.M.',
+            dosenPengampu: 'Denia Maulani, S.E., M.M.',
+            sks: 3,
+            nilaiHuruf: 'D',
+            dosenLalu: 'Dr. H. Hendra Suhendra, M.M.'
+          }
+        ]
+      },
+      {
+        id: 'REG-1006',
+        nim: '2211010087',
+        namaMahasiswa: 'Dimas Anggara Kusuma',
+        kodeProdi: 'MNJ',
+        prodi: 'Manajemen',
+        kelas: 'Karyawan 5A',
+        kategoriKelas: 'Karyawan',
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 5',
+        mataKuliah: '1. Manajemen Strategik (3 SKS)\n2. Perilaku Konsumen (3 SKS)',
+        dosenPengampu: '1. Dr. Muhamad Azis Firdaus, S.E., M.M.\n2. Hj. Ratih Purnamasari, S.E., M.Si.',
+        jenisLayanan: 'UTS Susulan',
+        alasan: 'Tugas dinas shift malam di perusahaan logistik',
+        buktiFoto: '',
+        statusJadwal: 'Terlambat',
+        nominal: 50000,
+        statusPembayaran: 'Lunas',
+        statusPersetujuan: 'Disetujui',
+        statusDenda: 'Terlambat',
+        mataKuliahList: [
+          { nama: 'Manajemen Strategik', mataKuliah: 'Manajemen Strategik', dosen: 'Dr. Muhamad Azis Firdaus, S.E., M.M.', dosenPengampu: 'Dr. Muhamad Azis Firdaus, S.E., M.M.', sks: 3 },
+          { nama: 'Perilaku Konsumen', mataKuliah: 'Perilaku Konsumen', dosen: 'Hj. Ratih Purnamasari, S.E., M.Si.', dosenPengampu: 'Hj. Ratih Purnamasari, S.E., M.Si.', sks: 3 }
+        ]
+      },
+      {
+        id: 'REG-1007',
+        nim: '2311020092',
+        namaMahasiswa: 'Fitria Rahmadani',
+        kodeProdi: 'AKT',
+        prodi: 'Akuntansi',
+        kelas: 'Reguler 3A',
+        kategoriKelas: 'Reguler',
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 3',
+        mataKuliah: '1. Perpajakan Terapan [Nilai: C] (3 SKS)\n2. Akuntansi Sektor Publik [Nilai: BC] (3 SKS)',
+        dosenPengampu: '1. Dr. Desmy Riani, S.E., M.Ak. (Dosen Lalu: Dr. Desmy Riani, S.E., M.Ak.)\n2. Ahmad, S.E., M.Ak. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)',
+        jenisLayanan: 'Remedial Teaching',
+        alasan: 'Perbaikan 2 mata kuliah konsentrasi perpajakan & sektor publik',
+        buktiFoto: '',
+        statusJadwal: 'Tepat Waktu',
+        nominal: 300000,
+        statusPembayaran: 'Lunas',
+        statusPersetujuan: 'Disetujui',
+        statusDenda: 'Tepat Waktu',
+        mataKuliahList: [
+          {
+            nama: 'Perpajakan Terapan',
+            mataKuliah: 'Perpajakan Terapan',
+            dosen: 'Dr. Desmy Riani, S.E., M.Ak.',
+            dosenPengampu: 'Dr. Desmy Riani, S.E., M.Ak.',
+            sks: 3,
+            nilaiHuruf: 'C',
+            dosenLalu: 'Dr. Desmy Riani, S.E., M.Ak.'
+          },
+          {
+            nama: 'Akuntansi Sektor Publik',
+            mataKuliah: 'Akuntansi Sektor Publik',
+            dosen: 'Ahmad, S.E., M.Ak.',
+            dosenPengampu: 'Ahmad, S.E., M.Ak.',
+            sks: 3,
+            nilaiHuruf: 'BC',
+            dosenLalu: 'Dra. Hj. Sri Mulyati, M.Ak.'
+          }
+        ]
+      },
+      {
+        id: 'REG-1008',
+        nim: '2311030054',
+        namaMahasiswa: 'Kevin Alamsyah',
+        kodeProdi: 'BD',
+        prodi: 'Bisnis Digital',
+        kelas: 'Karyawan 3A',
+        kategoriKelas: 'Karyawan',
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 3',
+        mataKuliah: 'E-Commerce Strategy & Marketing',
+        dosenPengampu: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.',
+        jenisLayanan: 'UAS Susulan',
+        alasan: 'Mewakili kampus dalam kompetisi Startup Digital Nasional',
+        buktiFoto: '',
+        statusJadwal: 'Tepat Waktu',
+        nominal: 0,
+        statusPembayaran: 'Gratis (Tepat Waktu)',
+        statusPersetujuan: 'Disetujui',
+        statusDenda: 'Tepat Waktu',
+        mataKuliahList: [
+          { nama: 'E-Commerce Strategy & Marketing', mataKuliah: 'E-Commerce Strategy & Marketing', dosen: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', dosenPengampu: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', sks: 3 }
+        ]
+      },
+      {
+        id: 'REG-1009',
+        nim: '2411040022',
+        namaMahasiswa: 'Zahra Amelia Putri',
+        kodeProdi: 'PI',
+        prodi: 'Perdagangan Internasional',
+        kelas: 'Reguler 1B',
+        kategoriKelas: 'Reguler',
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 1',
+        mataKuliah: 'Kepabeanan & Ekspor Impor',
+        dosenPengampu: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.',
+        jenisLayanan: 'UTS Susulan',
+        alasan: 'Sakit tifus saat hari pelaksanaan ujian reguler',
+        buktiFoto: '',
+        statusJadwal: 'Tepat Waktu',
+        nominal: 0,
+        statusPembayaran: 'Gratis (Tepat Waktu)',
+        statusPersetujuan: 'Pending',
+        statusDenda: 'Tepat Waktu',
+        mataKuliahList: [
+          { nama: 'Kepabeanan & Ekspor Impor', mataKuliah: 'Kepabeanan & Ekspor Impor', dosen: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', dosenPengampu: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', sks: 3 }
+        ]
+      },
+      {
+        id: 'REG-1010',
+        nim: '2211050015',
+        namaMahasiswa: 'Rian Hidayat',
+        kodeProdi: 'PKD',
+        prodi: 'Perbankan dan Keuangan Digital',
+        kelas: 'Reguler 5A',
+        kategoriKelas: 'Reguler',
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 5',
+        mataKuliah: '1. Analisis Kredit Perbankan (3 SKS)\n2. Financial Technology Ecosystem (3 SKS)',
+        dosenPengampu: '1. Denia Maulani, S.E., M.M.\n2. Dr. Hendra Suhendra, M.M.',
+        jenisLayanan: 'UAS Susulan',
+        alasan: 'Mengikuti program magang MBKM bersertifikat Kemendikbudristek',
+        buktiFoto: '',
+        statusJadwal: 'Terlambat',
+        nominal: 100000,
+        statusPembayaran: 'Lunas',
+        statusPersetujuan: 'Pending',
+        statusDenda: 'Terlambat',
+        mataKuliahList: [
+          { nama: 'Analisis Kredit Perbankan', mataKuliah: 'Analisis Kredit Perbankan', dosen: 'Denia Maulani, S.E., M.M.', dosenPengampu: 'Denia Maulani, S.E., M.M.', sks: 3 },
+          { nama: 'Financial Technology Ecosystem', mataKuliah: 'Financial Technology Ecosystem', dosen: 'Dr. Hendra Suhendra, M.M.', dosenPengampu: 'Dr. Hendra Suhendra, M.M.', sks: 3 }
+        ]
       }
     ];
 
@@ -1957,9 +2145,9 @@ function seedMockupData() {
       addPendaftaran(mockups[i]);
     }
 
-    logActivity('Admin TU', 'Admin TU', 'Suntik 5 Mockup Sampel', 'Pendaftaran', 'Menambahkan 5 data sampel pendaftaran untuk pengujian dashboard & kartu ujian.');
-    bumpSyncVersion('Admin', 'Seed 5 Mockup Data');
-    return { success: true, message: '5 data mockup contoh sampel berhasil dimasukkan ke sistem!' };
+    logActivity('Admin TU', 'Admin TU', 'Suntik 10 Mockup Sampel', 'Pendaftaran', 'Menambahkan 10 data sampel pendaftaran proporsional (UTS, UAS, & Remedial Teaching) untuk pengujian sistem & dashboard.');
+    bumpSyncVersion('Admin', 'Seed 10 Mockup Data');
+    return { success: true, message: '10 data mockup contoh sampel (UTS, UAS, & Remedial Teaching) berhasil dimasukkan ke sistem spreadsheet!' };
   } catch(err) {
     return { success: false, message: err.message };
   } finally {

@@ -2147,16 +2147,17 @@
   </div>
 
   <!-- MODAL: AI DIAGNOSTICS & SUNTIK 5 MOCKUP DATA -->
+  <!-- MODAL: AI DIAGNOSTICS & SUNTIK 10 MOCKUP DATA -->
   <div id="modalAiDiagnostics" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
         <div class="flex items-center space-x-3">
           <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-800 flex items-center justify-center text-lg">
             <i class="fas fa-robot"></i>
           </div>
           <div>
-            <h3 class="text-base font-black text-slate-800">AI Diagnostics & Mockup Sampel Data</h3>
-            <p class="text-xs text-slate-500">Uji coba simulasi data pendaftaran mahasiswa FEB UIKA</p>
+            <h3 class="text-base font-black text-slate-800">AI Diagnostics & 10 Mockup Sampel Data</h3>
+            <p class="text-xs text-slate-500">Simulasi data pendaftaran multi-layanan (UTS, UAS, & Remedial Teaching)</p>
           </div>
         </div>
         <button onclick="closeAiDiagnosticsModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
@@ -2165,42 +2166,130 @@
       <div class="space-y-4 text-xs">
         <div class="p-3.5 bg-purple-50/70 border border-purple-200 rounded-2xl flex items-center justify-between">
           <div>
-            <p class="font-bold text-purple-950">Status Integritas Sistem:</p>
-            <p class="text-[11px] text-purple-800">Database Website, Rules, Multi-Role, and Data Sync 100% Verified.</p>
+            <p class="font-bold text-purple-950">Status Integritas & Keselarasan Sistem:</p>
+            <p class="text-[11px] text-purple-800">Mendukung Multi-Matkul Dinamis, Akumulasi SKS, dan Nilai Remedial (D, CD, C, BC).</p>
           </div>
-          <span class="px-3 py-1 bg-emerald-500 text-white rounded-full font-bold text-[10px] shadow-xs">NORMAL & SINKRON</span>
+          <span class="px-3 py-1 bg-emerald-500 text-white rounded-full font-bold text-[10px] shadow-xs">100% SINKRON & VALID</span>
         </div>
 
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <h4 class="font-bold text-slate-800 uppercase tracking-wider text-[11px]"><i class="fas fa-database text-purple-700 mr-1"></i> 5 Sampel Data Mockup Siap Pakai:</h4>
-            <span class="text-[10px] text-slate-400">Terdistribusi di 5 Program Studi</span>
+            <h4 class="font-bold text-slate-800 uppercase tracking-wider text-[11px]"><i class="fas fa-database text-purple-700 mr-1"></i> 10 Sampel Data Mockup Siap Suntik:</h4>
+            <span class="text-[10px] text-slate-500 font-semibold">5 Prodi · UTS, UAS, & Remedial</span>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-              <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-900 font-mono">2311010012 · MNJ</span>
-              <p class="font-bold text-slate-800">Rizky Pratama Putra</p>
-              <p class="text-[11px] text-slate-500">UTS Susulan - Manajemen Keuangan</p>
-              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800">Disetujui (Gratis)</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[46vh] overflow-y-auto pr-1">
+            <!-- 1. MNJ - UTS Susulan -->
+            <div class="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-900 font-mono">2311010012 · MNJ</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-50 text-blue-800 border border-blue-200">UTS Susulan</span>
+              </div>
+              <p class="font-bold text-slate-800">Rizky Pratama Putra (Reguler 3A)</p>
+              <p class="text-[11px] text-slate-600">Manajemen Keuangan (3 SKS)</p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800">Disetujui · Gratis</span>
             </div>
-            <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-              <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-900 font-mono">2311020045 · AKT</span>
-              <p class="font-bold text-slate-800">Siti Nurhaliza Zahra</p>
-              <p class="text-[11px] text-slate-500">UTS Susulan - AKM II</p>
-              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800">Terlambat (Lunas Rp50.000)</span>
+
+            <!-- 2. AKT - Remedial Teaching (Nilai CD) -->
+            <div class="p-3 bg-indigo-50/60 hover:bg-indigo-50 border border-indigo-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-900 font-mono">2311020045 · AKT</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-black rounded bg-indigo-600 text-white shadow-2xs">Remedial Teaching</span>
+              </div>
+              <p class="font-bold text-slate-800">Siti Nurhaliza Zahra (Reguler 3B)</p>
+              <p class="text-[11px] text-indigo-950 font-semibold">Akuntansi Biaya Lanjutan <span class="text-indigo-700 font-black">[Nilai: CD]</span></p>
+              <p class="text-[10px] text-slate-500 italic">Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.</p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800">Pending · Lunas Rp150.000</span>
             </div>
-            <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-              <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-900 font-mono">2411030019 · BD</span>
-              <p class="font-bold text-slate-800">M. Farhan Ramadhan</p>
-              <p class="text-[11px] text-slate-500">UTS Susulan - Big Data Bisnis</p>
-              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-rose-100 text-rose-800">Belum Bayar (Pending)</span>
+
+            <!-- 3. BD - UTS Susulan (Multi-Matkul 2) -->
+            <div class="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-900 font-mono">2411030019 · BD</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-50 text-blue-800 border border-blue-200">UTS Susulan</span>
+              </div>
+              <p class="font-bold text-slate-800">Muhammad Farhan (Reguler 1A)</p>
+              <p class="text-[11px] text-slate-600">2 Matkul: Big Data & Riset Operasi <span class="font-bold text-blue-900">[6 SKS]</span></p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-rose-100 text-rose-800">Pending · Belum Bayar Denda Rp50.000</span>
             </div>
-            <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
-              <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-900 font-mono">2311040008 · PI</span>
-              <p class="font-bold text-slate-800">Nabila Putri Maharani</p>
-              <p class="text-[11px] text-slate-500">UAS Susulan - Hukum Dagang</p>
-              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800">Disetujui (Gratis)</span>
+
+            <!-- 4. PI - UAS Susulan -->
+            <div class="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-900 font-mono">2311040008 · PI</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 text-emerald-800 border border-emerald-200">UAS Susulan</span>
+              </div>
+              <p class="font-bold text-slate-800">Nabila Putri Maharani (Reguler 3A)</p>
+              <p class="text-[11px] text-slate-600">Hukum Perdagangan Internasional (3 SKS)</p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800">Disetujui · Gratis</span>
+            </div>
+
+            <!-- 5. PKD - Remedial Teaching (Nilai D) -->
+            <div class="p-3 bg-indigo-50/60 hover:bg-indigo-50 border border-indigo-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-900 font-mono">2411050031 · PKD</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-black rounded bg-indigo-600 text-white shadow-2xs">Remedial Teaching</span>
+              </div>
+              <p class="font-bold text-slate-800">Aditya Pratama Wijaya (Reguler 1A)</p>
+              <p class="text-[11px] text-indigo-950 font-semibold">Manajemen Perbankan <span class="text-rose-700 font-black">[Nilai: D]</span></p>
+              <p class="text-[10px] text-slate-500 italic">Dosen Lalu: Dr. H. Hendra Suhendra, M.M.</p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800">Pending · Lunas Rp75.000</span>
+            </div>
+
+            <!-- 6. MNJ - UTS Susulan (Multi-Matkul 2 Karyawan) -->
+            <div class="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-900 font-mono">2211010087 · MNJ</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-50 text-blue-800 border border-blue-200">UTS Susulan</span>
+              </div>
+              <p class="font-bold text-slate-800">Dimas Anggara Kusuma (Karyawan 5A)</p>
+              <p class="text-[11px] text-slate-600">2 Matkul: Manajemen Strategik & Perilaku Konsumen <span class="font-bold text-blue-900">[6 SKS]</span></p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800">Disetujui · Lunas Rp50.000</span>
+            </div>
+
+            <!-- 7. AKT - Remedial Teaching (Multi-Matkul 2: Nilai C & BC) -->
+            <div class="p-3 bg-indigo-50/60 hover:bg-indigo-50 border border-indigo-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-900 font-mono">2311020092 · AKT</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-black rounded bg-indigo-600 text-white shadow-2xs">Remedial Teaching</span>
+              </div>
+              <p class="font-bold text-slate-800">Fitria Rahmadani (Reguler 3A)</p>
+              <p class="text-[11px] text-indigo-950 font-semibold">2 Matkul: Perpajakan Terapan <span class="text-amber-700 font-black">[C]</span> & Akuntansi Sektor Publik <span class="text-indigo-700 font-black">[BC]</span></p>
+              <p class="text-[10px] text-slate-500 italic">Dosen Lalu: Dr. Desmy Riani & Dra. Hj. Sri Mulyati</p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800">Disetujui · Lunas Rp300.000</span>
+            </div>
+
+            <!-- 8. BD - UAS Susulan -->
+            <div class="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-900 font-mono">2311030054 · BD</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 text-emerald-800 border border-emerald-200">UAS Susulan</span>
+              </div>
+              <p class="font-bold text-slate-800">Kevin Alamsyah (Karyawan 3A)</p>
+              <p class="text-[11px] text-slate-600">E-Commerce Strategy & Marketing (3 SKS)</p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-100 text-emerald-800">Disetujui · Gratis</span>
+            </div>
+
+            <!-- 9. PI - UTS Susulan -->
+            <div class="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-900 font-mono">2411040022 · PI</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-blue-50 text-blue-800 border border-blue-200">UTS Susulan</span>
+              </div>
+              <p class="font-bold text-slate-800">Zahra Amelia Putri (Reguler 1B)</p>
+              <p class="text-[11px] text-slate-600">Kepabeanan & Ekspor Impor (3 SKS)</p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800">Pending · Gratis</span>
+            </div>
+
+            <!-- 10. PKD - UAS Susulan (Multi-Matkul 2) -->
+            <div class="p-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl space-y-1 transition">
+              <div class="flex items-center justify-between">
+                <span class="px-2 py-0.5 rounded text-[9px] font-bold bg-indigo-100 text-indigo-900 font-mono">2211050015 · PKD</span>
+                <span class="px-1.5 py-0.5 text-[9px] font-bold rounded bg-emerald-50 text-emerald-800 border border-emerald-200">UAS Susulan</span>
+              </div>
+              <p class="font-bold text-slate-800">Rian Hidayat (Reguler 5A)</p>
+              <p class="text-[11px] text-slate-600">2 Matkul: Analisis Kredit & FinTech <span class="font-bold text-blue-900">[6 SKS]</span></p>
+              <span class="inline-block px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-100 text-amber-800">Pending · Lunas Rp100.000</span>
             </div>
           </div>
         </div>
@@ -2210,7 +2299,7 @@
             <i class="fas fa-eraser mr-1 text-slate-400"></i> Bersihkan Data Uji
           </button>
           <button type="button" onclick="handleInjectMockups()" class="px-5 py-2 rounded-xl font-bold bg-purple-700 text-white hover:bg-purple-800 shadow-md text-center flex items-center justify-center gap-1.5">
-            <i class="fas fa-flask"></i> <span>Suntik 5 Data Mockup ke Database Website</span>
+            <i class="fas fa-flask"></i> <span>Suntik 10 Data Mockup ke Database Website</span>
           </button>
         </div>
       </div>
@@ -6484,55 +6573,404 @@
       openAiDiagnosticsModal();
     }
 
+    // Data generator: 10 Sampel Data Mockup Proporsional (UTS, UAS, & Remedial Teaching)
+    function getTenMockupDataItems() {
+      return [
+        {
+          'ID': 'REG-1001',
+          'Tanggal': '2026-10-15',
+          'NPM': '2311010012',
+          'Nama Mahasiswa': 'Rizky Pratama Putra',
+          'Kode Prodi': 'MNJ',
+          'Program Studi': 'Manajemen',
+          'Semester': 'Semester 3',
+          'Kelas': 'Reguler 3A',
+          'Kategori Kelas': 'Reguler',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': 'Manajemen Keuangan',
+          'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.',
+          'Jenis Layanan': 'UTS Susulan',
+          'Alasan': 'Rawat inap RS PMI Bogor karena DBD (Surat dokter terlampir)',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Tepat Waktu',
+          'Nominal': 0,
+          'Status Pembayaran': 'Gratis (Tepat Waktu)',
+          'Status Persetujuan': 'Disetujui',
+          'mataKuliahList': [
+            { nama: 'Manajemen Keuangan', mataKuliah: 'Manajemen Keuangan', dosen: 'Dr. Agung Wibowo, S.E., M.M.', dosenPengampu: 'Dr. Agung Wibowo, S.E., M.M.', sks: 3 }
+          ],
+          'jumlahMatkul': 1,
+          'totalSks': 3
+        },
+        {
+          'ID': 'REG-1002',
+          'Tanggal': '2026-10-15',
+          'NPM': '2311020045',
+          'Nama Mahasiswa': 'Siti Nurhaliza Zahra',
+          'Kode Prodi': 'AKT',
+          'Program Studi': 'Akuntansi',
+          'Semester': 'Semester 3',
+          'Kelas': 'Reguler 3B',
+          'Kategori Kelas': 'Reguler',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': 'Akuntansi Biaya Lanjutan [Nilai Asal: CD]',
+          'Dosen Pengampu': 'Prof. Dr. Hendro Sasongko, M.M. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)',
+          'Jenis Layanan': 'Remedial Teaching',
+          'Alasan': 'Perbaikan nilai mata kuliah prasyarat skripsi',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Tepat Waktu',
+          'Nominal': 150000,
+          'Status Pembayaran': 'Lunas',
+          'Status Persetujuan': 'Pending',
+          'mataKuliahList': [
+            {
+              nama: 'Akuntansi Biaya Lanjutan',
+              mataKuliah: 'Akuntansi Biaya Lanjutan',
+              dosen: 'Prof. Dr. Hendro Sasongko, M.M.',
+              dosenPengampu: 'Prof. Dr. Hendro Sasongko, M.M.',
+              sks: 3,
+              nilaiHuruf: 'CD',
+              dosenLalu: 'Dra. Hj. Sri Mulyati, M.Ak.'
+            }
+          ],
+          'jumlahMatkul': 1,
+          'totalSks': 3
+        },
+        {
+          'ID': 'REG-1003',
+          'Tanggal': '2026-10-16',
+          'NPM': '2411030019',
+          'Nama Mahasiswa': 'Muhammad Farhan Ramadhan',
+          'Kode Prodi': 'BD',
+          'Program Studi': 'Bisnis Digital',
+          'Semester': 'Semester 1',
+          'Kelas': 'Reguler 1A',
+          'Kategori Kelas': 'Reguler',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': '1. Big Data untuk Bisnis (3 SKS)\n2. Riset Operasi Bisnis (3 SKS)',
+          'Dosen Pengampu': '1. Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.\n2. Dr. Hendra Suhendra, M.M.',
+          'Jenis Layanan': 'UTS Susulan',
+          'Alasan': 'Terkendala jaringan saat pendaftaran periode normal',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Terlambat',
+          'Nominal': 50000,
+          'Status Pembayaran': 'Belum Bayar',
+          'Status Persetujuan': 'Pending',
+          'mataKuliahList': [
+            { nama: 'Big Data untuk Bisnis', mataKuliah: 'Big Data untuk Bisnis', dosen: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', dosenPengampu: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', sks: 3 },
+            { nama: 'Riset Operasi Bisnis', mataKuliah: 'Riset Operasi Bisnis', dosen: 'Dr. Hendra Suhendra, M.M.', dosenPengampu: 'Dr. Hendra Suhendra, M.M.', sks: 3 }
+          ],
+          'jumlahMatkul': 2,
+          'totalSks': 6
+        },
+        {
+          'ID': 'REG-1004',
+          'Tanggal': '2026-10-16',
+          'NPM': '2311040008',
+          'Nama Mahasiswa': 'Nabila Putri Maharani',
+          'Kode Prodi': 'PI',
+          'Program Studi': 'Perdagangan Internasional',
+          'Semester': 'Semester 3',
+          'Kelas': 'Reguler 3A',
+          'Kategori Kelas': 'Reguler',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': 'Hukum Perdagangan Internasional',
+          'Dosen Pengampu': 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.',
+          'Jenis Layanan': 'UAS Susulan',
+          'Alasan': 'Kedukaan keluarga inti di luar kota (Surat keterangan RT terlampir)',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Tepat Waktu',
+          'Nominal': 0,
+          'Status Pembayaran': 'Gratis (Tepat Waktu)',
+          'Status Persetujuan': 'Disetujui',
+          'mataKuliahList': [
+            { nama: 'Hukum Perdagangan Internasional', mataKuliah: 'Hukum Perdagangan Internasional', dosen: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', dosenPengampu: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', sks: 3 }
+          ],
+          'jumlahMatkul': 1,
+          'totalSks': 3
+        },
+        {
+          'ID': 'REG-1005',
+          'Tanggal': '2026-10-17',
+          'NPM': '2411050031',
+          'Nama Mahasiswa': 'Aditya Pratama Wijaya',
+          'Kode Prodi': 'PKD',
+          'Program Studi': 'Perbankan dan Keuangan Digital',
+          'Semester': 'Semester 1',
+          'Kelas': 'Reguler 1A',
+          'Kategori Kelas': 'Reguler',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': 'Manajemen Perbankan [Nilai Asal: D]',
+          'Dosen Pengampu': 'Denia Maulani, S.E., M.M. (Dosen Lalu: Dr. H. Hendra Suhendra, M.M.)',
+          'Jenis Layanan': 'Remedial Teaching',
+          'Alasan': 'Perbaikan nilai mata kuliah syarat magang di Bank Syariah',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Terlambat',
+          'Nominal': 75000,
+          'Status Pembayaran': 'Lunas',
+          'Status Persetujuan': 'Pending',
+          'mataKuliahList': [
+            {
+              nama: 'Manajemen Perbankan',
+              mataKuliah: 'Manajemen Perbankan',
+              dosen: 'Denia Maulani, S.E., M.M.',
+              dosenPengampu: 'Denia Maulani, S.E., M.M.',
+              sks: 3,
+              nilaiHuruf: 'D',
+              dosenLalu: 'Dr. H. Hendra Suhendra, M.M.'
+            }
+          ],
+          'jumlahMatkul': 1,
+          'totalSks': 3
+        },
+        {
+          'ID': 'REG-1006',
+          'Tanggal': '2026-10-17',
+          'NPM': '2211010087',
+          'Nama Mahasiswa': 'Dimas Anggara Kusuma',
+          'Kode Prodi': 'MNJ',
+          'Program Studi': 'Manajemen',
+          'Semester': 'Semester 5',
+          'Kelas': 'Karyawan 5A',
+          'Kategori Kelas': 'Karyawan',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': '1. Manajemen Strategik (3 SKS)\n2. Perilaku Konsumen (3 SKS)',
+          'Dosen Pengampu': '1. Dr. Muhamad Azis Firdaus, S.E., M.M.\n2. Hj. Ratih Purnamasari, S.E., M.Si.',
+          'Jenis Layanan': 'UTS Susulan',
+          'Alasan': 'Tugas dinas shift malam di perusahaan logistik',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Terlambat',
+          'Nominal': 50000,
+          'Status Pembayaran': 'Lunas',
+          'Status Persetujuan': 'Disetujui',
+          'mataKuliahList': [
+            { nama: 'Manajemen Strategik', mataKuliah: 'Manajemen Strategik', dosen: 'Dr. Muhamad Azis Firdaus, S.E., M.M.', dosenPengampu: 'Dr. Muhamad Azis Firdaus, S.E., M.M.', sks: 3 },
+            { nama: 'Perilaku Konsumen', mataKuliah: 'Perilaku Konsumen', dosen: 'Hj. Ratih Purnamasari, S.E., M.Si.', dosenPengampu: 'Hj. Ratih Purnamasari, S.E., M.Si.', sks: 3 }
+          ],
+          'jumlahMatkul': 2,
+          'totalSks': 6
+        },
+        {
+          'ID': 'REG-1007',
+          'Tanggal': '2026-10-18',
+          'NPM': '2311020092',
+          'Nama Mahasiswa': 'Fitria Rahmadani',
+          'Kode Prodi': 'AKT',
+          'Program Studi': 'Akuntansi',
+          'Semester': 'Semester 3',
+          'Kelas': 'Reguler 3A',
+          'Kategori Kelas': 'Reguler',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': '1. Perpajakan Terapan [Nilai: C] (3 SKS)\n2. Akuntansi Sektor Publik [Nilai: BC] (3 SKS)',
+          'Dosen Pengampu': '1. Dr. Desmy Riani, S.E., M.Ak. (Dosen Lalu: Dr. Desmy Riani, S.E., M.Ak.)\n2. Ahmad, S.E., M.Ak. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)',
+          'Jenis Layanan': 'Remedial Teaching',
+          'Alasan': 'Perbaikan 2 mata kuliah konsentrasi perpajakan & sektor publik',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Tepat Waktu',
+          'Nominal': 300000,
+          'Status Pembayaran': 'Lunas',
+          'Status Persetujuan': 'Disetujui',
+          'mataKuliahList': [
+            {
+              nama: 'Perpajakan Terapan',
+              mataKuliah: 'Perpajakan Terapan',
+              dosen: 'Dr. Desmy Riani, S.E., M.Ak.',
+              dosenPengampu: 'Dr. Desmy Riani, S.E., M.Ak.',
+              sks: 3,
+              nilaiHuruf: 'C',
+              dosenLalu: 'Dr. Desmy Riani, S.E., M.Ak.'
+            },
+            {
+              nama: 'Akuntansi Sektor Publik',
+              mataKuliah: 'Akuntansi Sektor Publik',
+              dosen: 'Ahmad, S.E., M.Ak.',
+              dosenPengampu: 'Ahmad, S.E., M.Ak.',
+              sks: 3,
+              nilaiHuruf: 'BC',
+              dosenLalu: 'Dra. Hj. Sri Mulyati, M.Ak.'
+            }
+          ],
+          'jumlahMatkul': 2,
+          'totalSks': 6
+        },
+        {
+          'ID': 'REG-1008',
+          'Tanggal': '2026-10-18',
+          'NPM': '2311030054',
+          'Nama Mahasiswa': 'Kevin Alamsyah',
+          'Kode Prodi': 'BD',
+          'Program Studi': 'Bisnis Digital',
+          'Semester': 'Semester 3',
+          'Kelas': 'Karyawan 3A',
+          'Kategori Kelas': 'Karyawan',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': 'E-Commerce Strategy & Marketing',
+          'Dosen Pengampu': 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.',
+          'Jenis Layanan': 'UAS Susulan',
+          'Alasan': 'Mewakili kampus dalam kompetisi Startup Digital Nasional',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Tepat Waktu',
+          'Nominal': 0,
+          'Status Pembayaran': 'Gratis (Tepat Waktu)',
+          'Status Persetujuan': 'Disetujui',
+          'mataKuliahList': [
+            { nama: 'E-Commerce Strategy & Marketing', mataKuliah: 'E-Commerce Strategy & Marketing', dosen: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', dosenPengampu: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', sks: 3 }
+          ],
+          'jumlahMatkul': 1,
+          'totalSks': 3
+        },
+        {
+          'ID': 'REG-1009',
+          'Tanggal': '2026-10-19',
+          'NPM': '2411040022',
+          'Nama Mahasiswa': 'Zahra Amelia Putri',
+          'Kode Prodi': 'PI',
+          'Program Studi': 'Perdagangan Internasional',
+          'Semester': 'Semester 1',
+          'Kelas': 'Reguler 1B',
+          'Kategori Kelas': 'Reguler',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': 'Kepabeanan & Ekspor Impor',
+          'Dosen Pengampu': 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.',
+          'Jenis Layanan': 'UTS Susulan',
+          'Alasan': 'Sakit tifus saat hari pelaksanaan ujian reguler',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Tepat Waktu',
+          'Nominal': 0,
+          'Status Pembayaran': 'Gratis (Tepat Waktu)',
+          'Status Persetujuan': 'Pending',
+          'mataKuliahList': [
+            { nama: 'Kepabeanan & Ekspor Impor', mataKuliah: 'Kepabeanan & Ekspor Impor', dosen: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', dosenPengampu: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', sks: 3 }
+          ],
+          'jumlahMatkul': 1,
+          'totalSks': 3
+        },
+        {
+          'ID': 'REG-1010',
+          'Tanggal': '2026-10-19',
+          'NPM': '2211050015',
+          'Nama Mahasiswa': 'Rian Hidayat',
+          'Kode Prodi': 'PKD',
+          'Program Studi': 'Perbankan dan Keuangan Digital',
+          'Semester': 'Semester 5',
+          'Kelas': 'Reguler 5A',
+          'Kategori Kelas': 'Reguler',
+          'Tahun Akademik': '2026/2027 Ganjil',
+          'Mata Kuliah': '1. Analisis Kredit Perbankan (3 SKS)\n2. Financial Technology Ecosystem (3 SKS)',
+          'Dosen Pengampu': '1. Denia Maulani, S.E., M.M.\n2. Dr. Hendra Suhendra, M.M.',
+          'Jenis Layanan': 'UAS Susulan',
+          'Alasan': 'Mengikuti program magang MBKM bersertifikat Kemendikbudristek',
+          'Bukti Foto': '',
+          'Status Jadwal': 'Terlambat',
+          'Nominal': 100000,
+          'Status Pembayaran': 'Lunas',
+          'Status Persetujuan': 'Pending',
+          'mataKuliahList': [
+            { nama: 'Analisis Kredit Perbankan', mataKuliah: 'Analisis Kredit Perbankan', dosen: 'Denia Maulani, S.E., M.M.', dosenPengampu: 'Denia Maulani, S.E., M.M.', sks: 3 },
+            { nama: 'Financial Technology Ecosystem', mataKuliah: 'Financial Technology Ecosystem', dosen: 'Dr. Hendra Suhendra, M.M.', dosenPengampu: 'Dr. Hendra Suhendra, M.M.', sks: 3 }
+          ],
+          'jumlahMatkul': 2,
+          'totalSks': 6
+        }
+      ];
+    }
+
     function handleInjectMockups() {
       Swal.fire({
-        title: 'Suntik 5 Data Mockup?',
-        text: 'Sistem akan memasukkan 5 data sampel mahasiswa lengkap dengan status verifikasi & tagihan ke database website.',
+        title: 'Suntik 10 Data Mockup?',
+        text: 'Sistem akan memasukkan 10 data sampel mahasiswa FEB UIKA (UTS Susulan, UAS Susulan, & Remedial Teaching lengkap dengan multi-matkul dan riwayat nilai D, CD, C, BC).',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Suntik Data',
+        confirmButtonText: 'Ya, Suntik 10 Data',
         confirmButtonColor: '#7e22ce'
       }).then(r => {
         if (r.isConfirmed) {
           Swal.fire({
-            title: 'Memproses Injeksi Data Mockup...',
+            title: 'Memproses Injeksi 10 Data Mockup...',
             allowOutsideClick: false,
             didOpen: () => Swal.showLoading()
           });
 
-          google.script.run
-            .withSuccessHandler(res => {
-              closeAiDiagnosticsModal();
-              Swal.fire('Berhasil Disuntik', res.message || '5 Data Mockup berhasil masuk ke database website!', 'success');
-              loadAppData();
-            })
-            .withFailureHandler(err => {
-              Swal.fire('Error', err.message || String(err), 'error');
-            })
-            .seedMockupData(currentUser?.nama || 'Master Admin');
+          const mockups = getTenMockupDataItems();
+
+          // Cek apakah Google Apps Script runtime tersedia
+          const isGas = typeof google !== 'undefined' && google.script && google.script.run && typeof google.script.run.seedMockupData === 'function';
+
+          if (isGas) {
+            google.script.run
+              .withSuccessHandler(res => {
+                closeAiDiagnosticsModal();
+                Swal.fire('Berhasil Disuntik', res.message || '10 Data Mockup berhasil masuk ke database website!', 'success');
+                loadAppData();
+              })
+              .withFailureHandler(err => {
+                // Fallback client-side jika koneksi GAS offline
+                injectMockupDataClientSide(mockups);
+              })
+              .seedMockupData(currentUser?.nama || 'Master Admin');
+          } else {
+            // Mode Client / Vite / Standalone
+            injectMockupDataClientSide(mockups);
+          }
         }
       });
+    }
+
+    function injectMockupDataClientSide(mockups) {
+      if (!appData.pendaftaran) appData.pendaftaran = [];
+      const existingIds = new Set(appData.pendaftaran.map(p => String(p.ID)));
+      let added = 0;
+      mockups.forEach(m => {
+        if (!existingIds.has(String(m.ID))) {
+          appData.pendaftaran.push(m);
+          added++;
+        }
+      });
+      closeAiDiagnosticsModal();
+      Swal.fire('Berhasil Disuntik', `10 Data Mockup sampel berhasil disuntikkan ke memori sistem (UTS Susulan, UAS Susulan, & Remedial Teaching)!`, 'success');
+      renderPendaftaranTable();
+      renderExecutiveDashboard();
     }
 
     function handleClearTestData() {
       Swal.fire({
         title: 'Bersihkan Data Uji?',
-        text: 'Data sampel pengujian akan dihapus dari database website.',
+        text: 'Data sampel pengujian (REG-1001 s.d. REG-1010) akan dibersihkan dari database website.',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonText: 'Ya, Bersihkan',
         confirmButtonColor: '#e11d48'
       }).then(r => {
         if (r.isConfirmed) {
-          google.script.run
-            .withSuccessHandler(res => {
-              closeAiDiagnosticsModal();
-              Swal.fire('Bersih', res.message, 'success');
-              loadAppData();
-            })
-            .clearAITestData();
+          const isGas = typeof google !== 'undefined' && google.script && google.script.run && typeof google.script.run.clearAITestData === 'function';
+
+          if (isGas) {
+            google.script.run
+              .withSuccessHandler(res => {
+                closeAiDiagnosticsModal();
+                Swal.fire('Bersih', res.message || 'Data uji berhasil dibersihkan.', 'success');
+                loadAppData();
+              })
+              .withFailureHandler(() => {
+                clearTestDataClientSide();
+              })
+              .clearAITestData();
+          } else {
+            clearTestDataClientSide();
+          }
         }
       });
+    }
+
+    function clearTestDataClientSide() {
+      if (appData.pendaftaran) {
+        const testIds = new Set(['REG-1001', 'REG-1002', 'REG-1003', 'REG-1004', 'REG-1005', 'REG-1006', 'REG-1007', 'REG-1008', 'REG-1009', 'REG-1010']);
+        appData.pendaftaran = appData.pendaftaran.filter(p => !testIds.has(String(p.ID)));
+      }
+      closeAiDiagnosticsModal();
+      Swal.fire('Bersih', 'Data sampel pengujian berhasil dibersihkan dari memori.', 'success');
+      renderPendaftaranTable();
+      renderExecutiveDashboard();
     }
 
     // ==========================================

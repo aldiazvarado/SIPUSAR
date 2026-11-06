@@ -1,6 +1,6 @@
 {
-  "summary": "Rencana implementasi fitur Remedial Teaching dengan input nilai huruf sebelumnya (D, CD, C, BC) dan penentuan dosen pengampu terdahulu pada formulir pendaftaran multi-mata kuliah dinamis. Dilengkapi validasi kelayakan nilai, autocomplete dosen terdahulu dengan opsi ketik manual, sinkronisasi format spreadsheet, dan visualisasi kartu ujian.",
-  "updatedAt": "2026-11-06T10:11:43.637292680Z",
+  "summary": "Rencana penyusunan prompt flowchart komprehensif berbasis kode diagram Mermaid.js untuk dikirim ke Gemini, mencakup seluruh 7 role pengguna dan seluruh fitur/menu sistem FEB UIKA (multi-matkul, remedial teaching D/CD/C/BC, verifikasi, penjadwalan, kartu ujian, dan master data).",
+  "updatedAt": "2026-11-06T12:19:27.916324598Z",
   "requestFeedback": true,
   "userFacing": true
 }
