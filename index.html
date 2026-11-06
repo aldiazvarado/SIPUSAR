@@ -3,8 +3,6 @@
 <head>
   <script type="module" src="/@vite/client"></script>
 
-  <script type="module" src="/@vite/client"></script>
-
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Pendaftaran & Reporting Akademik - FEB UIKA Bogor</title>
@@ -1306,7 +1304,7 @@
 
   <!-- MODAL: PENDAFTARAN (POIN 3 DITERAPKAN: NAMA, NPM, DAN PRODI TERKUNCI READONLY BAGI MAHASISWA) -->
   <div id="modalPendaftaran" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
         <div>
           <h3 id="modalPendaftaranTitle" class="text-base font-black text-slate-800">Form Pendaftaran Akademik Baru</h3>
@@ -1336,11 +1334,21 @@
               <input type="text" id="pendaftaranSemester" readonly class="w-full bg-slate-100 text-slate-800 font-bold border border-slate-200 rounded-xl px-3 py-2 cursor-not-allowed select-none">
             </div>
             <div>
-              <label class="block font-bold text-slate-500 mb-1">Jenis Layanan</label>
-              <input type="text" id="pendaftaranLayanan" readonly class="w-full bg-blue-50 text-blue-950 font-bold border border-blue-200 rounded-xl px-3 py-2 cursor-not-allowed select-none">
+              <div class="flex items-center justify-between mb-1">
+                <label for="pendaftaranLayanan" class="block font-bold text-slate-600">Jenis Layanan <span class="text-rose-500">*</span></label>
+                <span id="badgeLayananLock" class="text-[10px] text-blue-800 font-bold"></span>
+              </div>
+              <select id="pendaftaranLayanan" onchange="onLayananChange(this.value)" class="w-full bg-white text-blue-950 font-black border-2 border-blue-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer shadow-2xs">
+                <option value="UTS Susulan">UTS Susulan</option>
+                <option value="UAS Susulan">UAS Susulan</option>
+                <option value="Remedial Teaching">Remedial Teaching</option>
+              </select>
             </div>
           </div>
         </div>
+
+        <!-- DATALIST GLOBAL UNTUK AUTOCOMPLETE DOSEN TERDAHULU -->
+        <datalist id="datalistDosenTerdahulu"></datalist>
 
         <!-- Bagian NPM & Nama (POIN 3: KUNCI READONLY UNTUK MAHASISWA) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1387,80 +1395,61 @@
           </div>
         </div>
 
-        <!-- KOMPONEN AUTOCOMPLETE MATA KULIAH & DOSEN PENGAMPU -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <!-- AUTOCOMPLETE MATA KULIAH -->
-          <div class="relative" id="autocompleteMatkulContainer">
-            <div class="flex items-center justify-between mb-1">
-              <label for="pendaftaranMatkul" class="block font-bold text-slate-700 text-xs sm:text-sm">
-                Mata Kuliah <span class="text-rose-500">*</span>
+        <!-- PILIHAN JUMLAH MATA KULIAH (1 SAMPAI 7) -->
+        <div class="bg-gradient-to-r from-blue-50/90 via-indigo-50/60 to-blue-50/90 p-4 rounded-2xl border border-blue-200/90 space-y-2.5 shadow-2xs">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+            <div>
+              <label for="pendaftaranJumlahMatkul" class="block font-black text-blue-950 text-xs sm:text-sm">
+                <i class="fas fa-layer-group text-blue-900 mr-1.5"></i> Jumlah Mata Kuliah yang Ingin Didaftarkan <span class="text-rose-500">*</span>
               </label>
-              <span id="badgeMatkulProdi" class="text-[10px] font-bold text-blue-800 bg-blue-100/70 px-1.5 py-0.5 rounded-md">Prodi: MNJ</span>
+              <p class="text-[11px] text-blue-900/80 font-medium">Pilih 1 sampai 7 mata kuliah dalam satu formulir pendaftaran ujian.</p>
             </div>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <i class="fas fa-book-open text-xs"></i>
-              </div>
-              <input type="text" id="pendaftaranMatkul" required autocomplete="off"
-                placeholder="Ketik untuk mencari mata kuliah..."
-                class="w-full pl-8 pr-16 py-2 bg-white border border-slate-300 rounded-xl font-semibold text-slate-800 text-xs sm:text-sm placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition-all shadow-sm">
-              <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
-                <button type="button" id="btnClearMatkul" title="Bersihkan input"
-                  class="hidden w-5 h-5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors">
-                  <i class="fas fa-times text-[10px]"></i>
-                </button>
-                <div class="text-slate-400 pointer-events-none px-1">
-                  <i class="fas fa-chevron-down text-[10px]"></i>
-                </div>
-              </div>
-            </div>
-            <!-- Feedback Visual Pilihan Valid -->
-            <div id="feedbackMatkulSelected" class="hidden mt-1 text-[11px] font-medium text-emerald-800 flex items-center gap-1">
-              <i class="fas fa-check-circle text-emerald-700"></i>
-              <span id="feedbackMatkulText"></span>
-            </div>
-            <!-- Floating Suggestions Dropdown -->
-            <div id="dropdownListMatkul" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100">
-            </div>
-          </div>
-
-          <!-- AUTOCOMPLETE DOSEN PENGAMPU -->
-          <div class="relative" id="autocompleteDosenContainer">
-            <div class="flex items-center justify-between mb-1">
-              <label for="pendaftaranDosen" class="block font-bold text-slate-700 text-xs sm:text-sm">
-                Dosen Pengampu <span class="text-rose-500">*</span>
-              </label>
-              <span id="badgeDosenSuggest" class="hidden text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-1.5 py-0.5 rounded-md flex items-center gap-1">
-                <i class="fas fa-magic text-[9px]"></i> Disarankan
-              </span>
-            </div>
-            <div class="relative">
-              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <i class="fas fa-user-tie text-xs"></i>
-              </div>
-              <input type="text" id="pendaftaranDosen" required autocomplete="off"
-                placeholder="Ketik untuk mencari dosen pengampu..."
-                class="w-full pl-8 pr-16 py-2 bg-white border border-slate-300 rounded-xl font-semibold text-slate-800 text-xs sm:text-sm placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition-all shadow-sm">
-              <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
-                <button type="button" id="btnClearDosen" title="Bersihkan input"
-                  class="hidden w-5 h-5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors">
-                  <i class="fas fa-times text-[10px]"></i>
-                </button>
-                <div class="text-slate-400 pointer-events-none px-1">
-                  <i class="fas fa-chevron-down text-[10px]"></i>
-                </div>
-              </div>
-            </div>
-            <!-- Feedback Visual Pilihan Valid -->
-            <div id="feedbackDosenSelected" class="hidden mt-1 text-[11px] font-medium text-emerald-800 flex items-center gap-1">
-              <i class="fas fa-check-circle text-emerald-700"></i>
-              <span id="feedbackDosenText"></span>
-            </div>
-            <!-- Floating Suggestions Dropdown -->
-            <div id="dropdownListDosen" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-60 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100">
+            <div class="w-full sm:w-52 shrink-0">
+              <select id="pendaftaranJumlahMatkul" onchange="onJumlahMatkulChange(this.value)" class="w-full bg-white border-2 border-blue-400 rounded-xl px-3 py-2 font-black text-blue-950 text-xs sm:text-sm focus:ring-2 focus:ring-blue-900 focus:border-blue-900 shadow-xs cursor-pointer">
+                <option value="1">1 Mata Kuliah</option>
+                <option value="2">2 Mata Kuliah</option>
+                <option value="3">3 Mata Kuliah</option>
+                <option value="4">4 Mata Kuliah</option>
+                <option value="5">5 Mata Kuliah</option>
+                <option value="6">6 Mata Kuliah</option>
+                <option value="7">7 Mata Kuliah</option>
+              </select>
             </div>
           </div>
         </div>
+
+        <!-- KONTAINER INPUT DINAMIS MATA KULIAH & DOSEN PENGAMPU -->
+        <div id="dynamicMatkulContainer" class="space-y-3">
+          <!-- Di-generate secara dinamis oleh JavaScript -->
+        </div>
+
+        <!-- LIVE SUMMARY STRIP (TOTAL MATKUL, TOTAL SKS, ESTIMASI BIAYA) -->
+        <div id="liveSummaryStrip" class="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white p-4 rounded-2xl shadow-md border border-slate-800">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-300">
+                <i class="fas fa-calculator text-sm"></i>
+              </div>
+              <div>
+                <p class="text-[10px] uppercase tracking-wider text-slate-400 font-extrabold">Ringkasan Pengajuan Ujian</p>
+                <div class="flex items-center gap-2 mt-0.5">
+                  <span id="summaryMatkulCountBadge" class="text-xs font-bold text-white bg-blue-600/80 px-2 py-0.5 rounded-md border border-blue-400/40">1 Mata Kuliah</span>
+                  <span class="text-slate-500">·</span>
+                  <span id="summaryTotalSksText" class="text-xs font-mono font-bold text-amber-300">0 SKS Terakumulasi</span>
+                </div>
+              </div>
+            </div>
+            <div class="text-right">
+              <p class="text-[10px] uppercase tracking-wider text-slate-400 font-extrabold">Estimasi Total Biaya / Retribusi</p>
+              <p id="summaryTotalNominalText" class="font-mono text-sm sm:text-base font-black text-emerald-400">Rp 0</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- PROXY INPUTS UNTUK KOMPATIBILITAS SYSTEM & SPREADSHEET -->
+        <input type="hidden" id="pendaftaranMatkul">
+        <input type="hidden" id="pendaftaranDosen">
+        <input type="hidden" id="pendaftaranTotalSks" value="0">
 
         <div id="wrapperStatusPersetujuan" class="hidden p-3 bg-slate-50 rounded-xl border border-slate-200">
           <label class="block font-bold text-slate-600 mb-1">Status Persetujuan (Khusus Mode Edit Admin)</label>
@@ -2359,13 +2348,24 @@
           'Kategori Kelas': 'Reguler',
           'Mata Kuliah': 'Akuntansi Biaya Lanjutan',
           'Dosen Pengampu': 'Prof. Dr. Hendro Sasongko, M.M.',
-          'Jenis Layanan': 'Remedial',
+          'Jenis Layanan': 'Remedial Teaching',
           'Nominal': 150000,
           'Status Pembayaran': 'Lunas',
           'Status Persetujuan': 'Pending',
           'Tahun Akademik': '2026/2027 Ganjil',
           'No Rekening': '1100234902',
-          'Alasan': 'Perbaikan nilai mata kuliah'
+          'Alasan': 'Perbaikan nilai mata kuliah',
+          'mataKuliahList': [
+            {
+              nama: 'Akuntansi Biaya Lanjutan',
+              mataKuliah: 'Akuntansi Biaya Lanjutan',
+              dosen: 'Prof. Dr. Hendro Sasongko, M.M.',
+              dosenPengampu: 'Prof. Dr. Hendro Sasongko, M.M.',
+              sks: 3,
+              nilaiHuruf: 'CD',
+              dosenLalu: 'Dra. Hj. Sri Mulyati, M.Ak.'
+            }
+          ]
         },
         {
           'ID': 'REG-1003',
@@ -3546,32 +3546,284 @@
     }
 
     // Variabel Instans Autocomplete Global
-    let autoMatkulPendaftaran = null;
-    let autoDosenPendaftaran = null;
+    let dynamicMatkulAutocompletes = [];
     let autoMatkulJadwal = null;
     let autoDosenJadwal = null;
 
-    function initAllAutocompletes() {
-      // 1. AUTOCOMPLETE MATA KULIAH PADA FORM PENDAFTARAN
-      const inputMatkul = document.getElementById('pendaftaranMatkul');
-      const dropMatkul = document.getElementById('dropdownListMatkul');
-      const btnClearMatkul = document.getElementById('btnClearMatkul');
-      const contMatkul = document.getElementById('autocompleteMatkulContainer');
+    // Helper: Mengisi datalist dosen terdahulu dari master data dosen FEB UIKA
+    function populateDatalistDosenTerdahulu() {
+      const datalist = document.getElementById('datalistDosenTerdahulu');
+      if (!datalist) return;
+      const master = appData.master || {};
+      const allDosen = master.dosen || [];
+      datalist.innerHTML = allDosen.map(d => {
+        const nama = d['Nama Dosen'] || d.Nama || '';
+        const prodi = d['Kode Prodi'] || 'FEB';
+        return `<option value="${escapeHtml(nama)}">${escapeHtml(nama)} (${prodi})</option>`;
+      }).join('');
+    }
 
-      if (inputMatkul && dropMatkul && !autoMatkulPendaftaran) {
-        autoMatkulPendaftaran = setupAutocomplete({
-          inputElem: inputMatkul,
-          dropdownElem: dropMatkul,
-          clearBtnElem: btnClearMatkul,
-          containerElem: contMatkul,
+    // Handler: Perubahan jenis layanan (UTS Susulan / UAS Susulan / Remedial Teaching)
+    function onLayananChange(newVal) {
+      const existing = collectCurrentMatkulFormData();
+      const selJumlah = document.getElementById('pendaftaranJumlahMatkul');
+      const count = parseInt(selJumlah?.value || '1', 10);
+      renderDynamicMatkulInputs(count, existing);
+      updateRegistrationSummary();
+    }
+
+    // Helper: Salin nama dosen pengampu baru ke dosen masa lalu untuk baris rowIdx
+    function copyCurrentDosenToLalu(rowIdx) {
+      const currentDosenInput = document.getElementById(`pendaftaranDosen_${rowIdx}`);
+      const laluDosenInput = document.getElementById(`pendaftaranDosenLalu_${rowIdx}`);
+      if (currentDosenInput && laluDosenInput) {
+        laluDosenInput.value = currentDosenInput.value;
+      }
+    }
+
+    // Helper: Mengumpulkan data form mata kuliah dinamis yang sedang terisi di browser
+    function collectCurrentMatkulFormData() {
+      const container = document.getElementById('dynamicMatkulContainer');
+      if (!container) return [];
+      const cards = container.querySelectorAll('[id^="matkulRowCard_"]');
+      const data = [];
+      cards.forEach((card, idx) => {
+        const matkulInput = document.getElementById(`pendaftaranMatkul_${idx}`);
+        const dosenInput = document.getElementById(`pendaftaranDosen_${idx}`);
+        const nilaiHurufSelect = document.getElementById(`pendaftaranNilaiHuruf_${idx}`);
+        const dosenLaluInput = document.getElementById(`pendaftaranDosenLalu_${idx}`);
+        const matkulVal = (matkulInput ? matkulInput.value : '').trim();
+        const dosenVal = (dosenInput ? dosenInput.value : '').trim();
+        const sksVal = parseInt(matkulInput?.dataset?.sks || '0', 10) || 0;
+        const kodeVal = matkulInput?.dataset?.kode || '';
+        const nilaiHurufVal = (nilaiHurufSelect ? nilaiHurufSelect.value : '').trim();
+        const dosenLaluVal = (dosenLaluInput ? dosenLaluInput.value : '').trim();
+        data.push({
+          mataKuliah: matkulVal,
+          dosenPengampu: dosenVal,
+          sks: sksVal,
+          kode: kodeVal,
+          nilaiHuruf: nilaiHurufVal,
+          dosenLalu: dosenLaluVal
+        });
+      });
+      return data;
+    }
+
+    // Helper: Mengubah jumlah mata kuliah dari dropdown (1 sampai 7)
+    function onJumlahMatkulChange(countVal) {
+      let count = parseInt(countVal, 10) || 1;
+      if (count < 1) count = 1;
+      if (count > 7) count = 7;
+      const existing = collectCurrentMatkulFormData();
+      renderDynamicMatkulInputs(count, existing);
+    }
+
+    // Helper: Hapus satu baris mata kuliah tertentu
+    function removeSingleMatkulRow(rowIdx) {
+      const sel = document.getElementById('pendaftaranJumlahMatkul');
+      const currentCount = parseInt(sel?.value || '1', 10);
+      if (currentCount <= 1) {
+        Swal.fire('Info', 'Minimal 1 mata kuliah harus didaftarkan.', 'info');
+        return;
+      }
+      const existing = collectCurrentMatkulFormData();
+      if (rowIdx >= 0 && rowIdx < existing.length) {
+        existing.splice(rowIdx, 1);
+      }
+      const newCount = existing.length;
+      if (sel) sel.value = String(newCount);
+      renderDynamicMatkulInputs(newCount, existing);
+    }
+
+    // Generator Dinamis: Render Baris Form Sesuai Jumlah yang Dipilih (1 sampai 7)
+    function renderDynamicMatkulInputs(count = 1, existingData = []) {
+      const container = document.getElementById('dynamicMatkulContainer');
+      if (!container) return;
+
+      count = Math.max(1, Math.min(7, parseInt(count, 10) || 1));
+      const sel = document.getElementById('pendaftaranJumlahMatkul');
+      if (sel && sel.value !== String(count)) {
+        sel.value = String(count);
+      }
+
+      container.innerHTML = '';
+      dynamicMatkulAutocompletes = [];
+
+      const activeProdi = (document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
+      const layananVal = (document.getElementById('pendaftaranLayanan')?.value || '').toLowerCase();
+      const isRemedial = layananVal.includes('remedial');
+
+      for (let i = 0; i < count; i++) {
+        const rowData = existingData[i] || {};
+        const rowNum = i + 1;
+
+        const rowCard = document.createElement('div');
+        rowCard.id = `matkulRowCard_${i}`;
+        rowCard.className = 'p-3.5 sm:p-4 bg-slate-50/90 hover:bg-slate-50 rounded-2xl border border-slate-200/90 transition-all space-y-3 relative shadow-2xs';
+
+        rowCard.innerHTML = `
+          <!-- Header Baris Matkul -->
+          <div class="flex items-center justify-between pb-2 border-b border-slate-200/70">
+            <div class="flex items-center gap-2">
+              <span class="w-6 h-6 rounded-lg bg-blue-900 text-white font-mono font-bold text-xs flex items-center justify-center shadow-xs">${rowNum}</span>
+              <span class="font-extrabold text-slate-800 text-xs sm:text-sm">Mata Kuliah #${rowNum}</span>
+              <span id="badgeMatkulProdi_${i}" class="text-[10px] font-bold text-blue-900 bg-blue-100/80 px-2 py-0.5 rounded-md">Prodi: ${activeProdi}</span>
+              ${isRemedial ? `<span class="text-[10px] font-black text-indigo-700 bg-indigo-100/90 px-2 py-0.5 rounded-md border border-indigo-200"><i class="fas fa-graduation-cap mr-1"></i>Remedial Teaching</span>` : ''}
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="badgeRowSks_${i}" class="text-[11px] font-mono font-bold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">0 SKS</span>
+              ${count > 1 ? `
+                <button type="button" onclick="removeSingleMatkulRow(${i})" title="Hapus baris mata kuliah ini" class="text-slate-400 hover:text-rose-600 hover:bg-rose-50 w-6 h-6 rounded-lg flex items-center justify-center transition">
+                  <i class="fas fa-trash-alt text-[10px]"></i>
+                </button>
+              ` : ''}
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- AUTOCOMPLETE MATA KULIAH -->
+            <div class="relative" id="autocompleteMatkulContainer_${i}">
+              <div class="flex items-center justify-between mb-1">
+                <label for="pendaftaranMatkul_${i}" class="block font-bold text-slate-700 text-xs">
+                  Nama Mata Kuliah <span class="text-rose-500">*</span>
+                </label>
+              </div>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <i class="fas fa-book-open text-xs"></i>
+                </div>
+                <input type="text" id="pendaftaranMatkul_${i}" required autocomplete="off"
+                  placeholder="Ketik untuk mencari mata kuliah..."
+                  class="w-full pl-8 pr-16 py-2 bg-white border border-slate-300 rounded-xl font-semibold text-slate-800 text-xs sm:text-sm placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition-all shadow-2xs">
+                <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+                  <button type="button" id="btnClearMatkul_${i}" title="Bersihkan input"
+                    class="hidden w-5 h-5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors">
+                    <i class="fas fa-times text-[10px]"></i>
+                  </button>
+                  <div class="text-slate-400 pointer-events-none px-1">
+                    <i class="fas fa-chevron-down text-[10px]"></i>
+                  </div>
+                </div>
+              </div>
+              <!-- Feedback Visual Pilihan Valid -->
+              <div id="feedbackMatkulSelected_${i}" class="hidden mt-1 text-[11px] font-medium text-emerald-800 flex items-center gap-1">
+                <i class="fas fa-check-circle text-emerald-700"></i>
+                <span id="feedbackMatkulText_${i}"></span>
+              </div>
+              <!-- Floating Suggestions Dropdown -->
+              <div id="dropdownListMatkul_${i}" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100"></div>
+            </div>
+
+            <!-- AUTOCOMPLETE DOSEN PENGAMPU -->
+            <div class="relative" id="autocompleteDosenContainer_${i}">
+              <div class="flex items-center justify-between mb-1">
+                <label for="pendaftaranDosen_${i}" class="block font-bold text-slate-700 text-xs">
+                  Dosen Pengampu ${isRemedial ? '(Saat Ini / Penguji)' : ''} <span class="text-rose-500">*</span>
+                </label>
+                <span id="badgeDosenSuggest_${i}" class="hidden text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                  <i class="fas fa-magic text-[9px]"></i> Disarankan
+                </span>
+              </div>
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <i class="fas fa-user-tie text-xs"></i>
+                </div>
+                <input type="text" id="pendaftaranDosen_${i}" required autocomplete="off"
+                  placeholder="Ketik untuk mencari dosen pengampu..."
+                  class="w-full pl-8 pr-16 py-2 bg-white border border-slate-300 rounded-xl font-semibold text-slate-800 text-xs sm:text-sm placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition-all shadow-2xs">
+                <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+                  <button type="button" id="btnClearDosen_${i}" title="Bersihkan input"
+                    class="hidden w-5 h-5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors">
+                    <i class="fas fa-times text-[10px]"></i>
+                  </button>
+                  <div class="text-slate-400 pointer-events-none px-1">
+                    <i class="fas fa-chevron-down text-[10px]"></i>
+                  </div>
+                </div>
+              </div>
+              <!-- Feedback Visual Pilihan Valid -->
+              <div id="feedbackDosenSelected_${i}" class="hidden mt-1 text-[11px] font-medium text-emerald-800 flex items-center gap-1">
+                <i class="fas fa-check-circle text-emerald-700"></i>
+                <span id="feedbackDosenText_${i}"></span>
+              </div>
+              <!-- Floating Suggestions Dropdown -->
+              <div id="dropdownListDosen_${i}" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100"></div>
+            </div>
+          </div>
+
+          ${isRemedial ? `
+          <!-- BLOK KHUSUS REMEDIAL TEACHING: NILAI HURUF & DOSEN PADA SAAT ITU -->
+          <div id="remedialBlock_${i}" class="p-3 sm:p-3.5 bg-gradient-to-r from-indigo-50/90 via-purple-50/60 to-blue-50/80 rounded-xl border border-indigo-200/90 space-y-2.5 shadow-2xs">
+            <div class="flex items-center justify-between pb-1.5 border-b border-indigo-200/60">
+              <span class="text-[11px] font-black text-indigo-950 flex items-center gap-1.5">
+                <i class="fas fa-award text-indigo-700"></i> Riwayat Nilai & Dosen Terdahulu
+              </span>
+              <span class="text-[10px] font-bold text-indigo-800 bg-indigo-100/90 px-2 py-0.5 rounded-md border border-indigo-200">
+                Nilai Syarat: D, CD, C, BC
+              </span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="pendaftaranNilaiHuruf_${i}" class="block font-bold text-indigo-950 text-xs mb-1">
+                  Nilai Huruf Sebelumnya <span class="text-rose-500">*</span>
+                </label>
+                <select id="pendaftaranNilaiHuruf_${i}" required onchange="syncMatkulLegacyFields()" class="w-full py-2 px-3 bg-white border border-indigo-300 rounded-xl font-bold text-indigo-950 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-indigo-700 focus:border-indigo-700 shadow-2xs">
+                  <option value="" disabled ${!rowData.nilaiHuruf ? 'selected' : ''}>-- Pilih Nilai Huruf --</option>
+                  <option value="BC" ${rowData.nilaiHuruf === 'BC' ? 'selected' : ''}>BC (Cukup Baik)</option>
+                  <option value="C" ${rowData.nilaiHuruf === 'C' ? 'selected' : ''}>C (Cukup)</option>
+                  <option value="CD" ${rowData.nilaiHuruf === 'CD' ? 'selected' : ''}>CD (Kurang Cukup)</option>
+                  <option value="D" ${rowData.nilaiHuruf === 'D' ? 'selected' : ''}>D (Kurang)</option>
+                </select>
+                <p class="text-[10px] text-slate-500 mt-1">Nilai huruf yang didapat pada semester sebelumnya.</p>
+              </div>
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label for="pendaftaranDosenLalu_${i}" class="block font-bold text-indigo-950 text-xs">
+                    Dosen Mata Kuliah Pada Saat Itu <span class="text-rose-500">*</span>
+                  </label>
+                  <button type="button" onclick="copyCurrentDosenToLalu(${i})" title="Salin dari dosen pengampu baru di atas" class="text-[10px] font-bold text-indigo-700 hover:text-indigo-900 hover:underline flex items-center gap-1">
+                    <i class="fas fa-copy text-[9px]"></i> Sama Dgn Dosen Baru
+                  </button>
+                </div>
+                <input type="text" id="pendaftaranDosenLalu_${i}" list="datalistDosenTerdahulu" required autocomplete="off"
+                  value="${escapeHtml(rowData.dosenLalu || '')}"
+                  oninput="syncMatkulLegacyFields()"
+                  placeholder="Pilih dari daftar dosen atau ketik nama..."
+                  class="w-full py-2 px-3 bg-white border border-indigo-300 rounded-xl font-semibold text-slate-800 text-xs sm:text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-700 focus:border-indigo-700 shadow-2xs">
+                <p class="text-[10px] text-slate-500 mt-1">Dosen yang mengajar saat Anda memperoleh nilai tersebut.</p>
+              </div>
+            </div>
+          </div>
+          ` : ''}
+        `;
+
+        container.appendChild(rowCard);
+
+        // Bind Autocomplete Mata Kuliah untuk Row i
+        const inputM = document.getElementById(`pendaftaranMatkul_${i}`);
+        const dropM = document.getElementById(`dropdownListMatkul_${i}`);
+        const btnClearM = document.getElementById(`btnClearMatkul_${i}`);
+        const contM = document.getElementById(`autocompleteMatkulContainer_${i}`);
+
+        // Bind Autocomplete Dosen Pengampu untuk Row i
+        const inputD = document.getElementById(`pendaftaranDosen_${i}`);
+        const dropD = document.getElementById(`dropdownListDosen_${i}`);
+        const btnClearD = document.getElementById(`btnClearDosen_${i}`);
+        const contD = document.getElementById(`autocompleteDosenContainer_${i}`);
+
+        const autoMatkulInstance = setupAutocomplete({
+          inputElem: inputM,
+          dropdownElem: dropM,
+          clearBtnElem: btnClearM,
+          containerElem: contM,
           placeholderEmpty: 'Mata kuliah tidak ditemukan untuk Prodi ini',
           getItems: (query) => {
             const master = appData.master || {};
             const allMatkul = master.matkul || [];
-            const activeProdi = (document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
-            
-            // Filter berdasarkan Prodi yang aktif di form pendaftaran
-            let filtered = allMatkul.filter(m => String(m['Kode Prodi'] || '').toUpperCase() === activeProdi);
+            const currProdi = (document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
+
+            let filtered = allMatkul.filter(m => String(m['Kode Prodi'] || '').toUpperCase() === currProdi);
             if (filtered.length === 0) filtered = allMatkul;
 
             if (!query || !query.trim()) return filtered;
@@ -3600,48 +3852,90 @@
             `;
           },
           onSelect: (item) => {
-            // Tampilkan feedback visual pilihan mata kuliah
-            const fb = document.getElementById('feedbackMatkulSelected');
-            const fbText = document.getElementById('feedbackMatkulText');
+            // Anti-duplikasi real-time: cek apakah mata kuliah sudah dipilih di baris lain
+            const selectedName = (item['Nama Mata Kuliah'] || '').trim().toLowerCase();
+            let isDuplicate = false;
+            let dupIndex = -1;
+
+            const allCards = container.querySelectorAll('[id^="matkulRowCard_"]');
+            allCards.forEach((c, idx) => {
+              if (idx !== i) {
+                const otherVal = (document.getElementById(`pendaftaranMatkul_${idx}`)?.value || '').trim().toLowerCase();
+                if (otherVal && otherVal === selectedName) {
+                  isDuplicate = true;
+                  dupIndex = idx + 1;
+                }
+              }
+            });
+
+            if (isDuplicate) {
+              Swal.fire({
+                icon: 'warning',
+                title: 'Mata Kuliah Sudah Dipilih',
+                text: `Mata kuliah "${item['Nama Mata Kuliah']}" sudah dipilih pada Mata Kuliah #${dupIndex}. Setiap mata kuliah dalam satu formulir harus berbeda.`,
+                confirmButtonText: 'Pilih Lainnya'
+              });
+              if (autoMatkulInstance) autoMatkulInstance.clear();
+              return;
+            }
+
+            // Simpan metadata SKS & Kode di dataset input
+            inputM.dataset.sks = item.SKS || '3';
+            inputM.dataset.kode = item['Kode Matkul'] || '';
+
+            // Tampilkan feedback visual
+            const fb = document.getElementById(`feedbackMatkulSelected_${i}`);
+            const fbText = document.getElementById(`feedbackMatkulText_${i}`);
             if (fb && fbText) {
               fb.classList.remove('hidden');
               fbText.innerText = `${item['Nama Mata Kuliah']} (${item.SKS || 3} SKS · ${item['Kode Matkul'] || 'FEB'})`;
             }
 
-            // [RELASI OTOMATIS]: Sarankan & isi Dosen Pengampu sesuai Mata Kuliah yang dipilih
-            suggestDosenFromMatkul(item);
+            // Update badge SKS per row
+            const badgeSks = document.getElementById(`badgeRowSks_${i}`);
+            if (badgeSks) {
+              badgeSks.innerText = `${item.SKS || 3} SKS`;
+              badgeSks.className = 'text-[11px] font-mono font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md shadow-2xs';
+            }
+
+            // Otomatis sarankan dan isi dosen pengampu sesuai matkul
+            suggestDosenForMatkulRow(i, item);
+
+            // Sinkronkan data ringkasan & legacy fields
+            syncMatkulLegacyFields();
+            updateRegistrationSummary();
           },
           onClear: () => {
-            const fb = document.getElementById('feedbackMatkulSelected');
+            inputM.dataset.sks = '0';
+            inputM.dataset.kode = '';
+            const fb = document.getElementById(`feedbackMatkulSelected_${i}`);
             if (fb) fb.classList.add('hidden');
-            const badgeSuggest = document.getElementById('badgeDosenSuggest');
+            const badgeSuggest = document.getElementById(`badgeDosenSuggest_${i}`);
             if (badgeSuggest) badgeSuggest.classList.add('hidden');
+            const badgeSks = document.getElementById(`badgeRowSks_${i}`);
+            if (badgeSks) {
+              badgeSks.innerText = '0 SKS';
+              badgeSks.className = 'text-[11px] font-mono font-bold text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs';
+            }
+            syncMatkulLegacyFields();
+            updateRegistrationSummary();
           }
         });
-      }
 
-      // 2. AUTOCOMPLETE DOSEN PENGAMPU PADA FORM PENDAFTARAN
-      const inputDosen = document.getElementById('pendaftaranDosen');
-      const dropDosen = document.getElementById('dropdownListDosen');
-      const btnClearDosen = document.getElementById('btnClearDosen');
-      const contDosen = document.getElementById('autocompleteDosenContainer');
-
-      if (inputDosen && dropDosen && !autoDosenPendaftaran) {
-        autoDosenPendaftaran = setupAutocomplete({
-          inputElem: inputDosen,
-          dropdownElem: dropDosen,
-          clearBtnElem: btnClearDosen,
-          containerElem: contDosen,
+        const autoDosenInstance = setupAutocomplete({
+          inputElem: inputD,
+          dropdownElem: dropD,
+          clearBtnElem: btnClearD,
+          containerElem: contD,
           placeholderEmpty: 'Dosen pengampu tidak ditemukan',
           getItems: (query) => {
             const master = appData.master || {};
             const allDosen = master.dosen || [];
-            const activeProdi = (document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
+            const currProdi = (document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
 
-            // Prioritaskan dosen prodi yang sama terlebih dahulu
             let list = [...allDosen].sort((a, b) => {
-              const aProdi = String(a['Kode Prodi'] || '').toUpperCase() === activeProdi ? 0 : 1;
-              const bProdi = String(b['Kode Prodi'] || '').toUpperCase() === activeProdi ? 0 : 1;
+              const aProdi = String(a['Kode Prodi'] || '').toUpperCase() === currProdi ? 0 : 1;
+              const bProdi = String(b['Kode Prodi'] || '').toUpperCase() === currProdi ? 0 : 1;
               return aProdi - bProdi;
             });
 
@@ -3669,23 +3963,219 @@
             `;
           },
           onSelect: (item) => {
-            const fb = document.getElementById('feedbackDosenSelected');
-            const fbText = document.getElementById('feedbackDosenText');
+            const fb = document.getElementById(`feedbackDosenSelected_${i}`);
+            const fbText = document.getElementById(`feedbackDosenText_${i}`);
             if (fb && fbText) {
               fb.classList.remove('hidden');
               fbText.innerText = `${item['Nama Dosen'] || item.Nama} [${item['Kode Prodi'] || 'FEB'}]`;
             }
+            syncMatkulLegacyFields();
           },
           onClear: () => {
-            const fb = document.getElementById('feedbackDosenSelected');
+            const fb = document.getElementById(`feedbackDosenSelected_${i}`);
             if (fb) fb.classList.add('hidden');
-            const badgeSuggest = document.getElementById('badgeDosenSuggest');
+            const badgeSuggest = document.getElementById(`badgeDosenSuggest_${i}`);
             if (badgeSuggest) badgeSuggest.classList.add('hidden');
+            syncMatkulLegacyFields();
           }
         });
+
+        dynamicMatkulAutocompletes.push({
+          rowIdx: i,
+          autoMatkul: autoMatkulInstance,
+          autoDosen: autoDosenInstance
+        });
+
+        // Set data awal jika diberikan (misal saat mode edit pendaftaran atau perubahan dropdown)
+        if (rowData.mataKuliah) {
+          autoMatkulInstance.setValue(rowData.mataKuliah);
+          inputM.dataset.sks = String(rowData.sks || '3');
+          inputM.dataset.kode = rowData.kode || '';
+
+          const fbM = document.getElementById(`feedbackMatkulSelected_${i}`);
+          const fbMText = document.getElementById(`feedbackMatkulText_${i}`);
+          if (fbM && fbMText) {
+            fbM.classList.remove('hidden');
+            fbMText.innerText = `${rowData.mataKuliah} (${rowData.sks || 3} SKS)`;
+          }
+
+          const badgeSks = document.getElementById(`badgeRowSks_${i}`);
+          if (badgeSks) {
+            badgeSks.innerText = `${rowData.sks || 3} SKS`;
+            badgeSks.className = 'text-[11px] font-mono font-bold text-blue-800 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md shadow-2xs';
+          }
+        }
+
+        if (rowData.dosenPengampu) {
+          autoDosenInstance.setValue(rowData.dosenPengampu);
+          const fbD = document.getElementById(`feedbackDosenSelected_${i}`);
+          const fbDText = document.getElementById(`feedbackDosenText_${i}`);
+          if (fbD && fbDText) {
+            fbD.classList.remove('hidden');
+            fbDText.innerText = rowData.dosenPengampu;
+          }
+        }
       }
 
-      // 3. AUTOCOMPLETE MATA KULIAH PADA FORM INPUT JADWAL UJIAN
+      syncMatkulLegacyFields();
+      updateRegistrationSummary();
+    }
+
+    // Helper: Otomatis sarankan dosen pengampu untuk baris mata kuliah tertentu
+    function suggestDosenForMatkulRow(rowIdx, matkulItem) {
+      if (!matkulItem) return;
+      const master = appData.master || {};
+      let lecturerName = matkulItem['Dosen Pengampu'] || '';
+
+      if (!lecturerName) {
+        const activeProdi = (matkulItem['Kode Prodi'] || document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
+        const matchDosen = (master.dosen || []).find(d => String(d['Kode Prodi'] || '').toUpperCase() === activeProdi);
+        if (matchDosen) {
+          lecturerName = matchDosen['Nama Dosen'] || matchDosen.Nama;
+        }
+      }
+
+      const rowEntry = dynamicMatkulAutocompletes.find(entry => entry.rowIdx === rowIdx);
+      if (lecturerName && rowEntry && rowEntry.autoDosen) {
+        rowEntry.autoDosen.setValue(lecturerName);
+
+        const badgeSuggest = document.getElementById(`badgeDosenSuggest_${rowIdx}`);
+        if (badgeSuggest) badgeSuggest.classList.remove('hidden');
+
+        const fb = document.getElementById(`feedbackDosenSelected_${rowIdx}`);
+        const fbText = document.getElementById(`feedbackDosenText_${rowIdx}`);
+        if (fb && fbText) {
+          fb.classList.remove('hidden');
+          fbText.innerText = `${lecturerName} (Saran Otomatis)`;
+        }
+
+        // Jika form dalam mode Remedial Teaching dan dosen terdahulu masih kosong, sarankan nama yang sama
+        const inputLalu = document.getElementById(`pendaftaranDosenLalu_${rowIdx}`);
+        if (inputLalu && !inputLalu.value) {
+          inputLalu.value = lecturerName;
+        }
+      }
+    }
+
+    // Helper: Sinkronisasi field legacy (#pendaftaranMatkul & #pendaftaranDosen) agar kompatibel ke semua modul
+    function syncMatkulLegacyFields() {
+      const data = collectCurrentMatkulFormData().filter(d => d.mataKuliah && d.mataKuliah.trim().length > 0);
+      const hiddenMatkul = document.getElementById('pendaftaranMatkul');
+      const hiddenDosen = document.getElementById('pendaftaranDosen');
+
+      if (!hiddenMatkul || !hiddenDosen) return;
+
+      const layananVal = (document.getElementById('pendaftaranLayanan')?.value || '').toLowerCase();
+      const isRemedial = layananVal.includes('remedial');
+
+      if (data.length === 0) {
+        hiddenMatkul.value = '';
+        hiddenDosen.value = '';
+      } else if (data.length === 1) {
+        const d = data[0];
+        const nilaiStr = isRemedial && d.nilaiHuruf ? ` [Nilai: ${d.nilaiHuruf}]` : '';
+        const laluStr = isRemedial && d.dosenLalu ? ` (Dosen Lalu: ${d.dosenLalu})` : '';
+        hiddenMatkul.value = `${d.mataKuliah}${nilaiStr}`;
+        hiddenDosen.value = `${d.dosenPengampu || '-'}${laluStr}`;
+      } else {
+        hiddenMatkul.value = data.map((d, i) => {
+          const nilaiStr = isRemedial && d.nilaiHuruf ? ` [Nilai: ${d.nilaiHuruf}]` : '';
+          return `${i + 1}. ${d.mataKuliah}${nilaiStr} (${d.sks || 3} SKS)`;
+        }).join('\n');
+        hiddenDosen.value = data.map((d, i) => {
+          const laluStr = isRemedial && d.dosenLalu ? ` (Dosen Lalu: ${d.dosenLalu})` : '';
+          return `${i + 1}. ${d.dosenPengampu || '-'}${laluStr}`;
+        }).join('\n');
+      }
+    }
+
+    // Helper: Hitung live total matkul, total SKS, dan estimasi biaya denda / retribusi
+    function updateRegistrationSummary() {
+      const data = collectCurrentMatkulFormData();
+      const filledItems = data.filter(d => d.mataKuliah && d.mataKuliah.trim().length > 0);
+      const filledCount = filledItems.length;
+
+      const masterMatkul = (appData.master && appData.master.matkul) || [];
+      let totalSks = 0;
+      filledItems.forEach(item => {
+        let sks = parseInt(item.sks, 10);
+        if (!sks || isNaN(sks) || sks <= 0) {
+          const matchMaster = masterMatkul.find(m => (m['Nama Mata Kuliah'] || '').toLowerCase() === item.mataKuliah.toLowerCase());
+          sks = matchMaster && matchMaster.SKS ? parseInt(matchMaster.SKS, 10) : 3;
+        }
+        totalSks += (sks || 3);
+      });
+
+      // Pengecekan Periode & Jadwal Denda
+      const periodes = (appData.master && appData.master.periode) || [];
+      const activePrd = periodes.find(p => String(p.Status || '').toLowerCase() === 'aktif') || periodes[0];
+
+      let isLate = false;
+      let lateFeePerItem = 50000;
+
+      if (activePrd) {
+        lateFeePerItem = Number(activePrd['Biaya Keterlambatan'] || 50000);
+        const now = new Date();
+        const normalEnd = activePrd['Tanggal & Jam Selesai'] ? new Date(activePrd['Tanggal & Jam Selesai']) : null;
+        const lateStart = activePrd['Mulai Terlambat'] ? new Date(activePrd['Mulai Terlambat']) : null;
+        const lateEnd = activePrd['Selesai Terlambat'] ? new Date(activePrd['Selesai Terlambat']) : null;
+
+        if (normalEnd && now > normalEnd) {
+          if (lateEnd && now <= lateEnd) {
+            isLate = true;
+          } else if (!lateEnd && lateStart && now >= lateStart) {
+            isLate = true;
+          }
+        }
+      }
+
+      const totalNominal = isLate ? (lateFeePerItem * Math.max(1, filledCount)) : 0;
+
+      // Update Live Summary Strip
+      const badgeCount = document.getElementById('summaryMatkulCountBadge');
+      if (badgeCount) {
+        badgeCount.innerText = `${filledCount || 1} Mata Kuliah Diajukan`;
+      }
+
+      const textSks = document.getElementById('summaryTotalSksText');
+      if (textSks) {
+        textSks.innerText = `${totalSks} SKS Terakumulasi`;
+      }
+
+      const textNominal = document.getElementById('summaryTotalNominalText');
+      if (textNominal) {
+        textNominal.innerText = `Rp ${Number(totalNominal).toLocaleString('id-ID')}`;
+      }
+
+      // Update Box Ketentuan Jadwal & Biaya Denda
+      const statusBadge = document.getElementById('notifStatusCurrent');
+      if (statusBadge) {
+        if (isLate) {
+          statusBadge.innerText = `Terlambat (Denda Rp ${Number(totalNominal).toLocaleString('id-ID')})`;
+          statusBadge.className = 'font-mono font-bold text-[11px] text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-300';
+        } else {
+          statusBadge.innerText = 'Tepat Waktu (Gratis)';
+          statusBadge.className = 'font-mono font-bold text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300';
+        }
+      }
+
+      const hiddenStatusJadwal = document.getElementById('pendaftaranStatusJadwal');
+      if (hiddenStatusJadwal) hiddenStatusJadwal.value = isLate ? 'Terlambat' : 'Tepat Waktu';
+
+      const hiddenStatusPembayaran = document.getElementById('pendaftaranStatusPembayaran');
+      if (hiddenStatusPembayaran) {
+        hiddenStatusPembayaran.value = (isLate && totalNominal > 0) ? 'Belum Bayar (Denda Keterlambatan)' : 'Gratis (Tepat Waktu)';
+      }
+
+      const hiddenNominal = document.getElementById('pendaftaranNominal');
+      if (hiddenNominal) hiddenNominal.value = totalNominal;
+
+      const hiddenTotalSks = document.getElementById('pendaftaranTotalSks');
+      if (hiddenTotalSks) hiddenTotalSks.value = totalSks;
+    }
+
+    function initAllAutocompletes() {
+      // 1. AUTOCOMPLETE MATA KULIAH PADA FORM INPUT JADWAL UJIAN
       const inputJadwalMatkul = document.getElementById('jadwalMataKuliah');
       const dropJadwalMatkul = document.getElementById('dropdownListJadwalMatkul');
       const btnClearJadwalMatkul = document.getElementById('btnClearJadwalMatkul');
@@ -3733,7 +4223,7 @@
         });
       }
 
-      // 4. AUTOCOMPLETE DOSEN PENGAMPU PADA FORM INPUT JADWAL UJIAN
+      // 2. AUTOCOMPLETE DOSEN PENGAMPU PADA FORM INPUT JADWAL UJIAN
       const inputJadwalDosen = document.getElementById('jadwalDosenPengampu');
       const dropJadwalDosen = document.getElementById('dropdownListJadwalDosen');
       const btnClearJadwalDosen = document.getElementById('btnClearJadwalDosen');
@@ -3766,38 +4256,6 @@
             `;
           }
         });
-      }
-    }
-
-    // Helper: Otomatis sarankan dosen pengampu dari data mata kuliah
-    function suggestDosenFromMatkul(matkulItem) {
-      if (!matkulItem) return;
-      const master = appData.master || {};
-      let lecturerName = matkulItem['Dosen Pengampu'] || '';
-
-      if (!lecturerName) {
-        // Cari dari master.dosen yang memiliki kode prodi sama
-        const activeProdi = (matkulItem['Kode Prodi'] || document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
-        const matchDosen = (master.dosen || []).find(d => String(d['Kode Prodi'] || '').toUpperCase() === activeProdi);
-        if (matchDosen) {
-          lecturerName = matchDosen['Nama Dosen'] || matchDosen.Nama;
-        }
-      }
-
-      if (lecturerName && autoDosenPendaftaran) {
-        autoDosenPendaftaran.setValue(lecturerName);
-
-        // Tampilkan badge indikator visual 'Disarankan'
-        const badgeSuggest = document.getElementById('badgeDosenSuggest');
-        if (badgeSuggest) {
-          badgeSuggest.classList.remove('hidden');
-        }
-        const fb = document.getElementById('feedbackDosenSelected');
-        const fbText = document.getElementById('feedbackDosenText');
-        if (fb && fbText) {
-          fb.classList.remove('hidden');
-          fbText.innerText = `${lecturerName} (Saran Otomatis Sesuai Matkul)`;
-        }
       }
     }
 
@@ -3937,35 +4395,31 @@
       const master = appData.master || {};
       const allMatkul = master.matkul || [];
 
-      // Perbarui badge Prodi di atas input Autocomplete Mata Kuliah
-      const badgeMatkulProdi = document.getElementById('badgeMatkulProdi');
-      if (badgeMatkulProdi) {
-        badgeMatkulProdi.innerText = `Prodi: ${prodiCode}`;
+      // Perbarui badge Prodi di setiap baris dinamis
+      const allBadgeProdis = document.querySelectorAll('[id^="badgeMatkulProdi_"]');
+      allBadgeProdis.forEach(b => {
+        b.innerText = `Prodi: ${prodiCode}`;
+      });
+
+      // Verifikasi setiap input mata kuliah apakah masih sesuai prodi
+      const prodiMatkul = allMatkul.filter(m => String(m['Kode Prodi'] || '').toUpperCase() === prodiCode);
+      if (Array.isArray(dynamicMatkulAutocompletes)) {
+        dynamicMatkulAutocompletes.forEach(entry => {
+          const inp = document.getElementById(`pendaftaranMatkul_${entry.rowIdx}`);
+          if (inp && inp.value) {
+            const curVal = inp.value.trim().toLowerCase();
+            const isValid = prodiMatkul.some(m => (m['Nama Mata Kuliah'] || '').toLowerCase() === curVal);
+            if (!isValid && prodiMatkul.length > 0) {
+              if (entry.autoMatkul) entry.autoMatkul.clear();
+            }
+          }
+          if (entry.autoMatkul) entry.autoMatkul.refresh();
+          if (entry.autoDosen) entry.autoDosen.refresh();
+        });
       }
 
-      // Verifikasi apakah mata kuliah yang saat ini diinput masih valid untuk prodi yang dipilih
-      const matkulInput = document.getElementById('pendaftaranMatkul');
-      if (matkulInput && matkulInput.value) {
-        const curVal = matkulInput.value.trim().toLowerCase();
-        const prodiMatkul = allMatkul.filter(m => String(m['Kode Prodi'] || '').toUpperCase() === prodiCode);
-        const isValidInNewProdi = prodiMatkul.some(m => (m['Nama Mata Kuliah'] || '').toLowerCase() === curVal);
-        if (!isValidInNewProdi) {
-          matkulInput.value = '';
-          const btnClear = document.getElementById('btnClearMatkul');
-          if (btnClear) btnClear.classList.add('hidden');
-          const fb = document.getElementById('feedbackMatkulSelected');
-          if (fb) fb.classList.add('hidden');
-          const badgeSuggest = document.getElementById('badgeDosenSuggest');
-          if (badgeSuggest) badgeSuggest.classList.add('hidden');
-        }
-      }
-
-      if (autoMatkulPendaftaran) {
-        autoMatkulPendaftaran.refresh();
-      }
-      if (autoDosenPendaftaran) {
-        autoDosenPendaftaran.refresh();
-      }
+      syncMatkulLegacyFields();
+      updateRegistrationSummary();
 
       // Sinkronkan dropdown kelas dengan kategori kelas yang aktif
       const katSel = document.getElementById('pendaftaranKategoriKelas');
@@ -4016,7 +4470,17 @@
       if (active) {
         document.getElementById('pendaftaranTahunAkademik').value = active['Tahun Akademik'] || '2026/2027';
         document.getElementById('pendaftaranSemester').value = active.Semester || 'Ganjil';
-        document.getElementById('pendaftaranLayanan').value = active['Jenis Layanan'] || 'UTS Susulan';
+        const layananEl = document.getElementById('pendaftaranLayanan');
+        if (layananEl) {
+          const lAct = String(active['Jenis Layanan'] || '').toLowerCase();
+          if (lAct.includes('remedial')) {
+            layananEl.value = 'Remedial Teaching';
+          } else if (lAct.includes('uas')) {
+            layananEl.value = 'UAS Susulan';
+          } else {
+            layananEl.value = 'UTS Susulan';
+          }
+        }
         document.getElementById('activePeriodBadgeId').innerText = active.ID || 'PRD-AKTIF';
       }
     }
@@ -4251,6 +4715,8 @@
 
       onProdiSelectionChange();
 
+      populateDatalistDosenTerdahulu();
+
       if (id) {
         const item = (appData.pendaftaran || []).find(d => String(d.ID) === String(id));
         if (item) {
@@ -4262,36 +4728,69 @@
           if (kategoriSelect) kategoriSelect.value = itemCategory;
           populateKelasDropdown(prodiSelect.value, itemCategory, itemCleanClass);
           if (kelasSelect) kelasSelect.value = itemCleanClass;
-          
-          const matkulVal = item['Mata Kuliah'] || '';
-          const dosenVal = item['Dosen Pengampu'] || '';
-          if (autoMatkulPendaftaran) {
-            autoMatkulPendaftaran.setValue(matkulVal);
-          } else {
-            document.getElementById('pendaftaranMatkul').value = matkulVal;
+
+          if (item['Jenis Layanan']) {
+            const layananSelect = document.getElementById('pendaftaranLayanan');
+            if (layananSelect) {
+              let lVal = item['Jenis Layanan'];
+              if (lVal.toLowerCase().includes('remedial')) lVal = 'Remedial Teaching';
+              else if (lVal.toLowerCase().includes('uas')) lVal = 'UAS Susulan';
+              else if (lVal.toLowerCase().includes('uts')) lVal = 'UTS Susulan';
+              layananSelect.value = lVal;
+            }
           }
-          if (autoDosenPendaftaran) {
-            autoDosenPendaftaran.setValue(dosenVal);
+          
+          // Parsing data multi-matkul dari item
+          let parsedRows = [];
+          if (Array.isArray(item.mataKuliahList) && item.mataKuliahList.length > 0) {
+            parsedRows = item.mataKuliahList.map(m => ({
+              mataKuliah: m.nama || m.mataKuliah || '',
+              dosenPengampu: m.dosen || m.dosenPengampu || '',
+              sks: m.sks || 3,
+              kode: m.kode || '',
+              nilaiHuruf: m.nilaiHuruf || '',
+              dosenLalu: m.dosenLalu || ''
+            }));
           } else {
-            document.getElementById('pendaftaranDosen').value = dosenVal;
+            const rawMatkul = String(item['Mata Kuliah'] || '').trim();
+            const rawDosen = String(item['Dosen Pengampu'] || '').trim();
+            const matkulLines = rawMatkul.split('\n').map(l => l.replace(/^\d+\.\s*/, '').replace(/\s*\(\d+\s*SKS\)/i, '').trim()).filter(Boolean);
+            const dosenLines = rawDosen.split('\n').map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+
+            if (matkulLines.length > 0) {
+              parsedRows = matkulLines.map((mk, idx) => {
+                let nilaiHuruf = '';
+                const mNilai = mk.match(/\[(?:Nilai|Nilai Asal)\s*:\s*([A-Za-z]+)\]/i);
+                if (mNilai) {
+                  nilaiHuruf = mNilai[1].toUpperCase();
+                  mk = mk.replace(/\[(?:Nilai|Nilai Asal)\s*:\s*[A-Za-z]+\]/i, '').trim();
+                }
+                let dosenP = dosenLines[idx] || (dosenLines.length === 1 ? dosenLines[0] : '');
+                let dosenLalu = '';
+                const mDosenLalu = dosenP.match(/\((?:Dosen Lalu|Dosen Kelas Lalu|Dosen Saat Mengambil)\s*:\s*([^)]+)\)/i);
+                if (mDosenLalu) {
+                  dosenLalu = mDosenLalu[1].trim();
+                  dosenP = dosenP.replace(/\((?:Dosen Lalu|Dosen Kelas Lalu|Dosen Saat Mengambil)\s*:\s*[^)]+\)/i, '').trim();
+                }
+                return {
+                  mataKuliah: mk,
+                  dosenPengampu: dosenP,
+                  sks: 3,
+                  kode: '',
+                  nilaiHuruf: nilaiHuruf,
+                  dosenLalu: dosenLalu
+                };
+              });
+            } else {
+              parsedRows = [{ mataKuliah: rawMatkul, dosenPengampu: rawDosen, sks: 3, kode: '', nilaiHuruf: '', dosenLalu: '' }];
+            }
           }
 
-          if (matkulVal) {
-            const fbM = document.getElementById('feedbackMatkulSelected');
-            const fbMText = document.getElementById('feedbackMatkulText');
-            if (fbM && fbMText) {
-              fbM.classList.remove('hidden');
-              fbMText.innerText = matkulVal;
-            }
-          }
-          if (dosenVal) {
-            const fbD = document.getElementById('feedbackDosenSelected');
-            const fbDText = document.getElementById('feedbackDosenText');
-            if (fbD && fbDText) {
-              fbD.classList.remove('hidden');
-              fbDText.innerText = dosenVal;
-            }
-          }
+          const parsedCount = Math.max(1, Math.min(7, parsedRows.length));
+          const selJumlah = document.getElementById('pendaftaranJumlahMatkul');
+          if (selJumlah) selJumlah.value = String(parsedCount);
+
+          renderDynamicMatkulInputs(parsedCount, parsedRows);
 
           document.getElementById('pendaftaranAlasan').value = item.Alasan || '';
 
@@ -4304,18 +4803,25 @@
           if (semKalkulasiInput) {
             semKalkulasiInput.value = item.Semester || calculateSemesterFromAngkatan(itemAngkatan || 2024);
           }
+
+          const wrapperStatus = document.getElementById('wrapperStatusPersetujuan');
+          const selStatus = document.getElementById('pendaftaranStatusPersetujuan');
+          if (!isMhs && wrapperStatus && selStatus) {
+            wrapperStatus.classList.remove('hidden');
+            selStatus.value = item['Status Persetujuan'] || 'Pending';
+          } else if (wrapperStatus) {
+            wrapperStatus.classList.add('hidden');
+          }
         }
       } else {
-        if (autoMatkulPendaftaran) autoMatkulPendaftaran.clear();
-        else if (document.getElementById('pendaftaranMatkul')) document.getElementById('pendaftaranMatkul').value = '';
-        if (autoDosenPendaftaran) autoDosenPendaftaran.clear();
-        else if (document.getElementById('pendaftaranDosen')) document.getElementById('pendaftaranDosen').value = '';
-        const fbM = document.getElementById('feedbackMatkulSelected');
-        if (fbM) fbM.classList.add('hidden');
-        const fbD = document.getElementById('feedbackDosenSelected');
-        if (fbD) fbD.classList.add('hidden');
-        const badgeSuggest = document.getElementById('badgeDosenSuggest');
-        if (badgeSuggest) badgeSuggest.classList.add('hidden');
+        const wrapperStatus = document.getElementById('wrapperStatusPersetujuan');
+        if (wrapperStatus) wrapperStatus.classList.add('hidden');
+
+        syncPeriodeToPendaftaran();
+
+        const selJumlah = document.getElementById('pendaftaranJumlahMatkul');
+        if (selJumlah) selJumlah.value = '1';
+        renderDynamicMatkulInputs(1, []);
       }
 
       modal.classList.remove('hidden');
@@ -4339,6 +4845,83 @@
       const rawKategori = document.getElementById('pendaftaranKategoriKelas')?.value;
       const cleanKategori = rawKategori || detectCategoryFromClassClient(cleanKelas);
 
+      // Verifikasi seluruh baris mata kuliah dinamis
+      const matkulRows = collectCurrentMatkulFormData();
+      if (matkulRows.length === 0) {
+        Swal.fire('Validasi Gagal', 'Mohon pilih minimal 1 mata kuliah yang akan didaftarkan.', 'warning');
+        return;
+      }
+
+      const layananVal = document.getElementById('pendaftaranLayanan')?.value || '';
+      const isRemedial = layananVal.toLowerCase().includes('remedial');
+
+      for (let i = 0; i < matkulRows.length; i++) {
+        const row = matkulRows[i];
+        if (!row.mataKuliah || row.mataKuliah.trim().length === 0) {
+          Swal.fire('Validasi Gagal', `Nama Mata Kuliah #${i + 1} belum dipilih. Silakan pilih dari daftar Master Data!`, 'warning');
+          document.getElementById(`pendaftaranMatkul_${i}`)?.focus();
+          return;
+        }
+        if (!row.dosenPengampu || row.dosenPengampu.trim().length === 0) {
+          Swal.fire('Validasi Gagal', `Dosen Pengampu untuk Mata Kuliah #${i + 1} belum dipilih. Silakan pilih dari daftar Dosen!`, 'warning');
+          document.getElementById(`pendaftaranDosen_${i}`)?.focus();
+          return;
+        }
+        if (isRemedial) {
+          if (!row.nilaiHuruf || !['D', 'CD', 'C', 'BC'].includes(row.nilaiHuruf)) {
+            Swal.fire('Validasi Nilai Remedial', `Nilai huruf sebelumnya untuk Mata Kuliah #${i + 1} wajib dipilih (syarat perbaikan: D, CD, C, atau BC).`, 'warning');
+            document.getElementById(`pendaftaranNilaiHuruf_${i}`)?.focus();
+            return;
+          }
+          if (!row.dosenLalu || row.dosenLalu.trim().length === 0) {
+            Swal.fire('Validasi Dosen Remedial', `Nama dosen mata kuliah pada saat mengambil Mata Kuliah #${i + 1} wajib diisi!`, 'warning');
+            document.getElementById(`pendaftaranDosenLalu_${i}`)?.focus();
+            return;
+          }
+        }
+      }
+
+      // Validasi duplikasi antar baris
+      const seenNames = new Set();
+      for (let i = 0; i < matkulRows.length; i++) {
+        const nameLower = matkulRows[i].mataKuliah.trim().toLowerCase();
+        if (seenNames.has(nameLower)) {
+          Swal.fire('Duplikasi Terdeteksi', `Mata kuliah "${matkulRows[i].mataKuliah}" terdaftar lebih dari satu kali pada formulir ini. Mohon perbaiki sebelum menyimpan!`, 'warning');
+          return;
+        }
+        seenNames.add(nameLower);
+      }
+
+      // Format string multi-matkul dan dosen untuk backwards compatibility dan spreadsheet
+      let formattedMatkul = '';
+      let formattedDosen = '';
+      if (matkulRows.length === 1) {
+        const m = matkulRows[0];
+        const nilaiStr = isRemedial && m.nilaiHuruf ? ` [Nilai: ${m.nilaiHuruf}]` : '';
+        const laluStr = isRemedial && m.dosenLalu ? ` (Dosen Lalu: ${m.dosenLalu})` : '';
+        formattedMatkul = `${m.mataKuliah}${nilaiStr}`;
+        formattedDosen = `${m.dosenPengampu}${laluStr}`;
+      } else {
+        formattedMatkul = matkulRows.map((m, idx) => {
+          const nilaiStr = isRemedial && m.nilaiHuruf ? ` [Nilai: ${m.nilaiHuruf}]` : '';
+          return `${idx + 1}. ${m.mataKuliah}${nilaiStr} (${m.sks || 3} SKS)`;
+        }).join('\n');
+        formattedDosen = matkulRows.map((m, idx) => {
+          const laluStr = isRemedial && m.dosenLalu ? ` (Dosen Lalu: ${m.dosenLalu})` : '';
+          return `${idx + 1}. ${m.dosenPengampu}${laluStr}`;
+        }).join('\n');
+      }
+
+      const totalNominal = Number(document.getElementById('pendaftaranNominal')?.value || 0);
+      const statusJadwal = document.getElementById('pendaftaranStatusJadwal')?.value || 'Tepat Waktu';
+      const statusPembayaran = document.getElementById('pendaftaranStatusPembayaran')?.value || (totalNominal > 0 ? 'Belum Bayar' : 'Gratis (Tepat Waktu)');
+      const totalSksVal = Number(document.getElementById('pendaftaranTotalSks')?.value || 0);
+
+      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      const statusPersetujuan = !isMhs && document.getElementById('pendaftaranStatusPersetujuan') 
+        ? document.getElementById('pendaftaranStatusPersetujuan').value 
+        : 'Pending';
+
       const payload = {
         id: document.getElementById('pendaftaranId').value,
         nim: document.getElementById('pendaftaranNim').value,
@@ -4350,25 +4933,51 @@
         tahunAkademik: document.getElementById('pendaftaranTahunAkademik').value,
         semester: semCalculated,
         angkatan: angkatanVal,
-        mataKuliah: document.getElementById('pendaftaranMatkul').value,
-        dosenPengampu: document.getElementById('pendaftaranDosen').value,
+        mataKuliah: formattedMatkul,
+        dosenPengampu: formattedDosen,
+        mataKuliahList: matkulRows,
+        jumlahMatkul: matkulRows.length,
+        totalSks: totalSksVal,
         jenisLayanan: document.getElementById('pendaftaranLayanan').value,
         alasan: document.getElementById('pendaftaranAlasan').value,
         buktiFoto: document.getElementById('pendaftaranBuktiBase64').value,
-        statusPersetujuan: 'Pending'
+        statusJadwal: statusJadwal,
+        statusPembayaran: statusPembayaran,
+        nominal: totalNominal,
+        statusPersetujuan: statusPersetujuan
       };
+
+      const btnSave = document.getElementById('btnSavePendaftaran');
+      if (btnSave) {
+        btnSave.disabled = true;
+        btnSave.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...';
+      }
 
       const fn = payload.id ? 'updatePendaftaran' : 'addPendaftaran';
       const onSaveSuccess = function(res) {
+        if (btnSave) {
+          btnSave.disabled = false;
+          btnSave.innerHTML = 'Simpan Data';
+        }
         if (res && res.success) {
           closePendaftaranModal();
-          Swal.fire('Berhasil', res.message, 'success');
+          Swal.fire({
+            icon: 'success',
+            title: 'Berhasil Disimpan!',
+            text: res.message || 'Data formulir pendaftaran berhasil disimpan ke sistem.',
+            timer: 2000,
+            showConfirmButton: false
+          });
           loadAppData();
         } else {
           Swal.fire('Gagal', (res && res.message) || 'Terjadi kesalahan sistem saat menyimpan pendaftaran.', 'error');
         }
       };
       const onSaveError = function(err) {
+        if (btnSave) {
+          btnSave.disabled = false;
+          btnSave.innerHTML = 'Simpan Data';
+        }
         Swal.fire('Error Sistem', err?.message || String(err), 'error');
       };
 
@@ -4377,6 +4986,45 @@
           .withSuccessHandler(onSaveSuccess)
           .withFailureHandler(onSaveError)[fn](payload);
       } else {
+        // Optimistic update lokal jika mode demo / Hostinger
+        if (!payload.id) {
+          const newId = 'REG-' + (1000 + ((appData.pendaftaran || []).length + 1));
+          const newRecord = {
+            ID: newId,
+            Tanggal: new Date().toLocaleDateString('id-ID'),
+            'Tahun Akademik': payload.tahunAkademik,
+            Semester: payload.semester,
+            NPM: payload.nim,
+            NIM: payload.nim,
+            'Nama Mahasiswa': payload.namaMahasiswa,
+            'Kode Prodi': payload.kodeProdi,
+            'Program Studi': payload.prodi,
+            Kelas: payload.kelas,
+            'Kategori Kelas': payload.kategoriKelas,
+            'Mata Kuliah': payload.mataKuliah,
+            'Dosen Pengampu': payload.dosenPengampu,
+            mataKuliahList: payload.mataKuliahList,
+            'Jenis Layanan': payload.jenisLayanan,
+            Alasan: payload.alasan,
+            'Bukti Foto': payload.buktiFoto,
+            'Status Jadwal': payload.statusJadwal,
+            Nominal: payload.nominal,
+            'Status Pembayaran': payload.statusPembayaran,
+            'Status Persetujuan': payload.statusPersetujuan
+          };
+          appData.pendaftaran = appData.pendaftaran || [];
+          appData.pendaftaran.unshift(newRecord);
+        } else {
+          const item = (appData.pendaftaran || []).find(d => String(d.ID) === String(payload.id));
+          if (item) {
+            item['Mata Kuliah'] = payload.mataKuliah;
+            item['Dosen Pengampu'] = payload.dosenPengampu;
+            item.mataKuliahList = payload.mataKuliahList;
+            item.Nominal = payload.nominal;
+            item['Status Persetujuan'] = payload.statusPersetujuan;
+            item.Alasan = payload.alasan;
+          }
+        }
         callGasApi(fn, [payload], onSaveSuccess, onSaveError);
       }
     }
@@ -4585,7 +5233,8 @@
       const pendaftaranList = appData.pendaftaran || [];
       selectPendaftar.innerHTML = '<option value="">-- Pilih Mahasiswa Terdaftar (Disetujui / Pending) --</option>' +
         pendaftaranList.map(p => {
-          return `<option value="${p.ID}" data-json='${JSON.stringify(p).replace(/'/g, "&#39;")}'>${p['Nama Mahasiswa']} (NPM: ${p.NPM || p.NIM}) - ${p['Mata Kuliah']} [${p['Jenis Layanan']}]</option>`;
+          const cleanMatkul = String(p['Mata Kuliah'] || '').replace(/\n/g, ', ');
+          return `<option value="${p.ID}" data-json='${JSON.stringify(p).replace(/'/g, "&#39;")}'>${p['Nama Mahasiswa']} (NPM: ${p.NPM || p.NIM}) - ${cleanMatkul} [${p['Jenis Layanan']}]</option>`;
         }).join('');
 
       document.getElementById('jadwalTanggal').value = new Date().toISOString().split('T')[0];
@@ -4928,8 +5577,8 @@
             <p><b>NPM:</b> ${p.NPM || p.NIM}</p>
             <p><b>Prodi:</b> ${p['Program Studi']} (${p['Kode Prodi']})</p>
             <p><b>Semester & Kelas:</b> ${p.Semester || 'Semester 3'} · ${p.Kelas || 'Reguler'}</p>
-            <p><b>Mata Kuliah:</b> ${p['Mata Kuliah']}</p>
-            <p><b>Dosen:</b> ${p['Dosen Pengampu']}</p>
+            <p><b>Mata Kuliah:</b> <span class="font-bold text-blue-950">${escapeHtml(p['Mata Kuliah'] || '').replace(/\n/g, '<br>')}</span></p>
+            <p><b>Dosen Pengampu:</b> <span>${escapeHtml(p['Dosen Pengampu'] || '').replace(/\n/g, '<br>')}</span></p>
           </div>
 
           <div class="grid grid-cols-2 gap-3 bg-emerald-50/80 p-3 rounded-2xl border border-emerald-200 text-xs">
@@ -6681,6 +7330,37 @@
           </td>
         ` : '';
 
+        let matkulTdContent = '';
+        if (Array.isArray(p.mataKuliahList) && p.mataKuliahList.length > 0) {
+          matkulTdContent = p.mataKuliahList.map((m, idx) => {
+            const num = p.mataKuliahList.length > 1 ? `<span class="text-slate-400 font-mono text-[10px] mr-1">${idx + 1}.</span>` : '';
+            const nilaiBadge = m.nilaiHuruf ? `<span class="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-900 border border-indigo-200 shadow-2xs"><i class="fas fa-award text-[9px] text-indigo-600"></i> Nilai ${m.nilaiHuruf}</span>` : '';
+            const dosenLaluInfo = m.dosenLalu ? `<div class="text-[10px] text-indigo-700 italic flex items-center gap-1 mt-0.5"><i class="fas fa-history text-[9px]"></i> Dosen Saat Mengambil: ${escapeHtml(m.dosenLalu)}</div>` : '';
+            return `
+              <div class="${idx > 0 ? 'pt-1.5 mt-1.5 border-t border-slate-100' : ''}">
+                <div class="font-extrabold text-blue-950 leading-tight text-xs flex items-center flex-wrap">
+                  ${num}${escapeHtml(m.nama || m.mataKuliah || '')}${nilaiBadge}
+                </div>
+                <div class="text-[11px] text-slate-500 leading-tight mt-0.5 flex items-center gap-1">
+                  <i class="fas fa-user-tie text-[9px] text-slate-400"></i> ${escapeHtml(m.dosen || m.dosenPengampu || '-')}
+                </div>
+                ${dosenLaluInfo}
+              </div>
+            `;
+          }).join('');
+        } else {
+          matkulTdContent = `
+            <div class="space-y-1">
+              <div class="font-extrabold text-blue-950 leading-tight text-xs">
+                ${escapeHtml(p['Mata Kuliah'] || '').replace(/\n/g, '<br>')}
+              </div>
+              <div class="text-[11px] text-slate-500 leading-tight">
+                ${escapeHtml(p['Dosen Pengampu'] || '').replace(/\n/g, '<br>')}
+              </div>
+            </div>
+          `;
+        }
+
         tr.innerHTML = `
           ${checkboxTd}
           <td class="p-3 font-mono font-bold text-blue-900 whitespace-nowrap">${p.ID}</td>
@@ -6694,8 +7374,7 @@
             <span class="text-[11px] text-slate-500">${p.Semester || 'Semester 3'} · ${p.Kelas || 'Reguler'}</span>
           </td>
           <td class="p-3">
-            <b class="text-blue-950">${p['Mata Kuliah']}</b><br>
-            <span class="text-[11px] text-slate-500">${p['Dosen Pengampu']}</span>
+            ${matkulTdContent}
           </td>
           <td class="p-3 font-bold text-slate-700 whitespace-nowrap">${p['Jenis Layanan']}</td>
           <td class="p-3 font-mono font-bold text-slate-900 whitespace-nowrap">Rp ${Number(p.Nominal || 0).toLocaleString('id-ID')}</td>
@@ -7841,7 +8520,18 @@
       if (elProdi) elProdi.innerText = '[' + (item['Kode Prodi'] || '-') + '] ' + (item['Program Studi'] || '-');
       if (elKelas) elKelas.innerText = (item.Semester || 'Semester 3') + ' · ' + (item.Kelas || 'Reguler');
       if (elLayanan) elLayanan.innerText = item['Jenis Layanan'] || item.Layanan || '-';
-      if (elMatkul) elMatkul.innerText = item['Mata Kuliah'] || '-';
+      if (elMatkul) {
+        if (Array.isArray(item.mataKuliahList) && item.mataKuliahList.length > 0) {
+          elMatkul.innerHTML = item.mataKuliahList.map((m, idx) => {
+            const num = item.mataKuliahList.length > 1 ? `${idx + 1}. ` : '';
+            const remedialNote = m.nilaiHuruf ? ` <span class="font-bold text-indigo-700">[Nilai Asal: ${m.nilaiHuruf}]</span>` : '';
+            const dosenLaluNote = m.dosenLalu ? `<div class="text-[10px] text-slate-500 italic pl-3">Dosen Saat Mengambil: ${escapeHtml(m.dosenLalu)}</div>` : '';
+            return `<div class="mb-1">${num}<b>${escapeHtml(m.nama || m.mataKuliah || '')}</b> (${m.sks || 3} SKS)${remedialNote}${dosenLaluNote}</div>`;
+          }).join('');
+        } else {
+          elMatkul.innerText = item['Mata Kuliah'] || '-';
+        }
+      }
       if (elTerbilang) elTerbilang.innerText = terbilangRupiah(nominal) + ' Rupiah';
       if (elStatus) {
         elStatus.innerText = statusBayar.toUpperCase();
@@ -7904,7 +8594,18 @@
       if (elNama) elNama.innerText = item['Nama Mahasiswa'] || item.Nama || '-';
       if (elProdi) elProdi.innerText = '[' + (item['Kode Prodi'] || '-') + '] ' + (item['Program Studi'] || '-');
       if (elLayanan) elLayanan.innerText = item['Jenis Layanan'] || item.Layanan || '-';
-      if (elMatkul) elMatkul.innerText = item['Mata Kuliah'] || '-';
+      if (elMatkul) {
+        if (Array.isArray(item.mataKuliahList) && item.mataKuliahList.length > 0) {
+          elMatkul.innerHTML = item.mataKuliahList.map((m, idx) => {
+            const num = item.mataKuliahList.length > 1 ? `${idx + 1}. ` : '';
+            const remedialNote = m.nilaiHuruf ? ` <span class="font-bold text-indigo-700">[Nilai Asal: ${m.nilaiHuruf}]</span>` : '';
+            const dosenLaluNote = m.dosenLalu ? ` <div class="text-[10px] text-slate-500 italic pl-3">Dosen Saat Mengambil: ${escapeHtml(m.dosenLalu)}</div>` : '';
+            return `<div class="mb-1">${num}<b>${escapeHtml(m.nama || m.mataKuliah || '')}</b> (${m.sks || 3} SKS)${remedialNote}${dosenLaluNote}</div>`;
+          }).join('');
+        } else {
+          elMatkul.innerText = item['Mata Kuliah'] || '-';
+        }
+      }
       if (elBiaya) elBiaya.innerText = 'Rp ' + nominal.toLocaleString('id-ID');
       if (elTotal) elTotal.innerText = 'Rp ' + nominal.toLocaleString('id-ID');
       if (elTglCetak) {

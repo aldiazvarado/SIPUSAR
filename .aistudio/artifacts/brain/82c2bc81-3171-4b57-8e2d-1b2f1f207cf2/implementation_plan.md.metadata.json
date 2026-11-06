@@ -1,6 +1,6 @@
 {
-  "summary": "Penyelesaian implementasi Komponen Autocomplete interaktif pada Mata Kuliah dan Dosen Pengampu untuk formulir pendaftaran dan formulir input jadwal ujian. Mendukung pencarian substring case-insensitive, penyorot teks (text highlighter), navigasi keyboard lengkap (Panah Atas/Bawah, Enter, Escape, Tab), deteksi click outside, visual feedback pilihan, tombol pembersih cepat, filter otomatis berbasis Program Studi, saran dosen otomatis sesuai mata kuliah, dan validasi ketat Master Data. Telah disinkronkan ke Hostinger dan Google Apps Script.",
-  "updatedAt": "2026-11-04T12:31:23.414211606Z",
+  "summary": "Rencana implementasi fitur Remedial Teaching dengan input nilai huruf sebelumnya (D, CD, C, BC) dan penentuan dosen pengampu terdahulu pada formulir pendaftaran multi-mata kuliah dinamis. Dilengkapi validasi kelayakan nilai, autocomplete dosen terdahulu dengan opsi ketik manual, sinkronisasi format spreadsheet, dan visualisasi kartu ujian.",
+  "updatedAt": "2026-11-06T10:11:43.637292680Z",
   "requestFeedback": true,
   "userFacing": true
 }

@@ -8,6 +8,17 @@ export interface UserSession {
   npm?: string;
 }
 
+export interface MataKuliahRowItem {
+  nama?: string;
+  mataKuliah?: string;
+  dosen?: string;
+  dosenPengampu?: string;
+  sks?: number;
+  kode?: string;
+  nilaiHuruf?: 'D' | 'CD' | 'C' | 'BC' | string;
+  dosenLalu?: string;
+}
+
 export interface PendaftaranItem {
   ID: string;
   Tanggal: string;
@@ -29,6 +40,9 @@ export interface PendaftaranItem {
   'Status Pembayaran': 'Gratis (Tepat Waktu)' | 'Belum Bayar' | 'Lunas';
   'Status Persetujuan': 'Pending' | 'Disetujui' | 'Ditolak';
   Catatan?: string;
+  mataKuliahList?: MataKuliahRowItem[];
+  jumlahMatkul?: number;
+  totalSks?: number;
 }
 
 export interface JadwalUjianItem {
