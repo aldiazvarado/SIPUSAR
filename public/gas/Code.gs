@@ -491,6 +491,9 @@ function getSheetData(sheetName) {
         item['Biaya Keterlambatan'] = sanitizeNumber(rawBiaya);
         item['Tahun Akademik'] = item['Tahun Akademik'] || '2026/2027';
         item['Semester'] = item['Semester'] || 'Ganjil';
+        if (String(item['Status'] || '').toLowerCase() === 'non-aktif') {
+          item['Status'] = 'Ditutup';
+        }
       });
     }
 
@@ -1116,14 +1119,43 @@ function getInitialData(userRole, username, userProdi) {
     if (!periode || periode.length === 0) {
       periode = [
         {
-          'ID': 'PER-2026-01',
-          'Tahun Akademik': '2026/2027 Ganjil',
-          'Nama Periode': 'Pendaftaran Ujian Susulan & Remedial Semester Ganjil 2026/2027',
-          'Tanggal Mulai': '2026-10-10 08:00',
-          'Tanggal Selesai': '2026-10-31 23:59',
-          'Jenis Ujian': 'Susulan & Remedial',
-          'Biaya Per SKS': 50000,
+          'ID': 'PRD-REG-01',
+          'Tahun Akademik': '2026/2027',
+          'Semester': 'Ganjil',
+          'Jenis Layanan': 'UTS Susulan',
+          'Kategori Kelas': 'Reguler & Karyawan',
+          'Tanggal & Jam Mulai': '2026-10-10 08:00:00',
+          'Tanggal & Jam Selesai': '2026-10-20 23:59:00',
+          'Mulai Terlambat': '2026-10-21 00:00:00',
+          'Selesai Terlambat': '2026-10-25 23:59:00',
+          'Biaya Keterlambatan': 50000,
           'Status': 'Aktif'
+        },
+        {
+          'ID': 'PRD-REG-02',
+          'Tahun Akademik': '2026/2027',
+          'Semester': 'Ganjil',
+          'Jenis Layanan': 'UAS Susulan',
+          'Kategori Kelas': 'Reguler & Karyawan',
+          'Tanggal & Jam Mulai': '2026-12-15 08:00:00',
+          'Tanggal & Jam Selesai': '2026-12-25 23:59:00',
+          'Mulai Terlambat': '2026-12-26 00:00:00',
+          'Selesai Terlambat': '2026-12-30 23:59:00',
+          'Biaya Keterlambatan': 50000,
+          'Status': 'Ditutup'
+        },
+        {
+          'ID': 'PRD-REG-03',
+          'Tahun Akademik': '2026/2027',
+          'Semester': 'Ganjil',
+          'Jenis Layanan': 'Remedial Teaching',
+          'Kategori Kelas': 'Reguler & Karyawan',
+          'Tanggal & Jam Mulai': '2027-01-05 08:00:00',
+          'Tanggal & Jam Selesai': '2027-01-14 23:59:00',
+          'Mulai Terlambat': '2027-01-15 00:00:00',
+          'Selesai Terlambat': '2027-01-20 23:59:00',
+          'Biaya Keterlambatan': 75000,
+          'Status': 'Ditutup'
         }
       ];
     }
@@ -1611,7 +1643,9 @@ function addPeriode(payload) {
     var headerMap = getHeaderIndexMap(sheet);
     var lastRow = sheet.getLastRow();
     var newId = 'PRD-REG-' + ('0' + (lastRow > 1 ? lastRow : 1)).slice(-2);
-    var cleanBiaya = sanitizeNumber(payload.biaya);
+    var rawBiaya = payload.biayaKeterlambatan !== undefined ? payload.biayaKeterlambatan : (payload.biaya !== undefined ? payload.biaya : 50000);
+    var cleanBiaya = sanitizeNumber(rawBiaya);
+    var cleanStatus = String(payload.status || 'Aktif').toLowerCase() === 'non-aktif' ? 'Ditutup' : (payload.status || 'Aktif');
 
     var maxCol = Math.max(sheet.getLastColumn(), 11);
     var rowData = new Array(maxCol).fill('');
@@ -1626,7 +1660,7 @@ function addPeriode(payload) {
     rowData[7] = String(payload.tglTerlambatMulai || '').replace('T', ' ');
     rowData[8] = String(payload.tglTerlambatSelesai || '').replace('T', ' ');
     rowData[9] = cleanBiaya;
-    rowData[10] = payload.status || 'Aktif';
+    rowData[10] = cleanStatus;
 
     if (headerMap['ID']) rowData[headerMap['ID'] - 1] = newId;
     if (headerMap['Tahun Akademik']) rowData[headerMap['Tahun Akademik'] - 1] = payload.tahunAkademik || '2026/2027';
@@ -1638,7 +1672,7 @@ function addPeriode(payload) {
     if (headerMap['Mulai Terlambat']) rowData[headerMap['Mulai Terlambat'] - 1] = String(payload.tglTerlambatMulai || '').replace('T', ' ');
     if (headerMap['Selesai Terlambat']) rowData[headerMap['Selesai Terlambat'] - 1] = String(payload.tglTerlambatSelesai || '').replace('T', ' ');
     if (headerMap['Biaya Keterlambatan'] || headerMap['Biaya']) rowData[(headerMap['Biaya Keterlambatan'] || headerMap['Biaya']) - 1] = cleanBiaya;
-    if (headerMap['Status']) rowData[headerMap['Status'] - 1] = payload.status || 'Aktif';
+    if (headerMap['Status']) rowData[headerMap['Status'] - 1] = cleanStatus;
 
     sheet.appendRow(rowData);
     SpreadsheetApp.flush();
@@ -1675,7 +1709,9 @@ function updatePeriode(payload) {
 
     var rowRange = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn());
     var rowValues = rowRange.getValues()[0];
-    var cleanBiaya = sanitizeNumber(payload.biaya);
+    var rawBiaya = payload.biayaKeterlambatan !== undefined ? payload.biayaKeterlambatan : (payload.biaya !== undefined ? payload.biaya : 50000);
+    var cleanBiaya = sanitizeNumber(rawBiaya);
+    var cleanStatus = String(payload.status || 'Aktif').toLowerCase() === 'non-aktif' ? 'Ditutup' : (payload.status || 'Aktif');
 
     function setCol(name, val) {
       if (headerMap[name] && val !== undefined) {
@@ -1692,7 +1728,7 @@ function updatePeriode(payload) {
     setCol('Mulai Terlambat', String(payload.tglTerlambatMulai || '').replace('T', ' '));
     setCol('Selesai Terlambat', String(payload.tglTerlambatSelesai || '').replace('T', ' '));
     setCol('Biaya Keterlambatan', cleanBiaya);
-    setCol('Status', payload.status);
+    setCol('Status', cleanStatus);
 
     rowRange.setValues([rowValues]);
     SpreadsheetApp.flush();

@@ -2379,14 +2379,43 @@
         ],
         periode: [
           {
-            'ID': 'PER-2026-01',
-            'Tahun Akademik': '2026/2027 Ganjil',
-            'Nama Periode': 'Pendaftaran Ujian Susulan & Remedial Semester Ganjil 2026/2027',
-            'Tanggal Mulai': '2026-10-10 08:00',
-            'Tanggal Selesai': '2026-10-31 23:59',
-            'Jenis Ujian': 'Susulan & Remedial',
-            'Biaya Per SKS': 50000,
-            'Status': 'Aktif'
+            ID: 'PRD-REG-01',
+            'Tahun Akademik': '2026/2027',
+            Semester: 'Ganjil',
+            'Jenis Layanan': 'UTS Susulan',
+            'Kategori Kelas': 'Reguler & Karyawan',
+            'Tanggal & Jam Mulai': '2026-10-10 08:00',
+            'Tanggal & Jam Selesai': '2026-10-20 23:59',
+            'Mulai Terlambat': '2026-10-21 00:00',
+            'Selesai Terlambat': '2026-10-25 23:59',
+            'Biaya Keterlambatan': 50000,
+            Status: 'Aktif'
+          },
+          {
+            ID: 'PRD-REG-02',
+            'Tahun Akademik': '2026/2027',
+            Semester: 'Ganjil',
+            'Jenis Layanan': 'UAS Susulan',
+            'Kategori Kelas': 'Reguler & Karyawan',
+            'Tanggal & Jam Mulai': '2026-12-15 08:00',
+            'Tanggal & Jam Selesai': '2026-12-25 23:59',
+            'Mulai Terlambat': '2026-12-26 00:00',
+            'Selesai Terlambat': '2026-12-30 23:59',
+            'Biaya Keterlambatan': 50000,
+            Status: 'Ditutup'
+          },
+          {
+            ID: 'PRD-REG-03',
+            'Tahun Akademik': '2026/2027',
+            Semester: 'Ganjil',
+            'Jenis Layanan': 'Remedial Teaching',
+            'Kategori Kelas': 'Reguler & Karyawan',
+            'Tanggal & Jam Mulai': '2027-01-05 08:00',
+            'Tanggal & Jam Selesai': '2027-01-14 23:59',
+            'Mulai Terlambat': '2027-01-15 00:00',
+            'Selesai Terlambat': '2027-01-20 23:59',
+            'Biaya Keterlambatan': 75000,
+            Status: 'Ditutup'
           }
         ],
         tahunAkademik: [
@@ -6213,16 +6242,22 @@
         const list = (appData.master && appData.master.periode) || [];
         const item = list.find(p => String(p.ID).trim() === realId);
         if (item) {
+          const toDatetimeLocal = (val) => {
+            if (!val) return '';
+            const s = String(val).trim().replace(' ', 'T');
+            return s.length >= 16 ? s.slice(0, 16) : s;
+          };
           if (selectTa && item['Tahun Akademik']) selectTa.value = item['Tahun Akademik'];
           document.getElementById('periodeSemester').value = item.Semester || 'Ganjil';
           document.getElementById('periodeJenisLayanan').value = item['Jenis Layanan'] || 'UTS Susulan';
           document.getElementById('periodeKategoriKelas').value = item['Kategori Kelas'] || 'Reguler';
-          document.getElementById('periodeTglMulai').value = item['Tanggal & Jam Mulai'] || '';
-          document.getElementById('periodeTglSelesai').value = item['Tanggal & Jam Selesai'] || '';
-          document.getElementById('periodeTglTerlambatMulai').value = item['Mulai Terlambat'] || '';
-          document.getElementById('periodeTglTerlambatSelesai').value = item['Selesai Terlambat'] || '';
-          document.getElementById('periodeBiaya').value = item['Biaya Keterlambatan'] || 50000;
-          document.getElementById('periodeStatus').value = item.Status || 'Aktif';
+          document.getElementById('periodeTglMulai').value = toDatetimeLocal(item['Tanggal & Jam Mulai'] || item['Tanggal Mulai']);
+          document.getElementById('periodeTglSelesai').value = toDatetimeLocal(item['Tanggal & Jam Selesai'] || item['Tanggal Selesai']);
+          document.getElementById('periodeTglTerlambatMulai').value = toDatetimeLocal(item['Mulai Terlambat']);
+          document.getElementById('periodeTglTerlambatSelesai').value = toDatetimeLocal(item['Selesai Terlambat']);
+          document.getElementById('periodeBiaya').value = item['Biaya Keterlambatan'] !== undefined ? item['Biaya Keterlambatan'] : (item['Biaya'] || 50000);
+          const st = String(item.Status || 'Aktif').toLowerCase() === 'non-aktif' ? 'Ditutup' : (item.Status || 'Aktif');
+          document.getElementById('periodeStatus').value = st;
         }
       } else {
         // Default tanggal: hari ini s/d 7 hari ke depan
@@ -6268,6 +6303,7 @@
         tglTerlambatMulai: document.getElementById('periodeTglTerlambatMulai').value,
         tglTerlambatSelesai: document.getElementById('periodeTglTerlambatSelesai').value,
         biayaKeterlambatan: Number(document.getElementById('periodeBiaya').value) || 0,
+        biaya: Number(document.getElementById('periodeBiaya').value) || 0,
         status: document.getElementById('periodeStatus').value,
         actor: currentUser?.nama || 'Admin TU'
       };

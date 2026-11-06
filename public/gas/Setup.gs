@@ -217,9 +217,9 @@ function setupDatabase() {
   populateSheetData(ss, 'Periode_Pendaftaran', 
     ["ID", "Tahun Akademik", "Semester", "Jenis Layanan", "Kategori Kelas", "Tanggal & Jam Mulai", "Tanggal & Jam Selesai", "Mulai Terlambat", "Selesai Terlambat", "Biaya Keterlambatan", "Status"], 
     [
-      ["PRD-REG-01", "2026/2027", "Ganjil", "UTS Susulan", "Reguler & Karyawan", "2026-09-25 08:00:00", "2026-10-05 23:59:00", "2026-10-06 00:00:00", "2026-10-12 23:59:00", 50000, "Aktif"],
-      ["PRD-REG-02", "2026/2027", "Ganjil", "UAS Susulan", "Reguler & Karyawan", "2026-12-10 08:00:00", "2026-12-20 23:59:00", "2026-12-21 00:00:00", "2026-12-27 23:59:00", 50000, "Non-Aktif"],
-      ["PRD-REG-03", "2026/2027", "Ganjil", "Remedial Teaching", "Reguler & Karyawan", "2027-01-05 08:00:00", "2027-01-14 23:59:00", "2027-01-15 00:00:00", "2027-01-20 23:59:00", 75000, "Non-Aktif"]
+      ["PRD-REG-01", "2026/2027", "Ganjil", "UTS Susulan", "Reguler & Karyawan", "2026-10-10 08:00:00", "2026-10-20 23:59:00", "2026-10-21 00:00:00", "2026-10-25 23:59:00", 50000, "Aktif"],
+      ["PRD-REG-02", "2026/2027", "Ganjil", "UAS Susulan", "Reguler & Karyawan", "2026-12-15 08:00:00", "2026-12-25 23:59:00", "2026-12-26 00:00:00", "2026-12-30 23:59:00", 50000, "Ditutup"],
+      ["PRD-REG-03", "2026/2027", "Ganjil", "Remedial Teaching", "Reguler & Karyawan", "2027-01-05 08:00:00", "2027-01-14 23:59:00", "2027-01-15 00:00:00", "2027-01-20 23:59:00", 75000, "Ditutup"]
     ]
   );
 
