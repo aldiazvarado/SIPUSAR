@@ -22,7 +22,7 @@
     // [REST API ENGINE UNTUK HOSTINGER STANDALONE]
     // Menghubungkan seluruh fungsi ke Google Apps Script Web App Endpoint via CORS Fetch
     // ==========================================
-    let GAS_API_URL = localStorage.getItem("uika_gas_api_url") || "";
+    let GAS_API_URL = localStorage.getItem("uika_gas_api_url") || "https://script.google.com/macros/s/AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN/exec";
 
     function openApiConfigModal() {
       const roleLower = (currentUser && currentUser.role ? currentUser.role : '').toString().toLowerCase().trim();
@@ -7064,7 +7064,7 @@
               .clearAITestData();
           } else {
             clearTestDataClientSide();
-            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || '');
+            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || 'https://script.google.com/macros/s/AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN/exec');
             if (apiUrl) {
               fetch(apiUrl, {
                 method: 'POST',
