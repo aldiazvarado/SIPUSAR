@@ -691,11 +691,16 @@ function normalizeExistingClassesInSheet() {
 function loginUser(username, password) {
   try {
     var rawUser = String(username || '').trim();
-    if (!rawUser) rawUser = 'aldiaz';
-    var cleanUser = rawUser.toLowerCase();
     var cleanPass = String(password || '').trim();
-    if (!cleanPass) cleanPass = 'q007121997';
 
+    if (!rawUser || !cleanPass) {
+      return {
+        success: false,
+        message: 'Username dan kata sandi wajib diisi.'
+      };
+    }
+
+    var cleanUser = rawUser.toLowerCase();
     // Ekstrak prefix jika user memasukkan email (misal: aldiaz.siakad@uika-bogor.ac.id -> aldiaz)
     var emailPrefix = cleanUser.indexOf('@') !== -1 ? cleanUser.split('@')[0] : cleanUser;
     var simplePrefix = emailPrefix.indexOf('.') !== -1 ? emailPrefix.split('.')[0] : emailPrefix;
@@ -719,21 +724,17 @@ function loginUser(username, password) {
       var uNik = String(u.NIK || '').trim().toLowerCase();
       var uEmail = String(u.Email || '').trim().toLowerCase();
       var uPass = String(u.Password || '').trim();
+
       var isMatchUser = (
         uName === cleanUser || 
         uNik === cleanUser || 
         uEmail === cleanUser || 
         uName === emailPrefix || 
-        uName === simplePrefix ||
-        (cleanUser.indexOf('aldiaz') !== -1 && uName === 'aldiaz')
+        uName === simplePrefix
       );
-      var isMatchPass = (
-        uPass === cleanPass || 
-        cleanPass === 'q007121997' || 
-        cleanPass === 'q00712199' || 
-        cleanPass === '123456' ||
-        cleanPass.toLowerCase() === uName
-      );
+
+      // Password wajib cocok persis dengan kolom Password di sheet User_Staff
+      var isMatchPass = (uPass === cleanPass);
       return isMatchUser && isMatchPass;
     });
 
@@ -746,7 +747,7 @@ function loginUser(username, password) {
           nama: foundStaff['Nama Lengkap'] || foundStaff.Username,
           kodeProdi: foundStaff['Kode Prodi'] || 'ALL',
           prodi: foundStaff['Kode Prodi'] || 'ALL',
-          nik: foundStaff.NIK
+          nik: String(foundStaff.NIK || '').trim()
         }
       };
     }
@@ -754,12 +755,21 @@ function loginUser(username, password) {
     // 2. Cek di Sheet User_Mahasiswa (Mahasiswa)
     var mhsList = [];
     try { mhsList = getSheetData('User_Mahasiswa'); } catch(e) {}
+
     var foundMhs = (mhsList || []).find(function(u) {
       var uName = String(u.Username || '').trim().toLowerCase();
       var uNpm = String(u.NPM || u.NIM || '').trim().toLowerCase();
       var uPass = String(u.Password || '').trim();
-      var isMatchUser = (uName === cleanUser || uNpm === cleanUser || uName === emailPrefix || uNpm === emailPrefix);
-      var isMatchPass = (uPass === cleanPass || cleanPass === '123456' || cleanPass === '123' || cleanPass === uNpm);
+
+      var isMatchUser = (
+        uName === cleanUser || 
+        uNpm === cleanUser || 
+        uName === emailPrefix || 
+        uNpm === emailPrefix
+      );
+
+      // Password wajib cocok persis dengan kolom Password di sheet User_Mahasiswa
+      var isMatchPass = (uPass === cleanPass);
       return isMatchUser && isMatchPass;
     });
 
@@ -772,10 +782,11 @@ function loginUser(username, password) {
       var rawKelas = foundMhs.Kelas || foundMhs.kelas || 'Reguler A';
       var cleanKls = normalizeClassName(rawKelas);
       var mhsKatKelas = detectCategoryFromClass(cleanKls);
+
       return {
         success: true,
         user: {
-          username: String(foundMhs.Username).trim(),
+          username: String(foundMhs.Username || foundMhs.NPM).trim(),
           role: 'Mahasiswa',
           nama: foundMhs['Nama Lengkap'] || foundMhs.Username,
           kodeProdi: foundMhs['Kode Prodi'] || 'MNJ',
@@ -789,146 +800,10 @@ function loginUser(username, password) {
       };
     }
 
-    // 3. Default Emergency & Demo Fallback (Resilience for testing / initial deployment)
-    var isAldiaz = (
-      cleanUser === 'aldiaz' || 
-      simplePrefix === 'aldiaz' || 
-      cleanUser.indexOf('aldiaz') !== -1 ||
-      cleanUser === '198501012010121001'
-    );
-    if (isAldiaz) {
-      // Izinkan password demo resmi q007121997, varian typo q00712199, standar 123456, aldiaz, admin, dll.
-      var allowedAldiazPass = ['q007121997', 'q00712199', '123456', 'aldiaz', 'admin', 'uika', 'uikabogor', 'bismillah'];
-      if (allowedAldiazPass.indexOf(cleanPass.toLowerCase()) !== -1 || cleanPass.length >= 3) {
-        return {
-          success: true,
-          user: {
-            username: 'aldiaz',
-            role: 'Master Admin',
-            nama: 'Aldiaz Varado',
-            kodeProdi: 'ALL',
-            prodi: 'ALL',
-            nik: '198501012010121001'
-          }
-        };
-      }
-    }
-
-    var isAdminTU = (
-      cleanUser === 'admin' || 
-      cleanUser === 'tu' || 
-      cleanUser === 'admintu' ||
-      cleanUser === '410100242' || 
-      cleanUser === '410100612' ||
-      cleanUser === '410100314' ||
-      cleanUser === '410100501' ||
-      cleanUser === '410200328'
-    );
-    if (isAdminTU) {
-      return {
-        success: true,
-        user: {
-          username: '410100242',
-          role: 'Admin TU',
-          nama: 'Wawan Setiawan, M.Pd.',
-          kodeProdi: 'ALL',
-          prodi: 'ALL',
-          nik: '410100242'
-        }
-      };
-    }
-
-    if (cleanUser === 'dekan' || cleanUser.indexOf('immas') !== -1) {
-      return {
-        success: true,
-        user: {
-          username: 'dekan',
-          role: 'Dekan',
-          nama: 'Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.',
-          kodeProdi: 'ALL',
-          prodi: 'ALL',
-          nik: '196504121990032001'
-        }
-      };
-    }
-
-    if (cleanUser.indexOf('wadek') !== -1 || cleanUser.indexOf('asti') !== -1) {
-      return {
-        success: true,
-        user: {
-          username: 'wadek1',
-          role: 'Wakil Dekan',
-          nama: 'Dr. Asti Marlina, S.E., MMSI., DBA.',
-          kodeProdi: 'ALL',
-          prodi: 'ALL',
-          nik: '197805142008012002'
-        }
-      };
-    }
-
-    if (cleanUser.indexOf('kaprodi') !== -1) {
-      return {
-        success: true,
-        user: {
-          username: 'kaprodimnj',
-          role: 'Ketua Program Studi',
-          nama: 'Dr. Hendro Sasongko, Ak., M.M., CA.',
-          kodeProdi: 'MNJ',
-          prodi: 'Manajemen',
-          nik: '197003151996021001'
-        }
-      };
-    }
-
-    if (cleanUser.indexOf('sekprodi') !== -1) {
-      return {
-        success: true,
-        user: {
-          username: 'sekprodiakt',
-          role: 'Sekretaris Program Studi',
-          nama: 'Dr. Hj. Desmy Riani, S.E., M.M.',
-          kodeProdi: 'AKT',
-          prodi: 'Akuntansi',
-          nik: '197208221999032002'
-        }
-      };
-    }
-
-    if (cleanUser === '123' || cleanUser === '2311010012' || cleanUser === 'mahasiswa' || /^\d{7,14}$/.test(cleanUser)) {
-      var npmVal = cleanUser === '123' ? '2311010012' : cleanUser;
-      var angkatanVal = 2023;
-      var matchA = npmVal.match(/^(\d{2})/);
-      if (matchA) angkatanVal = 2000 + parseInt(matchA[1], 10);
-      var semVal = calculateSemesterFromAngkatanBackend(angkatanVal);
-      return {
-        success: true,
-        user: {
-          username: npmVal,
-          role: 'Mahasiswa',
-          nama: 'Rizky Pratama Putra',
-          kodeProdi: 'MNJ',
-          prodi: 'Manajemen',
-          npm: npmVal,
-          kelas: 'Reguler A',
-          kategoriKelas: 'Reguler',
-          angkatan: angkatanVal,
-          semester: semVal
-        }
-      };
-    }
-
-    // Fallback Universal: Selalu izinkan akses agar pengguna tidak pernah terkunci dari sistem web
-    return { 
-      success: true, 
-      user: {
-        username: rawUser || 'aldiaz',
-        role: /^\d{7,14}$/.test(cleanUser) ? 'Mahasiswa' : 'Master Admin',
-        nama: /^\d{7,14}$/.test(cleanUser) ? 'Mahasiswa FEB UIKA' : 'Aldiaz Varado',
-        kodeProdi: 'ALL',
-        prodi: 'ALL',
-        nik: '198501012010121001',
-        npm: /^\d{7,14}$/.test(cleanUser) ? cleanUser : ''
-      }
+    // Tolak akses jika username atau password tidak cocok dengan akun terdaftar di spreadsheet
+    return {
+      success: false,
+      message: 'Username atau kata sandi tidak valid. Pastikan data akun Anda terdaftar di sheet User_Staff atau User_Mahasiswa FEB UIKA.'
     };
   } catch (err) {
     return { success: false, message: 'Kesalahan Sistem Login: ' + (err.message || String(err)) };

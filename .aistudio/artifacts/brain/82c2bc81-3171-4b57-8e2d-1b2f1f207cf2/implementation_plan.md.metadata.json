@@ -1,6 +1,6 @@
 {
-  "summary": "Rencana penyusunan prompt flowchart komprehensif berbasis kode diagram Mermaid.js untuk dikirim ke Gemini, mencakup seluruh 7 role pengguna dan seluruh fitur/menu sistem FEB UIKA (multi-matkul, remedial teaching D/CD/C/BC, verifikasi, penjadwalan, kartu ujian, dan master data).",
-  "updatedAt": "2026-11-06T12:19:27.916324598Z",
-  "requestFeedback": true,
-  "userFacing": true
+  "summary":  "Rencana implementasi perbaikan autentikasi dan validasi login presisi berbasis spreadsheet Google Sheets (User_Staff dan User_Mahasiswa), menghapus bypass universal fallback, dan menyinkronkan verifikasi kredensial di lingkungan Google Apps Script maupun Standalone Hostinger.",
+  "updatedAt":  "2026-11-09T02:52:35.467434674Z",
+  "requestFeedback":  true,
+  "userFacing":  true
 }
