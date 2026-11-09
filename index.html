@@ -6611,16 +6611,17 @@
 
     // Data generator: 10 Sampel Data Mockup Proporsional (UTS, UAS, & Remedial Teaching)
     function getTenMockupDataItems() {
+      const todayStr = new Date().toISOString().split('T')[0];
       return [
         {
           'ID': 'REG-1001',
-          'Tanggal': '2026-10-15',
+          'Tanggal': todayStr,
           'NPM': '2311010012',
           'Nama Mahasiswa': 'Rizky Pratama Putra',
           'Kode Prodi': 'MNJ',
           'Program Studi': 'Manajemen',
           'Semester': 'Semester 3',
-          'Kelas': 'Reguler 3A',
+          'Kelas': 'Reguler A',
           'Kategori Kelas': 'Reguler',
           'Tahun Akademik': '2026/2027 Ganjil',
           'Mata Kuliah': 'Manajemen Keuangan',
@@ -6640,13 +6641,13 @@
         },
         {
           'ID': 'REG-1002',
-          'Tanggal': '2026-10-15',
+          'Tanggal': todayStr,
           'NPM': '2311020045',
           'Nama Mahasiswa': 'Siti Nurhaliza Zahra',
           'Kode Prodi': 'AKT',
           'Program Studi': 'Akuntansi',
           'Semester': 'Semester 3',
-          'Kelas': 'Reguler 3B',
+          'Kelas': 'Reguler B',
           'Kategori Kelas': 'Reguler',
           'Tahun Akademik': '2026/2027 Ganjil',
           'Mata Kuliah': 'Akuntansi Biaya Lanjutan [Nilai Asal: CD]',
@@ -6674,17 +6675,17 @@
         },
         {
           'ID': 'REG-1003',
-          'Tanggal': '2026-10-16',
+          'Tanggal': todayStr,
           'NPM': '2411030019',
           'Nama Mahasiswa': 'Muhammad Farhan Ramadhan',
           'Kode Prodi': 'BD',
           'Program Studi': 'Bisnis Digital',
           'Semester': 'Semester 1',
-          'Kelas': 'Reguler 1A',
+          'Kelas': 'Reguler A',
           'Kategori Kelas': 'Reguler',
           'Tahun Akademik': '2026/2027 Ganjil',
-          'Mata Kuliah': '1. Big Data untuk Bisnis (3 SKS)\n2. Riset Operasi Bisnis (3 SKS)',
-          'Dosen Pengampu': '1. Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.\n2. Dr. Hendra Suhendra, M.M.',
+          'Mata Kuliah': '1. Big Data untuk Bisnis (3 SKS) | 2. Riset Operasi Bisnis (3 SKS)',
+          'Dosen Pengampu': '1. Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom. | 2. Dr. Hendra Suhendra, M.M.',
           'Jenis Layanan': 'UTS Susulan',
           'Alasan': 'Terkendala jaringan saat pendaftaran periode normal',
           'Bukti Foto': '',
@@ -6701,13 +6702,13 @@
         },
         {
           'ID': 'REG-1004',
-          'Tanggal': '2026-10-16',
+          'Tanggal': todayStr,
           'NPM': '2311040008',
           'Nama Mahasiswa': 'Nabila Putri Maharani',
           'Kode Prodi': 'PI',
           'Program Studi': 'Perdagangan Internasional',
           'Semester': 'Semester 3',
-          'Kelas': 'Reguler 3A',
+          'Kelas': 'Reguler A',
           'Kategori Kelas': 'Reguler',
           'Tahun Akademik': '2026/2027 Ganjil',
           'Mata Kuliah': 'Hukum Perdagangan Internasional',
@@ -6727,13 +6728,13 @@
         },
         {
           'ID': 'REG-1005',
-          'Tanggal': '2026-10-17',
+          'Tanggal': todayStr,
           'NPM': '2411050031',
           'Nama Mahasiswa': 'Aditya Pratama Wijaya',
           'Kode Prodi': 'PKD',
           'Program Studi': 'Perbankan dan Keuangan Digital',
           'Semester': 'Semester 1',
-          'Kelas': 'Reguler 1A',
+          'Kelas': 'Reguler A',
           'Kategori Kelas': 'Reguler',
           'Tahun Akademik': '2026/2027 Ganjil',
           'Mata Kuliah': 'Manajemen Perbankan [Nilai Asal: D]',
@@ -6761,17 +6762,17 @@
         },
         {
           'ID': 'REG-1006',
-          'Tanggal': '2026-10-17',
+          'Tanggal': todayStr,
           'NPM': '2211010087',
           'Nama Mahasiswa': 'Dimas Anggara Kusuma',
           'Kode Prodi': 'MNJ',
           'Program Studi': 'Manajemen',
           'Semester': 'Semester 5',
-          'Kelas': 'Karyawan 5A',
+          'Kelas': 'Karyawan A',
           'Kategori Kelas': 'Karyawan',
           'Tahun Akademik': '2026/2027 Ganjil',
-          'Mata Kuliah': '1. Manajemen Strategik (3 SKS)\n2. Perilaku Konsumen (3 SKS)',
-          'Dosen Pengampu': '1. Dr. Muhamad Azis Firdaus, S.E., M.M.\n2. Hj. Ratih Purnamasari, S.E., M.Si.',
+          'Mata Kuliah': '1. Manajemen Strategik (3 SKS) | 2. Perilaku Konsumen (3 SKS)',
+          'Dosen Pengampu': '1. Dr. Muhamad Azis Firdaus, S.E., M.M. | 2. Hj. Ratih Purnamasari, S.E., M.Si.',
           'Jenis Layanan': 'UTS Susulan',
           'Alasan': 'Tugas dinas shift malam di perusahaan logistik',
           'Bukti Foto': '',
@@ -6788,17 +6789,17 @@
         },
         {
           'ID': 'REG-1007',
-          'Tanggal': '2026-10-18',
+          'Tanggal': todayStr,
           'NPM': '2311020092',
           'Nama Mahasiswa': 'Fitria Rahmadani',
           'Kode Prodi': 'AKT',
           'Program Studi': 'Akuntansi',
           'Semester': 'Semester 3',
-          'Kelas': 'Reguler 3A',
+          'Kelas': 'Reguler A',
           'Kategori Kelas': 'Reguler',
           'Tahun Akademik': '2026/2027 Ganjil',
-          'Mata Kuliah': '1. Perpajakan Terapan [Nilai: C] (3 SKS)\n2. Akuntansi Sektor Publik [Nilai: BC] (3 SKS)',
-          'Dosen Pengampu': '1. Dr. Desmy Riani, S.E., M.Ak. (Dosen Lalu: Dr. Desmy Riani, S.E., M.Ak.)\n2. Ahmad, S.E., M.Ak. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)',
+          'Mata Kuliah': '1. Perpajakan Terapan [Nilai: C] (3 SKS) | 2. Akuntansi Sektor Publik [Nilai: BC] (3 SKS)',
+          'Dosen Pengampu': '1. Dr. Desmy Riani, S.E., M.Ak. (Dosen Lalu: Dr. Desmy Riani, S.E., M.Ak.) | 2. Ahmad, S.E., M.Ak. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)',
           'Jenis Layanan': 'Remedial Teaching',
           'Alasan': 'Perbaikan 2 mata kuliah konsentrasi perpajakan & sektor publik',
           'Bukti Foto': '',
@@ -6831,13 +6832,13 @@
         },
         {
           'ID': 'REG-1008',
-          'Tanggal': '2026-10-18',
+          'Tanggal': todayStr,
           'NPM': '2311030054',
           'Nama Mahasiswa': 'Kevin Alamsyah',
           'Kode Prodi': 'BD',
           'Program Studi': 'Bisnis Digital',
           'Semester': 'Semester 3',
-          'Kelas': 'Karyawan 3A',
+          'Kelas': 'Karyawan A',
           'Kategori Kelas': 'Karyawan',
           'Tahun Akademik': '2026/2027 Ganjil',
           'Mata Kuliah': 'E-Commerce Strategy & Marketing',
@@ -6857,13 +6858,13 @@
         },
         {
           'ID': 'REG-1009',
-          'Tanggal': '2026-10-19',
+          'Tanggal': todayStr,
           'NPM': '2411040022',
           'Nama Mahasiswa': 'Zahra Amelia Putri',
           'Kode Prodi': 'PI',
           'Program Studi': 'Perdagangan Internasional',
           'Semester': 'Semester 1',
-          'Kelas': 'Reguler 1B',
+          'Kelas': 'Reguler B',
           'Kategori Kelas': 'Reguler',
           'Tahun Akademik': '2026/2027 Ganjil',
           'Mata Kuliah': 'Kepabeanan & Ekspor Impor',
@@ -6883,17 +6884,17 @@
         },
         {
           'ID': 'REG-1010',
-          'Tanggal': '2026-10-19',
+          'Tanggal': todayStr,
           'NPM': '2211050015',
           'Nama Mahasiswa': 'Rian Hidayat',
           'Kode Prodi': 'PKD',
           'Program Studi': 'Perbankan dan Keuangan Digital',
           'Semester': 'Semester 5',
-          'Kelas': 'Reguler 5A',
+          'Kelas': 'Reguler A',
           'Kategori Kelas': 'Reguler',
           'Tahun Akademik': '2026/2027 Ganjil',
-          'Mata Kuliah': '1. Analisis Kredit Perbankan (3 SKS)\n2. Financial Technology Ecosystem (3 SKS)',
-          'Dosen Pengampu': '1. Denia Maulani, S.E., M.M.\n2. Dr. Hendra Suhendra, M.M.',
+          'Mata Kuliah': '1. Analisis Kredit Perbankan (3 SKS) | 2. Financial Technology Ecosystem (3 SKS)',
+          'Dosen Pengampu': '1. Denia Maulani, S.E., M.M. | 2. Dr. Hendra Suhendra, M.M.',
           'Jenis Layanan': 'UAS Susulan',
           'Alasan': 'Mengikuti program magang MBKM bersertifikat Kemendikbudristek',
           'Bukti Foto': '',
@@ -6936,7 +6937,7 @@
             google.script.run
               .withSuccessHandler(res => {
                 closeAiDiagnosticsModal();
-                Swal.fire('Berhasil Disuntik', res.message || '10 Data Mockup berhasil masuk ke database website!', 'success');
+                Swal.fire('Berhasil Disuntik', res.message || '10 Data Mockup berhasil masuk ke database spreadsheet!', 'success');
                 loadAppData();
               })
               .withFailureHandler(err => {
@@ -6945,8 +6946,16 @@
               })
               .seedMockupData(currentUser?.nama || 'Master Admin');
           } else {
-            // Mode Client / Vite / Standalone
+            // Mode Client / Hostinger / Standalone
             injectMockupDataClientSide(mockups);
+            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || '');
+            if (apiUrl) {
+              fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: 'seedMockupData', args: [] })
+              }).catch(e => console.warn('Sync to GAS API failed:', e));
+            }
           }
         }
       });
@@ -6954,16 +6963,14 @@
 
     function injectMockupDataClientSide(mockups) {
       if (!appData.pendaftaran) appData.pendaftaran = [];
-      const existingIds = new Set(appData.pendaftaran.map(p => String(p.ID)));
-      let added = 0;
+      const testIds = new Set(['REG-1001', 'REG-1002', 'REG-1003', 'REG-1004', 'REG-1005', 'REG-1006', 'REG-1007', 'REG-1008', 'REG-1009', 'REG-1010']);
+      // Hapus data uji lama dulu agar tidak ada duplikasi
+      appData.pendaftaran = appData.pendaftaran.filter(p => !testIds.has(String(p.ID || p.id)));
       mockups.forEach(m => {
-        if (!existingIds.has(String(m.ID))) {
-          appData.pendaftaran.push(m);
-          added++;
-        }
+        appData.pendaftaran.push(m);
       });
       closeAiDiagnosticsModal();
-      Swal.fire('Berhasil Disuntik', `10 Data Mockup sampel berhasil disuntikkan ke memori sistem (UTS Susulan, UAS Susulan, & Remedial Teaching)!`, 'success');
+      Swal.fire('Berhasil Disuntik', `10 Data Mockup sampel berhasil disuntikkan secara lengkap dan sinkron (UTS Susulan, UAS Susulan, & Remedial Teaching)!`, 'success');
       renderPendaftaranTable();
       renderExecutiveDashboard();
     }
@@ -6984,7 +6991,7 @@
             google.script.run
               .withSuccessHandler(res => {
                 closeAiDiagnosticsModal();
-                Swal.fire('Bersih', res.message || 'Data uji berhasil dibersihkan.', 'success');
+                Swal.fire('Bersih', res.message || 'Data uji berhasil dibersihkan dari database spreadsheet.', 'success');
                 loadAppData();
               })
               .withFailureHandler(() => {
@@ -6993,6 +7000,14 @@
               .clearAITestData();
           } else {
             clearTestDataClientSide();
+            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || '');
+            if (apiUrl) {
+              fetch(apiUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: 'clearAITestData', args: [] })
+              }).catch(e => console.warn('Clear on GAS API failed:', e));
+            }
           }
         }
       });
@@ -7001,7 +7016,7 @@
     function clearTestDataClientSide() {
       if (appData.pendaftaran) {
         const testIds = new Set(['REG-1001', 'REG-1002', 'REG-1003', 'REG-1004', 'REG-1005', 'REG-1006', 'REG-1007', 'REG-1008', 'REG-1009', 'REG-1010']);
-        appData.pendaftaran = appData.pendaftaran.filter(p => !testIds.has(String(p.ID)));
+        appData.pendaftaran = appData.pendaftaran.filter(p => !testIds.has(String(p.ID || p.id)));
       }
       closeAiDiagnosticsModal();
       Swal.fire('Bersih', 'Data sampel pengujian berhasil dibersihkan dari memori.', 'success');

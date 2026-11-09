@@ -266,7 +266,24 @@ function setupDatabase() {
     props.setProperty('SIP_PERSISTENT_LOGS_V2', JSON.stringify(objLogs));
   } catch(e) {}
 
-  var successMsg = "Inisialisasi Database Berhasil! Seluruh Sheet terpisah User_Staff, User_Mahasiswa, Master_Ruangan, Jadwal_Ujian, Master Data, Notifikasi & Log Aktivitas (Persistent) FEB UIKA Bogor telah siap 100%.";
+  // 9. POPULATE SHEET: Pendaftaran (Inisialisasi Header Standar & 10 Mockup Sampel Data Lengkap Tanpa Baris Kosong)
+  populateSheetData(ss, 'Pendaftaran',
+    ["ID", "Tanggal", "Tahun Akademik", "Semester", "NPM", "Nama Mahasiswa", "Kode Prodi", "Program Studi", "Kelas", "Kategori Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Layanan", "Alasan", "Bukti Foto", "Status Jadwal", "Nominal", "Status Pembayaran", "Status Persetujuan"],
+    [
+      ["REG-1001", "2026-10-15", "2026/2027 Ganjil", "Semester 3", "2311010012", "Rizky Pratama Putra", "MNJ", "Manajemen", "Reguler A", "Reguler", "Manajemen Keuangan", "Dr. Agung Wibowo, S.E., M.M.", "UTS Susulan", "Rawat inap RS PMI Bogor karena DBD (Surat dokter terlampir)", "", "Tepat Waktu", 0, "Gratis (Tepat Waktu)", "Disetujui"],
+      ["REG-1002", "2026-10-15", "2026/2027 Ganjil", "Semester 3", "2311020045", "Siti Nurhaliza Zahra", "AKT", "Akuntansi", "Reguler B", "Reguler", "Akuntansi Biaya Lanjutan [Nilai Asal: CD]", "Prof. Dr. Hendro Sasongko, M.M. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)", "Remedial Teaching", "Perbaikan nilai mata kuliah prasyarat skripsi", "", "Tepat Waktu", 150000, "Lunas", "Pending"],
+      ["REG-1003", "2026-10-16", "2026/2027 Ganjil", "Semester 1", "2411030019", "Muhammad Farhan Ramadhan", "BD", "Bisnis Digital", "Reguler A", "Reguler", "1. Big Data untuk Bisnis (3 SKS) | 2. Riset Operasi Bisnis (3 SKS)", "1. Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom. | 2. Dr. Hendra Suhendra, M.M.", "UTS Susulan", "Terkendala jaringan saat pendaftaran periode normal", "", "Terlambat", 50000, "Belum Bayar", "Pending"],
+      ["REG-1004", "2026-10-16", "2026/2027 Ganjil", "Semester 3", "2311040008", "Nabila Putri Maharani", "PI", "Perdagangan Internasional", "Reguler A", "Reguler", "Hukum Perdagangan Internasional", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.", "UAS Susulan", "Kedukaan keluarga inti di luar kota (Surat keterangan RT terlampir)", "", "Tepat Waktu", 0, "Gratis (Tepat Waktu)", "Disetujui"],
+      ["REG-1005", "2026-10-17", "2026/2027 Ganjil", "Semester 1", "2411050031", "Aditya Pratama Wijaya", "PKD", "Perbankan dan Keuangan Digital", "Reguler A", "Reguler", "Manajemen Perbankan [Nilai Asal: D]", "Denia Maulani, S.E., M.M. (Dosen Lalu: Dr. H. Hendra Suhendra, M.M.)", "Remedial Teaching", "Perbaikan nilai mata kuliah syarat magang di Bank Syariah", "", "Terlambat", 75000, "Lunas", "Pending"],
+      ["REG-1006", "2026-10-17", "2026/2027 Ganjil", "Semester 5", "2211010087", "Dimas Anggara Kusuma", "MNJ", "Manajemen", "Karyawan A", "Karyawan", "1. Manajemen Strategik (3 SKS) | 2. Perilaku Konsumen (3 SKS)", "1. Dr. Muhamad Azis Firdaus, S.E., M.M. | 2. Hj. Ratih Purnamasari, S.E., M.Si.", "UTS Susulan", "Tugas dinas shift malam di perusahaan logistik", "", "Terlambat", 50000, "Lunas", "Disetujui"],
+      ["REG-1007", "2026-10-18", "2026/2027 Ganjil", "Semester 3", "2311020092", "Fitria Rahmadani", "AKT", "Akuntansi", "Reguler A", "Reguler", "1. Perpajakan Terapan [Nilai: C] (3 SKS) | 2. Akuntansi Sektor Publik [Nilai: BC] (3 SKS)", "1. Dr. Desmy Riani, S.E., M.Ak. (Dosen Lalu: Dr. Desmy Riani, S.E., M.Ak.) | 2. Ahmad, S.E., M.Ak. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)", "Remedial Teaching", "Perbaikan 2 mata kuliah konsentrasi perpajakan & sektor publik", "", "Tepat Waktu", 300000, "Lunas", "Disetujui"],
+      ["REG-1008", "2026-10-18", "2026/2027 Ganjil", "Semester 3", "2311030054", "Kevin Alamsyah", "BD", "Bisnis Digital", "Karyawan A", "Karyawan", "E-Commerce Strategy & Marketing", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.", "UAS Susulan", "Mewakili kampus dalam kompetisi Startup Digital Nasional", "", "Tepat Waktu", 0, "Gratis (Tepat Waktu)", "Disetujui"],
+      ["REG-1009", "2026-10-19", "2026/2027 Ganjil", "Semester 1", "2411040022", "Zahra Amelia Putri", "PI", "Perdagangan Internasional", "Reguler B", "Reguler", "Kepabeanan & Ekspor Impor", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.", "UTS Susulan", "Sakit tifus saat hari pelaksanaan ujian reguler", "", "Tepat Waktu", 0, "Gratis (Tepat Waktu)", "Pending"],
+      ["REG-1010", "2026-10-19", "2026/2027 Ganjil", "Semester 5", "2211050015", "Rian Hidayat", "PKD", "Perbankan dan Keuangan Digital", "Reguler A", "Reguler", "1. Analisis Kredit Perbankan (3 SKS) | 2. Financial Technology Ecosystem (3 SKS)", "1. Denia Maulani, S.E., M.M. | 2. Dr. Hendra Suhendra, M.M.", "UAS Susulan", "Mengikuti program magang MBKM bersertifikat Kemendikbudristek", "", "Terlambat", 100000, "Lunas", "Pending"]
+    ]
+  );
+
+  var successMsg = "Inisialisasi Database Berhasil! Seluruh Sheet terpisah User_Staff, User_Mahasiswa, Master_Ruangan, Jadwal_Ujian, Master Data, Notifikasi, Log Aktivitas & Pendaftaran (10 Data Mockup) FEB UIKA Bogor telah siap 100%.";
   Logger.log(successMsg);
   console.log(successMsg);
   try {
@@ -296,6 +313,9 @@ function populateSheetData(ss, sheetName, headers, rows) {
       sheet.getRange(2, 2, rows.length, 1).setNumberFormat('@');
       sheet.getRange(2, 3, rows.length, 1).setNumberFormat('@');
       sheet.getRange(2, 6, rows.length, 1).setNumberFormat('@');
+    }
+    if (sheetName === 'Pendaftaran') {
+      sheet.getRange(2, 5, rows.length, 1).setNumberFormat('@');
     }
   }
 
