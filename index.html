@@ -7012,7 +7012,7 @@
           } else {
             // Mode Client / Hostinger / Standalone
             injectMockupDataClientSide(mockups);
-            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || '');
+            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || 'https://script.google.com/macros/s/AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN/exec');
             if (apiUrl) {
               fetch(apiUrl, {
                 method: 'POST',
