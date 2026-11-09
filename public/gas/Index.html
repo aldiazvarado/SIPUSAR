@@ -2727,8 +2727,8 @@
         if (pInput) pInput.value = '';
         Swal.fire({
           icon: 'error',
-          title: 'Akses Ditolak',
-          text: msg || 'Username atau kata sandi yang Anda masukkan tidak sesuai dengan data akun terdaftar FEB UIKA. Silakan periksa kembali.',
+          title: 'Akun Tidak Ditemukan',
+          text: msg || 'Username atau kata sandi yang Anda masukkan tidak sesuai. Coba lagi atau hubungi admin jika belum memiliki akun.',
           confirmButtonColor: '#e11d48'
         });
       };
@@ -2767,7 +2767,7 @@
             if (res && res.success && res.user) {
               handleAuthSuccess(res.user);
             } else {
-              showLoginFailed(res?.message || 'Username atau kata sandi salah. Akun tidak ditemukan di sheet User_Staff atau User_Mahasiswa.');
+              showLoginFailed(res?.message || 'Username atau kata sandi yang Anda masukkan tidak sesuai. Coba lagi atau hubungi admin jika belum memiliki akun.');
             }
           })
           .withFailureHandler(err => {
@@ -2791,7 +2791,7 @@
               if (res && res.success && res.user) {
                 handleAuthSuccess(res.user);
               } else {
-                showLoginFailed(res?.message || 'Username atau kata sandi salah. Pastikan akun terdaftar di spreadsheet.');
+                showLoginFailed(res?.message || 'Username atau kata sandi yang Anda masukkan tidak sesuai. Coba lagi atau hubungi admin jika belum memiliki akun.');
               }
             })
             .catch(() => {
@@ -2885,7 +2885,7 @@
       }
 
       // Tolak akses jika kredensial tidak cocok
-      onFailed('Username atau kata sandi tidak valid. Pastikan data akun Anda terdaftar di sheet User_Staff atau User_Mahasiswa FEB UIKA.');
+      onFailed('Username atau kata sandi yang Anda masukkan tidak sesuai. Coba lagi atau hubungi admin jika belum memiliki akun.');
     }
 
     function handleLogout() {

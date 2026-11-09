@@ -803,7 +803,7 @@ function loginUser(username, password) {
     // Tolak akses jika username atau password tidak cocok dengan akun terdaftar di spreadsheet
     return {
       success: false,
-      message: 'Username atau kata sandi tidak valid. Pastikan data akun Anda terdaftar di sheet User_Staff atau User_Mahasiswa FEB UIKA.'
+      message: 'Username atau kata sandi yang Anda masukkan tidak sesuai. Coba lagi atau hubungi admin jika belum memiliki akun.'
     };
   } catch (err) {
     return { success: false, message: 'Kesalahan Sistem Login: ' + (err.message || String(err)) };
