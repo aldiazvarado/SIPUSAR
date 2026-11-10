@@ -476,7 +476,8 @@ function getSheetData(sheetName) {
       return combinedLogs;
     }
 
-    var isStaticMaster = ['Master_Prodi', 'Master_Matkul', 'Master_Kelas', 'Master_Dosen', 'Periode_Pendaftaran', 'Master_Tahun_Akademik', 'Master_Ruangan'].indexOf(sheetName) !== -1;
+    // Periode_Pendaftaran dan Master_Tahun_Akademik dibaca langsung tanpa cache 30 menit agar edit/hapus di spreadsheet langsung instan
+    var isStaticMaster = ['Master_Prodi', 'Master_Matkul', 'Master_Kelas', 'Master_Dosen', 'Master_Ruangan'].indexOf(sheetName) !== -1;
     var data = isStaticMaster ? getCachedMasterData(ss, sheetName) : getSheetDataRaw(ss, sheetName);
     if (!data) data = [];
 
@@ -995,49 +996,10 @@ function getInitialData(userRole, username, userProdi) {
     var masterDosen = [];
     try { masterDosen = getSheetData('Master_Dosen'); } catch(e) {}
     var periode = [];
-    try { periode = getSheetData('Periode_Pendaftaran'); } catch(e) {}
-    if (!periode || periode.length === 0) {
-      periode = [
-        {
-          'ID': 'PRD-REG-01',
-          'Tahun Akademik': '2026/2027',
-          'Semester': 'Ganjil',
-          'Jenis Layanan': 'UTS Susulan',
-          'Kategori Kelas': 'Reguler & Karyawan',
-          'Tanggal & Jam Mulai': '2026-10-10 08:00:00',
-          'Tanggal & Jam Selesai': '2026-10-20 23:59:00',
-          'Mulai Terlambat': '2026-10-21 00:00:00',
-          'Selesai Terlambat': '2026-10-25 23:59:00',
-          'Biaya Keterlambatan': 50000,
-          'Status': 'Aktif'
-        },
-        {
-          'ID': 'PRD-REG-02',
-          'Tahun Akademik': '2026/2027',
-          'Semester': 'Ganjil',
-          'Jenis Layanan': 'UAS Susulan',
-          'Kategori Kelas': 'Reguler & Karyawan',
-          'Tanggal & Jam Mulai': '2026-12-15 08:00:00',
-          'Tanggal & Jam Selesai': '2026-12-25 23:59:00',
-          'Mulai Terlambat': '2026-12-26 00:00:00',
-          'Selesai Terlambat': '2026-12-30 23:59:00',
-          'Biaya Keterlambatan': 50000,
-          'Status': 'Ditutup'
-        },
-        {
-          'ID': 'PRD-REG-03',
-          'Tahun Akademik': '2026/2027',
-          'Semester': 'Ganjil',
-          'Jenis Layanan': 'Remedial Teaching',
-          'Kategori Kelas': 'Reguler & Karyawan',
-          'Tanggal & Jam Mulai': '2027-01-05 08:00:00',
-          'Tanggal & Jam Selesai': '2027-01-14 23:59:00',
-          'Mulai Terlambat': '2027-01-15 00:00:00',
-          'Selesai Terlambat': '2027-01-20 23:59:00',
-          'Biaya Keterlambatan': 75000,
-          'Status': 'Ditutup'
-        }
-      ];
+    try {
+      periode = getSheetData('Periode_Pendaftaran') || [];
+    } catch(e) {
+      periode = [];
     }
     var pendaftaran = [];
     try { pendaftaran = getSheetData('Pendaftaran'); } catch(e) {}

@@ -19,10 +19,35 @@
   <script>
 
     // ==========================================
-    // [REST API ENGINE UNTUK HOSTINGER STANDALONE]
+    // [REST API ENGINE UNTUK HOSTINGER & GITHUB PAGES STANDALONE]
     // Menghubungkan seluruh fungsi ke Google Apps Script Web App Endpoint via CORS Fetch
     // ==========================================
-    let GAS_API_URL = localStorage.getItem("uika_gas_api_url") || "https://script.google.com/macros/s/AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN/exec";
+    function getGasApiUrl() {
+      let val = localStorage.getItem("SIP_GAS_API_URL") || localStorage.getItem("uika_gas_api_url") || "";
+      if (val && typeof val === 'string' && val.trim()) {
+        val = val.trim();
+        // Bersihkan typo leading '0' jika pernah tersimpan di cache browser pengguna
+        if (val.includes("/0AKfycbxKE")) {
+          val = val.replace("/0AKfycbxKE", "/AKfycbxKE");
+          localStorage.setItem("SIP_GAS_API_URL", val);
+          localStorage.setItem("uika_gas_api_url", val);
+        }
+        return val;
+      }
+      return "https://script.google.com/macros/s/AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN/exec";
+    }
+
+    function setGasApiUrl(newUrl) {
+      let cleanUrl = (newUrl || '').trim();
+      if (cleanUrl.includes("/0AKfycbxKE")) {
+        cleanUrl = cleanUrl.replace("/0AKfycbxKE", "/AKfycbxKE");
+      }
+      localStorage.setItem("SIP_GAS_API_URL", cleanUrl);
+      localStorage.setItem("uika_gas_api_url", cleanUrl);
+      GAS_API_URL = cleanUrl;
+    }
+
+    let GAS_API_URL = getGasApiUrl();
 
     function openApiConfigModal() {
       const roleLower = (currentUser && currentUser.role ? currentUser.role : '').toString().toLowerCase().trim();
@@ -40,17 +65,16 @@
         title: "Konfigurasi URL REST API GAS",
         text: "Masukkan URL Web App Deployment Google Apps Script Anda (akhiran /exec):",
         input: "url",
-        inputValue: GAS_API_URL,
-        inputPlaceholder: "https://script.google.com/macros/s/.../exec",
+        inputValue: getGasApiUrl(),
+        inputPlaceholder: "https://script.google.com/macros/s/AKfycb.../exec",
         showCancelButton: true,
         confirmButtonText: "Simpan URL",
         cancelButtonText: "Batal",
         confirmButtonColor: "#1e3a8a"
       }).then((res) => {
         if (res.isConfirmed && res.value) {
-          GAS_API_URL = res.value.trim();
-          localStorage.setItem("uika_gas_api_url", GAS_API_URL);
-          Swal.fire("Tersimpan!", "Endpoint REST API berhasil diperbarui.", "success");
+          setGasApiUrl(res.value);
+          Swal.fire("Tersimpan!", "Endpoint REST API berhasil diperbarui dan disinkronkan.", "success");
           loadAppData();
         }
       });
@@ -58,6 +82,7 @@
 
     if (typeof google === "undefined" || !google.script || !google.script.run) {
       window.google = window.google || {};
+      window.google.__isProxy = true;
       window.google.script = window.google.script || {};
       
       function createProxyRunner(successCb, failureCb) {
@@ -80,7 +105,8 @@
     }
 
     async function callGasApi(action, args, onSuccess, onFailure) {
-      if (!GAS_API_URL) {
+      const targetUrl = (getGasApiUrl() || GAS_API_URL || '').trim();
+      if (!targetUrl) {
         console.warn("GAS_API_URL belum dikonfigurasi. Menggunakan respon lokal di memori.");
         if (action === "getInitialData") {
           if (onSuccess) onSuccess(appData);
@@ -91,7 +117,7 @@
       }
 
       try {
-        const resp = await fetch(GAS_API_URL, {
+        const resp = await fetch(targetUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({ action: action, args: args })
@@ -2377,47 +2403,7 @@
           { 'Kode Ruangan': 'R-202', 'Nama Ruangan': 'Ruang Kuliah 202', 'Kapasitas': 45, 'Lokasi': 'Gedung FEB Lt. 2' },
           { 'Kode Ruangan': 'AULA-FEB', 'Nama Ruangan': 'Aula Utama FEB', 'Kapasitas': 120, 'Lokasi': 'Gedung FEB Lt. 3' }
         ],
-        periode: [
-          {
-            ID: 'PRD-REG-01',
-            'Tahun Akademik': '2026/2027',
-            Semester: 'Ganjil',
-            'Jenis Layanan': 'UTS Susulan',
-            'Kategori Kelas': 'Reguler & Karyawan',
-            'Tanggal & Jam Mulai': '2026-10-10 08:00',
-            'Tanggal & Jam Selesai': '2026-10-20 23:59',
-            'Mulai Terlambat': '2026-10-21 00:00',
-            'Selesai Terlambat': '2026-10-25 23:59',
-            'Biaya Keterlambatan': 50000,
-            Status: 'Aktif'
-          },
-          {
-            ID: 'PRD-REG-02',
-            'Tahun Akademik': '2026/2027',
-            Semester: 'Ganjil',
-            'Jenis Layanan': 'UAS Susulan',
-            'Kategori Kelas': 'Reguler & Karyawan',
-            'Tanggal & Jam Mulai': '2026-12-15 08:00',
-            'Tanggal & Jam Selesai': '2026-12-25 23:59',
-            'Mulai Terlambat': '2026-12-26 00:00',
-            'Selesai Terlambat': '2026-12-30 23:59',
-            'Biaya Keterlambatan': 50000,
-            Status: 'Ditutup'
-          },
-          {
-            ID: 'PRD-REG-03',
-            'Tahun Akademik': '2026/2027',
-            Semester: 'Ganjil',
-            'Jenis Layanan': 'Remedial Teaching',
-            'Kategori Kelas': 'Reguler & Karyawan',
-            'Tanggal & Jam Mulai': '2027-01-05 08:00',
-            'Tanggal & Jam Selesai': '2027-01-14 23:59',
-            'Mulai Terlambat': '2027-01-15 00:00',
-            'Selesai Terlambat': '2027-01-20 23:59',
-            'Biaya Keterlambatan': 75000,
-            Status: 'Ditutup'
-          }
-        ],
+        periode: [],
         tahunAkademik: [
           { 'ID': 'TA-01', 'Tahun': '2026/2027 Ganjil', 'Status': 'Aktif' },
           { 'ID': 'TA-02', 'Tahun': '2025/2026 Genap', 'Status': 'Selesai' }
@@ -3213,6 +3199,8 @@
         }
         if (res && res.success) {
           appData = res;
+          if (!appData.master) appData.master = {};
+          if (!Array.isArray(appData.master.periode)) appData.master.periode = [];
         }
         refreshAllViews();
         try {
@@ -3230,7 +3218,7 @@
         } catch (e) {}
       };
 
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
+      if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
         google.script.run
           .withSuccessHandler(finishRefresh)
           .withFailureHandler(function(err) {
@@ -3244,7 +3232,21 @@
           })
           .getInitialData(currentUser ? currentUser.role : '', currentUser ? currentUser.username : '', currentUser ? currentUser.kodeProdi : '');
       } else {
-        setTimeout(() => finishRefresh(appData), 350);
+        // Standalone Hostinger / GitHub Pages: panggil via REST API (callGasApi)
+        callGasApi(
+          'getInitialData',
+          [currentUser ? currentUser.role : '', currentUser ? currentUser.username : '', currentUser ? currentUser.kodeProdi : ''],
+          finishRefresh,
+          function(err) {
+            if (btn) {
+              btn.classList.remove('opacity-75');
+              const icon = btn.querySelector('i');
+              if (icon) icon.classList.remove('fa-spin');
+            }
+            console.warn('Gagal memuat data via REST API GAS, menggunakan data memori:', err);
+            refreshAllViews();
+          }
+        );
       }
     }
 
