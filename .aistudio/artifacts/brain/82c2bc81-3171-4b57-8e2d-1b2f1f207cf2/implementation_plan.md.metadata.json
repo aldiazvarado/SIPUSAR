@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi pembaruan judul form pendaftaran menjadi 'Form Pendaftaran Layanan Ujian Susulan dan Remedial Teaching' serta penambahan kolom Kelas pada Master_Matkul di spreadsheet dan filter otomatis mata kuliah sesuai kelas mahasiswa yang login.",
-  "updatedAt":  "2026-11-10T05:31:12.982559803Z",
+  "summary":  "Rencana implementasi validasi wajib isi untuk Alasan dan Bukti Dokumen pada formulir pendaftaran, pembatasan upload JPG/PNG/PDF hingga 5 MB, dan integrasi Google Apps Script untuk otomatis mengunggah berkas ke folder Google Drive 'Berkas Bukti Pendaftaran FEB UIKA' serta menyimpan tautan URL ke spreadsheet.",
+  "updatedAt":  "2026-11-10T06:47:03.552938388Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

@@ -3,8 +3,6 @@
 <head>
   <script type="module" src="/@vite/client"></script>
 
-  <script type="module" src="/@vite/client"></script>
-
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Pendaftaran & Reporting Akademik - FEB UIKA Bogor</title>
@@ -182,7 +180,7 @@
       }
     }
   </style>
-<script src="/_aistudio-iframe.js?v=1f94f900"></script><script src="/_aistudio-iframe.js?v=1f94f900"></script><script src="/_aistudio-iframe.js?v=1f94f900"></script></head>
+</head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased">
 
   <!-- LOGIN CONTAINER -->
@@ -1489,23 +1487,31 @@
         </div>
 
         <div>
-          <label class="block font-bold text-slate-600 mb-1">Alasan / Keterangan</label>
-          <textarea id="pendaftaranAlasan" rows="2" required placeholder="Tuliskan alasan pengajuan..." class="w-full border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-900"></textarea>
+          <label class="block font-bold text-slate-700 mb-1">Alasan / Keterangan <span class="text-rose-500 font-bold">*</span></label>
+          <textarea id="pendaftaranAlasan" rows="2" required placeholder="Tuliskan alasan pengajuan secara lengkap (wajib diisi)..." class="w-full border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-900"></textarea>
         </div>
 
         <div>
-          <label class="block font-bold text-slate-600 mb-1">Upload Bukti Foto / Dokumen Pendukung</label>
-          <input type="file" id="pendaftaranBuktiFile" accept="image/*" onchange="handleBuktiFotoUpload(event)" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 text-xs">
+          <label class="block font-bold text-slate-700 mb-1">Upload Bukti Foto / Dokumen Pendukung <span class="text-rose-500 font-bold">*</span></label>
+          <input type="file" id="pendaftaranBuktiFile" accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf" onchange="handleBuktiFotoUpload(event)" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-slate-50 text-xs cursor-pointer">
+          <p class="text-[11px] text-slate-500 mt-1"><i class="fas fa-circle-info text-blue-600 mr-1"></i>Format yang didukung: JPG, PNG, atau PDF (Maksimal 5 MB). File otomatis diunggah ke Google Drive.</p>
           <input type="hidden" id="pendaftaranBuktiBase64">
-          <div id="previewBuktiContainer" class="hidden mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <img id="previewBuktiImg" class="w-16 h-12 object-cover rounded-lg border border-slate-300 bg-white" alt="Preview Bukti">
-              <div>
-                <p class="font-bold text-slate-800 text-xs">Bukti Foto Terlampir</p>
-                <p class="text-[10px] text-emerald-700 font-semibold">Siap disimpan bersama pendaftaran</p>
+          <input type="hidden" id="pendaftaranBuktiFileName">
+          <input type="hidden" id="pendaftaranBuktiMimeType">
+          
+          <div id="previewBuktiContainer" class="hidden mt-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl items-center justify-between">
+            <div class="flex items-center gap-3 overflow-hidden">
+              <div id="previewBuktiIcon" class="hidden w-14 h-12 rounded-lg bg-rose-50 border border-rose-200 flex flex-col items-center justify-center text-rose-600 font-bold text-xs shrink-0">
+                <i class="fas fa-file-pdf text-lg text-rose-600 mb-0.5"></i>
+                <span class="text-[9px] font-mono">PDF</span>
+              </div>
+              <img id="previewBuktiImg" class="w-16 h-12 object-cover rounded-lg border border-slate-300 bg-white shrink-0" alt="Preview Bukti">
+              <div class="truncate">
+                <p id="previewBuktiName" class="font-bold text-slate-800 text-xs truncate">Bukti Terlampir</p>
+                <p id="previewBuktiInfo" class="text-[10px] text-emerald-700 font-semibold"><i class="fas fa-cloud-arrow-up mr-1"></i>Siap diunggah ke Google Drive</p>
               </div>
             </div>
-            <button type="button" onclick="clearBuktiFoto()" class="text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded-lg text-xs font-bold">Hapus Foto</button>
+            <button type="button" onclick="clearBuktiFoto()" class="text-rose-600 hover:bg-rose-50 px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 ml-2"><i class="fas fa-trash-can mr-1"></i>Hapus</button>
           </div>
         </div>
 
@@ -5014,6 +5020,39 @@
 
           document.getElementById('pendaftaranAlasan').value = item.Alasan || '';
 
+          // Inisialisasi preview berkas bukti yang sudah tersimpan
+          clearBuktiFoto();
+          const existingBukti = item['Bukti Foto'] || '';
+          const buktiInputElem = document.getElementById('pendaftaranBuktiFile');
+          if (buktiInputElem) buktiInputElem.dataset.existingUrl = existingBukti;
+          if (existingBukti) {
+            const box = document.getElementById('previewBuktiContainer');
+            const img = document.getElementById('previewBuktiImg');
+            const iconPdf = document.getElementById('previewBuktiIcon');
+            const nameP = document.getElementById('previewBuktiName');
+            const infoP = document.getElementById('previewBuktiInfo');
+            if (nameP) nameP.innerText = 'Berkas Bukti Terlampir';
+            if (infoP) infoP.innerHTML = `<span class="text-emerald-700 font-semibold"><i class="fas fa-cloud-check mr-1"></i>Tersimpan di Google Drive / Cloud</span>`;
+            if (existingBukti.toLowerCase().includes('.pdf') || existingBukti.includes('application/pdf')) {
+              if (img) img.classList.add('hidden');
+              if (iconPdf) {
+                iconPdf.classList.remove('hidden');
+                iconPdf.className = 'w-14 h-12 rounded-lg bg-rose-50 border border-rose-200 flex flex-col items-center justify-center text-rose-600 font-bold text-xs shrink-0';
+                iconPdf.innerHTML = '<i class="fas fa-file-pdf text-lg text-rose-600 mb-0.5"></i><span class="text-[9px] font-mono">PDF</span>';
+              }
+            } else {
+              if (iconPdf) iconPdf.classList.add('hidden');
+              if (img) {
+                img.classList.remove('hidden');
+                img.src = existingBukti;
+              }
+            }
+            if (box) {
+              box.classList.remove('hidden');
+              box.classList.add('flex');
+            }
+          }
+
           let itemAngkatan = item.Angkatan;
           if (!itemAngkatan) {
             const m = String(nimInput.value).match(/^(\d{2})/);
@@ -5036,6 +5075,13 @@
       } else {
         const wrapperStatus = document.getElementById('wrapperStatusPersetujuan');
         if (wrapperStatus) wrapperStatus.classList.add('hidden');
+
+        // Reset form pendaftaran baru
+        clearBuktiFoto();
+        const buktiInputElem = document.getElementById('pendaftaranBuktiFile');
+        if (buktiInputElem) buktiInputElem.dataset.existingUrl = '';
+        const alasanInput = document.getElementById('pendaftaranAlasan');
+        if (alasanInput) alasanInput.value = '';
 
         syncPeriodeToPendaftaran();
 
@@ -5112,6 +5158,31 @@
         seenNames.add(nameLower);
       }
 
+      // Validasi wajib isi: Alasan / Keterangan
+      const alasanVal = (document.getElementById('pendaftaranAlasan')?.value || '').trim();
+      if (!alasanVal) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Alasan Wajib Diisi',
+          text: 'Kolom Alasan / Keterangan pengajuan layanan wajib diisi secara lengkap.'
+        });
+        document.getElementById('pendaftaranAlasan')?.focus();
+        return;
+      }
+
+      // Validasi wajib isi: Upload Bukti Foto / Dokumen Pendukung (JPG, PNG, atau PDF)
+      const buktiBase64 = (document.getElementById('pendaftaranBuktiBase64')?.value || '').trim();
+      const existingBukti = (document.getElementById('pendaftaranBuktiFile')?.dataset?.existingUrl || '').trim();
+      if (!buktiBase64 && !existingBukti) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Berkas Bukti Wajib Diunggah',
+          text: 'Upload Bukti Foto atau Dokumen Pendukung (format JPG, PNG, atau PDF maks 5 MB) wajib dilampirkan sebelum menyimpan formulir!'
+        });
+        document.getElementById('pendaftaranBuktiFile')?.focus();
+        return;
+      }
+
       // Format string multi-matkul dan dosen untuk backwards compatibility dan spreadsheet
       let formattedMatkul = '';
       let formattedDosen = '';
@@ -5142,6 +5213,9 @@
         ? document.getElementById('pendaftaranStatusPersetujuan').value 
         : 'Pending';
 
+      const fileNameVal = document.getElementById('pendaftaranBuktiFileName')?.value || '';
+      const mimeTypeVal = document.getElementById('pendaftaranBuktiMimeType')?.value || '';
+
       const payload = {
         id: document.getElementById('pendaftaranId').value,
         nim: document.getElementById('pendaftaranNim').value,
@@ -5159,8 +5233,10 @@
         jumlahMatkul: matkulRows.length,
         totalSks: totalSksVal,
         jenisLayanan: document.getElementById('pendaftaranLayanan').value,
-        alasan: document.getElementById('pendaftaranAlasan').value,
-        buktiFoto: document.getElementById('pendaftaranBuktiBase64').value,
+        alasan: alasanVal,
+        buktiFoto: buktiBase64 || existingBukti,
+        buktiFileName: fileNameVal,
+        buktiMimeType: mimeTypeVal,
         statusJadwal: statusJadwal,
         statusPembayaran: statusPembayaran,
         nominal: totalNominal,
@@ -5170,7 +5246,7 @@
       const btnSave = document.getElementById('btnSavePendaftaran');
       if (btnSave) {
         btnSave.disabled = true;
-        btnSave.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...';
+        btnSave.innerHTML = '<i class="fas fa-cloud-arrow-up fa-bounce mr-1.5"></i> Mengunggah & Menyimpan...';
       }
 
       const fn = payload.id ? 'updatePendaftaran' : 'addPendaftaran';
@@ -8355,40 +8431,155 @@
     function handleBuktiFotoUpload(e) {
       const file = e.target.files[0];
       if (!file) return;
-      if (file.size > 2 * 1024 * 1024) {
-        Swal.fire('File Terlalu Besar', 'Maksimal ukuran foto adalah 2MB.', 'warning');
+
+      // Batas ukuran berkas 5 MB (5 * 1024 * 1024 bytes)
+      const maxBytes = 5 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Berkas Terlalu Besar',
+          text: 'Maksimal ukuran berkas bukti adalah 5 MB. Silakan kompres atau pilih berkas lain.'
+        });
+        e.target.value = '';
+        clearBuktiFoto();
         return;
       }
+
+      // Validasi format berkas: JPG, PNG, atau PDF
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+      const fileExt = file.name.split('.').pop().toLowerCase();
+      const isAllowedExt = ['jpg', 'jpeg', 'png', 'pdf'].includes(fileExt);
+
+      if (!allowedTypes.includes(file.type) && !isAllowedExt) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Format Berkas Tidak Didukung',
+          text: 'Hanya format gambar (JPG, JPEG, PNG) dan dokumen PDF yang diizinkan untuk bukti pendaftaran.'
+        });
+        e.target.value = '';
+        clearBuktiFoto();
+        return;
+      }
+
       const reader = new FileReader();
       reader.onload = function(evt) {
         const base64 = evt.target.result;
-        document.getElementById('pendaftaranBuktiBase64').value = base64;
-        const preview = document.getElementById('buktiFotoPreviewImg');
-        const box = document.getElementById('buktiFotoPreviewContainer');
-        if (preview && box) {
-          preview.src = base64;
+        const base64Input = document.getElementById('pendaftaranBuktiBase64');
+        const fileNameInput = document.getElementById('pendaftaranBuktiFileName');
+        const mimeTypeInput = document.getElementById('pendaftaranBuktiMimeType');
+
+        if (base64Input) base64Input.value = base64;
+        if (fileNameInput) fileNameInput.value = file.name;
+        if (mimeTypeInput) mimeTypeInput.value = file.type || (fileExt === 'pdf' ? 'application/pdf' : 'image/jpeg');
+
+        const box = document.getElementById('previewBuktiContainer');
+        const img = document.getElementById('previewBuktiImg');
+        const iconPdf = document.getElementById('previewBuktiIcon');
+        const nameP = document.getElementById('previewBuktiName');
+        const infoP = document.getElementById('previewBuktiInfo');
+
+        const fileSizeKb = Math.round(file.size / 1024);
+        const sizeStr = fileSizeKb > 1024 ? (file.size / (1024 * 1024)).toFixed(2) + ' MB' : fileSizeKb + ' KB';
+
+        if (nameP) nameP.innerText = file.name;
+        if (infoP) infoP.innerHTML = `<span class="text-blue-900 font-bold">${sizeStr}</span> · <i class="fas fa-cloud-arrow-up text-emerald-600 mr-1"></i>Siap diunggah ke Google Drive`;
+
+        if (file.type === 'application/pdf' || fileExt === 'pdf') {
+          if (img) img.classList.add('hidden');
+          if (iconPdf) {
+            iconPdf.classList.remove('hidden');
+            iconPdf.className = 'w-14 h-12 rounded-lg bg-rose-50 border border-rose-200 flex flex-col items-center justify-center text-rose-600 font-bold text-xs shrink-0';
+            iconPdf.innerHTML = '<i class="fas fa-file-pdf text-lg text-rose-600 mb-0.5"></i><span class="text-[9px] font-mono">PDF</span>';
+          }
+        } else {
+          if (iconPdf) iconPdf.classList.add('hidden');
+          if (img) {
+            img.classList.remove('hidden');
+            img.src = base64;
+          }
+        }
+
+        if (box) {
           box.classList.remove('hidden');
+          box.classList.add('flex');
         }
       };
       reader.readAsDataURL(file);
     }
 
     function clearBuktiFoto() {
-      const fileInput = document.getElementById('pendaftaranBuktiFoto');
-      if (fileInput) fileInput.value = '';
+      const fileInput = document.getElementById('pendaftaranBuktiFile');
+      if (fileInput) {
+        fileInput.value = '';
+        fileInput.dataset.existingUrl = '';
+      }
       const base64 = document.getElementById('pendaftaranBuktiBase64');
       if (base64) base64.value = '';
-      const box = document.getElementById('buktiFotoPreviewContainer');
-      if (box) box.classList.add('hidden');
+      const fName = document.getElementById('pendaftaranBuktiFileName');
+      if (fName) fName.value = '';
+      const fMime = document.getElementById('pendaftaranBuktiMimeType');
+      if (fMime) fMime.value = '';
+
+      const box = document.getElementById('previewBuktiContainer');
+      if (box) {
+        box.classList.add('hidden');
+        box.classList.remove('flex');
+      }
     }
 
     function showBuktiPreviewModal(src) {
-      Swal.fire({
-        imageUrl: src,
-        imageAlt: 'Bukti Foto Pendaftaran',
-        confirmButtonText: 'Tutup',
-        confirmButtonColor: '#1e3a8a'
-      });
+      if (!src) return;
+      const isDrive = src.includes('drive.google.com');
+      const isPdf = src.toLowerCase().includes('.pdf') || src.includes('application/pdf');
+
+      if (isDrive) {
+        Swal.fire({
+          title: 'Berkas Bukti Pendaftaran',
+          html: `
+            <div class="space-y-3 text-left">
+              <p class="text-xs text-slate-600">Berkas pendaftaran tersimpan aman di folder Google Drive Fakultas:</p>
+              <div class="p-3 bg-blue-50/70 border border-blue-200 rounded-2xl flex items-center justify-between gap-3">
+                <div class="flex items-center gap-2 overflow-hidden">
+                  <i class="fab fa-google-drive text-emerald-600 text-xl shrink-0"></i>
+                  <span class="text-xs font-mono text-slate-800 truncate">${escapeHtml(src)}</span>
+                </div>
+                <a href="${src}" target="_blank" rel="noopener noreferrer" class="px-3.5 py-1.5 bg-blue-900 text-white rounded-xl text-xs font-bold hover:bg-blue-800 shadow-sm shrink-0 inline-flex items-center gap-1.5">
+                  <i class="fas fa-arrow-up-right-from-square"></i> Buka Berkas
+                </a>
+              </div>
+            </div>
+          `,
+          showCloseButton: true,
+          confirmButtonText: 'Tutup',
+          confirmButtonColor: '#1e3a8a'
+        });
+      } else if (isPdf) {
+        Swal.fire({
+          title: 'Dokumen Bukti PDF',
+          html: `
+            <div class="p-4 text-center">
+              <div class="w-16 h-16 bg-rose-50 text-rose-600 border border-rose-200 rounded-2xl flex items-center justify-center mx-auto mb-3 text-2xl">
+                <i class="fas fa-file-pdf"></i>
+              </div>
+              <p class="text-xs text-slate-700 font-bold mb-3">Dokumen PDF Terlampir</p>
+              <a href="${src}" target="_blank" download="Bukti_Pendaftaran.pdf" class="inline-flex items-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700 shadow-md">
+                <i class="fas fa-download"></i> Unduh / Buka Dokumen PDF
+              </a>
+            </div>
+          `,
+          showCloseButton: true,
+          confirmButtonText: 'Tutup',
+          confirmButtonColor: '#1e3a8a'
+        });
+      } else {
+        Swal.fire({
+          imageUrl: src,
+          imageAlt: 'Bukti Foto Pendaftaran',
+          confirmButtonText: 'Tutup',
+          confirmButtonColor: '#1e3a8a',
+          showCloseButton: true
+        });
+      }
     }
 
     // ==========================================

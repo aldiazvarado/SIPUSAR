@@ -91,7 +91,8 @@ function handleApiRequest(action, args) {
     normalizeExistingClassesInSheet: normalizeExistingClassesInSheet,
     clearAllCache: clearAllCache,
     invalidateCache: invalidateCache,
-    seedMockupData: seedMockupData
+    seedMockupData: seedMockupData,
+    uploadBuktiPendaftaranToDrive: uploadBuktiToDrive
   };
   var fn = allowedFunctions[action];
   if (!fn) {
@@ -1298,6 +1299,77 @@ function bulkUpdateStatusApproval(idList, statusPersetujuan, userRole) {
   }
 }
 
+// ==========================================
+// [GOOGLE DRIVE AUTO UPLOAD INTEGRATION]:
+// Mengunggah berkas bukti pendaftaran otomatis ke folder Google Drive
+// "Berkas Bukti Pendaftaran FEB UIKA" agar tidak memenuhi kuota database spreadsheet.
+// ==========================================
+function getOrCreateUploadFolder(folderName) {
+  folderName = folderName || "Berkas Bukti Pendaftaran FEB UIKA";
+  try {
+    var folders = DriveApp.getFoldersByName(folderName);
+    if (folders.hasNext()) {
+      return folders.next();
+    }
+    return DriveApp.createFolder(folderName);
+  } catch(e) {
+    Logger.log("getOrCreateUploadFolder error: " + e.message);
+    throw new Error("Gagal mengakses Google Drive: " + e.message);
+  }
+}
+
+function uploadBuktiToDrive(base64Data, fileName, mimeType, npm, regId) {
+  if (!base64Data || typeof base64Data !== 'string') return '';
+  // Jika sudah merupakan tautan online (Google Drive atau URL eksternal), kembalikan langsung
+  if (base64Data.indexOf('http://') === 0 || base64Data.indexOf('https://') === 0) {
+    return base64Data;
+  }
+
+  try {
+    var folder = getOrCreateUploadFolder("Berkas Bukti Pendaftaran FEB UIKA");
+    var base64Content = base64Data;
+    var detectedMime = mimeType || 'image/jpeg';
+
+    // Parse Data URI scheme jika ada: data:image/png;base64,... atau data:application/pdf;base64,...
+    var matches = base64Data.match(/^data:([a-zA-Z0-9_\-\.\/]+);base64,(.+)$/);
+    if (matches && matches.length === 3) {
+      detectedMime = matches[1];
+      base64Content = matches[2];
+    }
+
+    var decodedBytes = Utilities.base64Decode(base64Content);
+    var ext = 'jpg';
+    if (detectedMime.indexOf('png') !== -1) ext = 'png';
+    else if (detectedMime.indexOf('pdf') !== -1) ext = 'pdf';
+    else if (detectedMime.indexOf('jpeg') !== -1 || detectedMime.indexOf('jpg') !== -1) ext = 'jpg';
+
+    var rawName = (fileName || 'Bukti_Pendaftaran').replace(/[^a-zA-Z0-9_\.\-]/g, '_');
+    if (!rawName.toLowerCase().endsWith('.' + ext)) {
+      rawName = rawName + '.' + ext;
+    }
+
+    var timeStamp = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMdd_HHmmss');
+    var finalFileName = (npm || 'MHS') + '_' + (regId || 'REG') + '_' + timeStamp + '_' + rawName;
+
+    var blob = Utilities.newBlob(decodedBytes, detectedMime, finalFileName);
+    var driveFile = folder.createFile(blob);
+
+    // Set permission agar berkas bukti dapat dibuka dan dilihat oleh staf verifikator
+    try {
+      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch(shareErr) {
+      Logger.log("Peringatan izin sharing Drive: " + shareErr.message);
+    }
+
+    var driveUrl = driveFile.getUrl();
+    Logger.log("Bukti berhasil diunggah ke Google Drive: " + driveUrl);
+    return driveUrl;
+  } catch (err) {
+    Logger.log("Error uploadBuktiToDrive: " + err.message);
+    return 'ERR_DRIVE_UPLOAD: ' + err.message;
+  }
+}
+
 function addPendaftaran(payload) {
   if (!payload || typeof payload !== 'object') {
     return { success: false, message: 'Payload pendaftaran kosong atau tidak valid.' };
@@ -1331,10 +1403,22 @@ function addPendaftaran(payload) {
     var newId = payload.id || payload.ID || ('REG-' + (1000 + (lastRow > 1 ? lastRow : 1)));
     var nowStr = formatDateToString(new Date());
 
+    // [AUTO UPLOAD GOOGLE DRIVE]: Cek jika bukti foto dikirim dalam format base64
+    var finalBuktiUrl = payload.buktiFoto || '';
+    if (finalBuktiUrl && (finalBuktiUrl.indexOf('data:') === 0 || finalBuktiUrl.length > 500) && finalBuktiUrl.indexOf('http') !== 0) {
+      try {
+        var uploadedUrl = uploadBuktiToDrive(finalBuktiUrl, payload.buktiFileName || 'Bukti_Pendaftaran', payload.buktiMimeType || 'image/jpeg', mhsNpm, newId);
+        if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0) {
+          finalBuktiUrl = uploadedUrl;
+        }
+      } catch (uploadErr) {
+        Logger.log('Gagal upload bukti ke Google Drive: ' + uploadErr.message);
+      }
+    }
+
     var maxCol = Math.max(sheet.getLastColumn(), 19);
     var rowData = new Array(maxCol).fill('');
 
-    var mhsNpm = payload.npm || payload.nim || '';
     var cleanKelas = normalizeClassName(payload.kelas || 'Reguler A');
     var cleanKategori = payload.kategoriKelas || detectCategoryFromClass(cleanKelas);
 
@@ -1352,7 +1436,7 @@ function addPendaftaran(payload) {
     rowData[11] = payload.dosenPengampu;
     rowData[12] = payload.jenisLayanan;
     rowData[13] = payload.alasan;
-    rowData[14] = payload.buktiFoto || '';
+    rowData[14] = finalBuktiUrl;
     rowData[15] = payload.statusJadwal || 'Tepat Waktu';
     rowData[16] = sanitizeNumber(payload.nominal);
     rowData[17] = payload.statusPembayaran || 'Gratis (Tepat Waktu)';
@@ -1374,7 +1458,7 @@ function addPendaftaran(payload) {
     if (headerMap['Dosen Pengampu']) rowData[headerMap['Dosen Pengampu'] - 1] = payload.dosenPengampu;
     if (headerMap['Jenis Layanan']) rowData[headerMap['Jenis Layanan'] - 1] = payload.jenisLayanan;
     if (headerMap['Alasan']) rowData[headerMap['Alasan'] - 1] = payload.alasan;
-    if (headerMap['Bukti Foto']) rowData[headerMap['Bukti Foto'] - 1] = payload.buktiFoto || '';
+    if (headerMap['Bukti Foto']) rowData[headerMap['Bukti Foto'] - 1] = finalBuktiUrl;
     if (headerMap['Status Jadwal']) rowData[headerMap['Status Jadwal'] - 1] = payload.statusJadwal || 'Tepat Waktu';
     if (headerMap['Nominal']) rowData[headerMap['Nominal'] - 1] = sanitizeNumber(payload.nominal);
     if (headerMap['Status Pembayaran']) rowData[headerMap['Status Pembayaran'] - 1] = payload.statusPembayaran || 'Gratis (Tepat Waktu)';
@@ -1437,7 +1521,20 @@ function updatePendaftaran(payload) {
     setCol('Dosen Pengampu', payload.dosenPengampu);
     setCol('Jenis Layanan', payload.jenisLayanan);
     setCol('Alasan', payload.alasan);
-    if (payload.buktiFoto !== undefined) setCol('Bukti Foto', payload.buktiFoto);
+    if (payload.buktiFoto !== undefined) {
+      var finalBuktiUrl = payload.buktiFoto;
+      if (finalBuktiUrl && (finalBuktiUrl.indexOf('data:') === 0 || finalBuktiUrl.length > 500) && finalBuktiUrl.indexOf('http') !== 0) {
+        try {
+          var uploadedUrl = uploadBuktiToDrive(finalBuktiUrl, payload.buktiFileName || 'Bukti_Pendaftaran', payload.buktiMimeType || 'image/jpeg', mhsNpm, payload.id);
+          if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0) {
+            finalBuktiUrl = uploadedUrl;
+          }
+        } catch (uploadErr) {
+          Logger.log('Gagal upload bukti update ke Google Drive: ' + uploadErr.message);
+        }
+      }
+      setCol('Bukti Foto', finalBuktiUrl);
+    }
     setCol('Nominal', sanitizeNumber(payload.nominal));
     setCol('Status Pembayaran', payload.statusPembayaran);
     setCol('Status Persetujuan', payload.statusPersetujuan);
