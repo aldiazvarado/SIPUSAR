@@ -418,9 +418,9 @@
         </div>
 
         <div class="flex items-center space-x-2 sm:space-x-3">
-          <span class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>Realtime Sync</span>
+          <span id="badgeRealtimeSync" class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 transition-all duration-300">
+            <span id="dotRealtimeSync" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="textRealtimeSync">Realtime Sync</span>
           </span>
           <button onclick="loadAppData()" class="bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 px-3 py-1.5 rounded-xl transition text-xs font-bold flex items-center space-x-1.5">
             <i class="fas fa-arrows-rotate"></i>
@@ -690,9 +690,10 @@
             <div class="flex items-center gap-2 text-slate-600">
               <span class="font-bold">Baris per halaman:</span>
               <select id="pendaftaranPageSize" onchange="changePendaftaranPageSize(this.value)" class="text-xs py-1 px-2.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-700 shadow-xs focus:ring-2 focus:ring-blue-900 cursor-pointer">
-                <option value="10">10</option>
-                <option value="15" selected>15</option>
+                <option value="10" selected>10</option>
                 <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="1000">Semua</option>
               </select>
               <span id="pendaftaranPaginationInfo" class="text-slate-500 font-semibold ml-2">Menampilkan 0-0 dari 0 berkas</span>
             </div>
@@ -765,6 +766,23 @@
               </thead>
               <tbody id="tableJadwalBody" class="divide-y divide-slate-100"></tbody>
             </table>
+          </div>
+
+          <!-- Pagination Toolbar Jadwal Ujian (Default 10 Baris) -->
+          <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-2 text-slate-600">
+              <span class="font-bold">Baris per halaman:</span>
+              <select id="jadwalPageSize" onchange="changeJadwalPageSize(this.value)" class="text-xs py-1 px-2.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-700 shadow-xs focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                <option value="10" selected>10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="1000">Semua</option>
+              </select>
+              <span id="jadwalPaginationInfo" class="text-slate-500 font-semibold ml-2">Menampilkan 0-0 dari 0 jadwal</span>
+            </div>
+            <div class="flex items-center space-x-1" id="jadwalPaginationControls">
+              <!-- Tombol Prev, Nomor Halaman, Next di-render via renderJadwalPagination() -->
+            </div>
           </div>
         </div>
       </div>
@@ -3175,7 +3193,67 @@
         switchTab('executive');
       }
 
-      loadAppData();
+      // [CACHE PINTAR 0 DETIK]: Muat seketika dari cache browser jika tersedia
+      const cached = loadCachedAppData();
+      if (cached) {
+        appData = cached;
+        refreshAllViews();
+        updateSyncStatusIndicator('cache');
+      }
+
+      // Jalankan sinkronisasi background secara senyap
+      loadAppData(true);
+    }
+
+    // ==========================================
+    // [MODUL CACHE PINTAR & INDIKATOR STATUS REALTIME]
+    // ==========================================
+    function saveAppDataCache(data) {
+      try {
+        if (data && data.success) {
+          localStorage.setItem('SIP_APP_DATA_CACHE_V2', JSON.stringify({
+            data: data,
+            savedAt: Date.now()
+          }));
+        }
+      } catch (err) {
+        console.warn('Gagal menyimpan cache lokal:', err);
+      }
+    }
+
+    function loadCachedAppData() {
+      try {
+        const raw = localStorage.getItem('SIP_APP_DATA_CACHE_V2');
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.data && parsed.data.success) {
+          return parsed.data;
+        }
+      } catch (err) {
+        console.warn('Gagal memuat cache lokal:', err);
+      }
+      return null;
+    }
+
+    function updateSyncStatusIndicator(state) {
+      const badge = document.getElementById('badgeRealtimeSync');
+      const dot = document.getElementById('dotRealtimeSync');
+      const text = document.getElementById('textRealtimeSync');
+      if (!badge || !text) return;
+
+      if (state === 'cache') {
+        badge.className = 'hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 transition-all duration-300';
+        if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-500 animate-pulse';
+        text.innerText = 'Cache Lokal (0 Detik)';
+      } else if (state === 'syncing') {
+        badge.className = 'hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200 transition-all duration-300';
+        if (dot) dot.className = 'w-2 h-2 rounded-full bg-blue-500 animate-pulse';
+        text.innerText = 'Sinkronisasi...';
+      } else {
+        badge.className = 'hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 transition-all duration-300';
+        if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+        text.innerText = 'Realtime Sync Aktif';
+      }
     }
 
     function refreshAllViews() {
@@ -3197,13 +3275,14 @@
       }
     }
 
-    function loadAppData() {
+    function loadAppData(isSilent = false) {
       const btn = document.querySelector('button[onclick="loadAppData()"]');
-      if (btn) {
+      if (btn && !isSilent) {
         btn.classList.add('opacity-75');
         const icon = btn.querySelector('i');
         if (icon) icon.classList.add('fa-spin');
       }
+      if (!isSilent) updateSyncStatusIndicator('syncing');
 
       const finishRefresh = (res) => {
         if (btn) {
@@ -3215,21 +3294,26 @@
           appData = res;
           if (!appData.master) appData.master = {};
           if (!Array.isArray(appData.master.periode)) appData.master.periode = [];
+          saveAppDataCache(res);
         }
         refreshAllViews();
-        try {
-          const Toast = Swal.mixin({
-            toast: true,
-            position: 'top-end',
-            showConfirmButton: false,
-            timer: 2000,
-            timerProgressBar: true
-          });
-          Toast.fire({
-            icon: 'success',
-            title: 'Data Berhasil Diperbarui Secara Instan'
-          });
-        } catch (e) {}
+        updateSyncStatusIndicator('online');
+
+        if (!isSilent) {
+          try {
+            const Toast = Swal.mixin({
+              toast: true,
+              position: 'top-end',
+              showConfirmButton: false,
+              timer: 1500,
+              timerProgressBar: true
+            });
+            Toast.fire({
+              icon: 'success',
+              title: 'Data Berhasil Diperbarui'
+            });
+          } catch (e) {}
+        }
       };
 
       if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
@@ -4515,17 +4599,38 @@
       const prodiList = master.prodi || [];
       const prodiSelect = document.getElementById('pendaftaranProdi');
       if (prodiSelect && prodiList.length > 0) {
+        // [BUGFIX PRODI RESET]: Pertahankan nilai prodi yang sedang aktif
+        const isMhs = typeof currentUser !== 'undefined' && currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+        let targetProdi = prodiSelect.value;
+        if (isMhs && currentUser.kodeProdi && currentUser.kodeProdi !== 'ALL') {
+          targetProdi = currentUser.kodeProdi;
+        }
+
         prodiSelect.innerHTML = prodiList.map(p => {
           const code = p['Kode Prodi'] || 'MNJ';
           const name = p['Nama Prodi'] || 'Manajemen';
           return `<option value="${code}" data-nama="${name}">${code} - ${name}</option>`;
         }).join('');
+
+        if (targetProdi) {
+          prodiSelect.value = targetProdi;
+        }
       }
 
       // Inisialisasi seluruh komponen Autocomplete
       initAllAutocompletes();
 
-      onProdiSelectionChange();
+      const modalPendaftaran = document.getElementById('modalPendaftaran');
+      const isModalOpen = modalPendaftaran && !modalPendaftaran.classList.contains('hidden');
+      if (!isModalOpen) {
+        onProdiSelectionChange();
+      } else {
+        // Jika modal sedang terbuka untuk mahasiswa, pastikan nilai prodi tetap konsisten
+        const isMhs = typeof currentUser !== 'undefined' && currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+        if (isMhs && currentUser.kodeProdi && currentUser.kodeProdi !== 'ALL' && prodiSelect) {
+          prodiSelect.value = currentUser.kodeProdi;
+        }
+      }
     }
 
     // ==========================================
@@ -5679,6 +5784,60 @@
     // [REVISI POIN 5]: TAMPILAN JADWAL UJIAN RAPI
     // Format tanggal dan jam tersusun rapi seperti Jadwal Periode
     // ==========================================
+    // ==========================================
+    // [PAGINATION & OPTIMASI DOM TABEL JADWAL UJIAN]
+    // ==========================================
+    let jadwalCurrentPage = 1;
+    let jadwalPageSize = 10;
+
+    function changeJadwalPageSize(val) {
+      jadwalPageSize = parseInt(val, 10) || 10;
+      jadwalCurrentPage = 1;
+      renderJadwalUjianTable();
+    }
+
+    function renderJadwalPagination(totalPages) {
+      const container = document.getElementById('jadwalPaginationControls');
+      if (!container) return;
+      container.innerHTML = '';
+      if (totalPages <= 1) return;
+
+      const prevBtn = document.createElement('button');
+      prevBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+        jadwalCurrentPage === 1 ? 'text-slate-300 border-slate-200 cursor-not-allowed' : 'text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer'
+      }`;
+      prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+      prevBtn.disabled = jadwalCurrentPage === 1;
+      prevBtn.onclick = () => { if (jadwalCurrentPage > 1) { jadwalCurrentPage--; renderJadwalUjianTable(); } };
+      container.appendChild(prevBtn);
+
+      for (let p = 1; p <= totalPages; p++) {
+        if (p === 1 || p === totalPages || (p >= jadwalCurrentPage - 1 && p <= jadwalCurrentPage + 1)) {
+          const pageBtn = document.createElement('button');
+          pageBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+            p === jadwalCurrentPage ? 'bg-blue-900 text-white border-blue-900 shadow-xs' : 'text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer'
+          }`;
+          pageBtn.innerText = p;
+          pageBtn.onclick = () => { jadwalCurrentPage = p; renderJadwalUjianTable(); };
+          container.appendChild(pageBtn);
+        } else if (p === jadwalCurrentPage - 2 || p === jadwalCurrentPage + 2) {
+          const dots = document.createElement('span');
+          dots.className = 'px-1 text-slate-400 font-bold';
+          dots.innerText = '...';
+          container.appendChild(dots);
+        }
+      }
+
+      const nextBtn = document.createElement('button');
+      nextBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+        jadwalCurrentPage === totalPages ? 'text-slate-300 border-slate-200 cursor-not-allowed' : 'text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer'
+      }`;
+      nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+      nextBtn.disabled = jadwalCurrentPage === totalPages;
+      nextBtn.onclick = () => { if (jadwalCurrentPage < totalPages) { jadwalCurrentPage++; renderJadwalUjianTable(); } };
+      container.appendChild(nextBtn);
+    }
+
     function renderJadwalUjianTable() {
       const tbody = document.getElementById('tableJadwalBody');
       const search = (document.getElementById('searchJadwal')?.value || '').toLowerCase();
@@ -5694,9 +5853,27 @@
       if (filterProdi) list = list.filter(j => (j['Kode Prodi'] || '').toUpperCase() === filterProdi.toUpperCase());
       if (search) list = list.filter(j => (j['Mata Kuliah'] || '').toLowerCase().includes(search) || (j.Ruangan || '').toLowerCase().includes(search));
 
+      // [OPTIMASI PERFORMA]: Pagination Jadwal Ujian (Default 10 baris per halaman)
+      const totalFiltered = list.length;
+      const totalPages = Math.ceil(totalFiltered / jadwalPageSize) || 1;
+      if (jadwalCurrentPage > totalPages) jadwalCurrentPage = totalPages;
+      if (jadwalCurrentPage < 1) jadwalCurrentPage = 1;
+
+      const startIndex = (jadwalCurrentPage - 1) * jadwalPageSize;
+      const endIndex = Math.min(startIndex + jadwalPageSize, totalFiltered);
+      const pageItems = list.slice(startIndex, endIndex);
+
+      const infoEl = document.getElementById('jadwalPaginationInfo');
+      if (infoEl) {
+        infoEl.innerText = totalFiltered > 0
+          ? `Menampilkan ${startIndex + 1} - ${endIndex} dari ${totalFiltered} jadwal`
+          : 'Tidak ada jadwal yang cocok';
+      }
+      renderJadwalPagination(totalPages);
+
       tbody.innerHTML = '';
-      if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-slate-400">Belum ada jadwal ujian</td></tr>';
+      if (pageItems.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">Belum ada jadwal ujian yang cocok</td></tr>';
         return;
       }
 
@@ -5704,7 +5881,7 @@
       const thAksi = document.getElementById('thAksiJadwal');
       if (thAksi) thAksi.classList.toggle('hidden', !canManageJadwal);
 
-      list.forEach(item => {
+      pageItems.forEach(item => {
         const cleanMulai = formatJamClean(item['Jam Mulai']);
         const cleanSelesai = formatJamClean(item['Jam Selesai']);
         const durasi = hitungDurasiMenit(cleanMulai, cleanSelesai);
@@ -7802,10 +7979,10 @@
     // [PAGINATION & OPTIMASI DOM TABEL PENDAFTARAN]
     // ==========================================
     let pendaftaranCurrentPage = 1;
-    let pendaftaranPageSize = 15;
+    let pendaftaranPageSize = 10;
 
     function changePendaftaranPageSize(val) {
-      pendaftaranPageSize = parseInt(val, 10) || 15;
+      pendaftaranPageSize = parseInt(val, 10) || 10;
       pendaftaranCurrentPage = 1;
       renderPendaftaranTable();
     }

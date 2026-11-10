@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi validasi wajib isi untuk Alasan dan Bukti Dokumen pada formulir pendaftaran, pembatasan upload JPG/PNG/PDF hingga 5 MB, dan integrasi Google Apps Script untuk otomatis mengunggah berkas ke folder Google Drive 'Berkas Bukti Pendaftaran FEB UIKA' serta menyimpan tautan URL ke spreadsheet.",
-  "updatedAt":  "2026-11-10T06:47:03.552938388Z",
+  "summary":  "Rencana implementasi perbaikan bug reset program studi pada form pendaftaran, implementasi Cache Pintar Stale-While-Revalidate (0 detik) di localStorage, dan paginasi tabel Pendaftaran & Jadwal Ujian (default 10 baris per halaman) dengan sinkronisasi senyap.",
+  "updatedAt":  "2026-11-10T12:33:46.528558895Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

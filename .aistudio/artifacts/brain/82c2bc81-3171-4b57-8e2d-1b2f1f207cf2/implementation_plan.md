@@ -1,72 +1,59 @@
-# Rencana Implementasi: Wajib Isi Alasan & Bukti serta Integrasi Upload Google Drive Otomatis
+# Rencana Implementasi: Perbaikan Bug Reset Prodi, Cache Pintar (0 Detik), & Paginasi Tabel
 
-## 1. Ringkasan Kebutuhan & Keputusan Pengguna
-Berdasarkan permintaan dan hasil klarifikasi pengguna:
-1. **Wajib Isi (Mandatory)**:
-   - Field **Alasan / Keterangan** dan **Upload Bukti Foto / Dokumen Pendukung** diubah menjadi **wajib diisi** (`required`).
-   - Ditambahkan indikator visual tanda bintang merah (`*`) pada label kedua field di UI formulir pendaftaran.
-   - Validasi sisi klien akan memblokir submit form jika alasan kosong atau berkas bukti belum dipilih.
-2. **Format & Batasan Berkas**:
-   - Jenis berkas yang diizinkan: **Gambar (JPG, JPEG, PNG)** dan **Dokumen PDF**.
-   - Batas maksimal ukuran berkas: **5 MB**.
-   - Validasi sisi klien memberikan notifikasi peringatan jika ukuran berkas melebihi 5 MB atau format tidak didukung.
-3. **Penyimpanan Berkas ke Google Drive Otomatis (GAS)**:
-   - Berkas diunggah secara otomatis ke Google Drive pada folder khusus bernama **`Berkas Bukti Pendaftaran FEB UIKA`**.
-   - Folder akan otomatis dibuat jika belum ada di Google Drive akun admin/GAS.
-   - Nama berkas di Drive distandarisasi: `[NPM]_[REG_ID]_[Timestamp]_[NamaBerkas]`.
-   - Izin berkas disetel agar dapat dilihat (*View link*) oleh staf/pemeriksa ujian.
-   - Spreadsheet pada kolom **Bukti Foto** hanya akan menyimpan **URL Google Drive** (`https://drive.google.com/file/d/.../view`), bukan string Base64 yang panjang, sehingga database spreadsheet tetap ringan, cepat, dan terhindar dari batas kuota karakter cell.
+## 1. Analisis Masalah & Kebutuhan Pengguna
+
+### A. Bug Reset Program Studi ke Manajemen ('MNJ')
+- **Penyebab Utama**:
+  Pada `populateMasterDropdowns()`, elemen `<select id="pendaftaranProdi">` dibangun ulang dengan `innerHTML = ...` setiap kali pemanggilan `loadAppData()` selesai.
+  Saat mahasiswa membuka formulir, nilainya sempat diatur sesuai akun mahasiswa (misal `AKT`, `BD`, `PI`, atau `PKD`). Namun ketika respons API latar belakang tiba beberapa milidetik kemudian, `populateMasterDropdowns()` berjalan dan menghapus opsi lama tanpa mempertahankan nilai terpilih, sehingga peramban otomatis mengembalikan pilihan ke opsi pertama yaitu `MNJ` (Manajemen).
+- **Solusi**:
+  1. Pada `populateMasterDropdowns()`, simpan nilai aktif (`currentSelectedVal = prodiSelect.value || currentUser.kodeProdi`) sebelum membangun ulang opsi, lalu setel ulang nilainya.
+  2. Proteksi formulir: jika modal pendaftaran sedang terbuka (`#modalPendaftaran` tidak `hidden`) atau pengguna adalah mahasiswa, kunci pilihan prodi agar tidak dapat di-reset oleh proses sinkronisasi latar belakang.
+
+### B. Penyimpanan Cache Pintar (*Stale-While-Revalidate* 0 Detik)
+- Menggunakan `localStorage` (`SIP_APP_DATA_CACHE_V2`) untuk menyimpan `appData` (master prodi, matkul, jadwal, dan pendaftaran).
+- Saat aplikasi dibuka di Hostinger / GitHub Pages:
+  - Data cache langsung dimuat seketika (**0 detik**) sehingga tampilan dashboard dan tabel langsung lengkap tanpa jeda loading spinner.
+  - Proses sinkronisasi ke Google Apps Script berjalan di latar belakang (*background sync*).
+  - Ketika data terbaru dari spreadsheet diterima, cache diperbarui otomatis dan tampilan di-refresh secara halus tanpa mengganggu input yang sedang dikerjakan pengguna.
+  - Sesuai jawaban klarifikasi pengguna, indikator ditampilkan secara senyap di bilah status kanan atas (`Realtime Sync Aktif`).
+
+### C. Paginasi & Pencarian Cepat di Tabel (Default 10 Baris)
+- Menambahkan kontrol paginasi pada:
+  1. **Tabel Riwayat Pendaftaran**
+  2. **Tabel Jadwal Ujian**
+- Fitur paginasi:
+  - Pilihan jumlah baris: **10 baris (default)**, 25, 50, dan Semua Baris.
+  - Status info: *"Menampilkan 1-10 dari 48 pendaftaran"*.
+  - Kontrol navigasi ramah pengguna: tombol *Sebelumnya*, nomor halaman aktif, dan *Selanjutnya*.
+  - Pencarian dan filter prodi/status tetap bekerja terintegrasi bersama paginasi.
 
 ---
 
 ## 2. Rincian Perubahan File & Komponen
 
-### A. Frontend Web (`index.html`, `public/hostinger/index.html`, `public/gas/Index.html`)
-1. **Pembaruan Elemen Formulir Pendaftaran**:
-   - Menambahkan tanda bintang merah pada label:
-     - `Alasan / Keterangan <span class="text-rose-500 font-bold">*</span>`
-     - `Upload Bukti Foto / Dokumen Pendukung <span class="text-rose-500 font-bold">*</span>`
-   - Mengatur `textarea#pendaftaranAlasan` dengan atribut `required`.
-   - Mengatur `input#pendaftaranBukti` dengan atribut `required`, `accept=".jpg,.jpeg,.png,.pdf,image/jpeg,image/png,application/pdf"`.
-2. **Komponen Preview Berkas Unggahan**:
-   - Menambahkan wadah preview real-time ketika berkas dipilih:
-     - Jika gambar: menampilkan thumbnail preview dengan tombol hapus.
-     - Jika PDF: menampilkan ikon dokumen merah dengan nama file, ukuran (KB/MB), dan indikator status siap upload.
-3. **Validasi & Penanganan Pengiriman Form (`handleSavePendaftaran`)**:
-   - Memeriksa kelengkapan `pendaftaranAlasan` (tidak boleh kosong atau hanya spasi).
-   - Memeriksa keberadaan file pada `pendaftaranBukti` saat membuat pendaftaran baru.
-   - Memeriksa ukuran file `<= 5 * 1024 * 1024` byte (5 MB).
-   - Mengonversi file ke format Base64 beserta informasi `fileName` dan `mimeType` untuk dikirim ke backend Google Apps Script.
-   - Menampilkan status proses pengunggahan di tombol submit ("Mengunggah berkas ke Google Drive...").
-
-### B. Google Apps Script Backend (`public/gas/Code.gs`)
-1. **Fungsi Manajemen Folder Drive**:
-   - `getOrCreateUploadFolder(folderName)`:
-     - Mencari folder dengan nama `Berkas Bukti Pendaftaran FEB UIKA`.
-     - Jika belum ada, otomatis membuat folder baru di Google Drive utama.
-     - Mengembalikan objek `Folder` Google Drive.
-2. **Fungsi Upload Berkas ke Drive**:
-   - `uploadFileToDrive(base64Data, fileName, mimeType, npm, regId)`:
-     - Mem-parsing string Base64 menjadi Blob data dengan MimeType yang sesuai.
-     - Menyimpan file ke dalam folder `Berkas Bukti Pendaftaran FEB UIKA`.
-     - Mengatur sharing permission file (`DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW`).
-     - Mengembalikan URL akses Google Drive (`file.getUrl()`).
-3. **Penyelarasan API `simpanPendaftaran` & `doPost`**:
-   - Saat action `SAVE_PENDAFTARAN` atau create registration dieksekusi:
-     - Jika `buktiFoto` terdeteksi berupa payload Base64 (atau objek berisi data berkas), panggil `uploadFileToDrive`.
-     - Masukkan URL Drive yang dihasilkan ke dalam kolom `Bukti Foto` (Kolom O) pada sheet `Pendaftaran`.
-     - Catat log aktivitas pengunggahan berkas secara transparan.
+### Frontend Web (`index.html`, `public/hostinger/index.html`, `public/gas/Index.html`)
+1. **Perbaikan `populateMasterDropdowns` & `openPendaftaranModal`**:
+   - Mempertahankan nilai prodi dan kelas yang sedang aktif saat membangun dropdown.
+   - Mengunci dropdown prodi jika pengguna berstatus mahasiswa (`disabled` / `readonly` dengan badge kunci).
+2. **Implementasi Modul Cache Pintar (`initAppDataCache`, `saveAppDataCache`)**:
+   - Load awal: `loadCachedAppData()` dijalankan sebelum request jaringan.
+   - Background update: `loadAppData()` memperbarui cache dan DOM secara senyap.
+3. **Komponen Paginasi Tabel**:
+   - Menambahkan state: `paginationState = { pendaftaran: { page: 1, limit: 10 }, jadwal: { page: 1, limit: 10 } }`.
+   - Menambahkan helper `renderPaginationControls(containerId, totalItems, currentPage, limit, onPageChange, onLimitChange)`.
+   - Memotong array data sebelum di-render ke `tbody`: `items.slice((page - 1) * limit, page * limit)`.
 
 ---
 
 ## 3. Rencana Pengujian & Verifikasi
-1. **Uji Validasi Form (Sisi Klien)**:
-   - Mencoba submit form pendaftaran dengan mengosongkan Alasan: harus ditolak dengan pesan validasi.
-   - Mencoba submit form pendaftaran tanpa memilih berkas bukti: harus ditolak dengan pesan validasi.
-   - Memilih file > 5 MB: sistem menampilkan notifikasi bahwa file melebihi batas 5 MB.
-   - Memilih file PDF atau JPG/PNG valid: preview muncul dengan rapi.
-2. **Uji Integrasi Backend Google Apps Script**:
-   - Memastikan fungsi `getOrCreateUploadFolder` dan `uploadFileToDrive` terdefinisi dan kompatibel dengan endpoint API GAS.
-3. **Verifikasi Build**:
-   - Sinkronisasi kode ke semua target (`index.html`, `public/hostinger/index.html`, `public/gas/Index.html`).
-   - Eksekusi `compile_applet` dan `lint_applet` untuk menjamin kualitas sintaks dan kelancaran dev server.
+1. **Verifikasi Bug Reset Prodi**:
+   - Login sebagai mahasiswa non-Manajemen (misal: Siti Nurhaliza Zahra / AKT).
+   - Klik "Tambah Pendaftaran Baru": pastikan program studi tetap Akuntansi (AKT) dan tidak berubah ke Manajemen saat sinkronisasi latar belakang selesai.
+2. **Verifikasi Cache Pintar**:
+   - Refresh halaman: pastikan data langsung tampil seketika (0 detik) dari cache lokal, lalu sinkronisasi latar belakang berjalan dengan indikator senyap di kanan atas.
+3. **Verifikasi Paginasi**:
+   - Cek tabel Pendaftaran dan Jadwal Ujian: pastikan menampilkan 10 baris per halaman secara rapi, tombol navigasi halaman berfungsi, dan dropdown limit (10, 25, 50) bekerja akurat.
+4. **Verifikasi Build**:
+   - Sinkronisasi kode ke seluruh direktori distribusi.
+   - Eksekusi `compile_applet` dan `lint_applet` bersamaan, dilanjutkan restart dev server.
