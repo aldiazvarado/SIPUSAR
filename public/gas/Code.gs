@@ -92,7 +92,8 @@ function handleApiRequest(action, args) {
     clearAllCache: clearAllCache,
     invalidateCache: invalidateCache,
     seedMockupData: seedMockupData,
-    uploadBuktiPendaftaranToDrive: uploadBuktiToDrive
+    uploadBuktiPendaftaranToDrive: uploadBuktiToDrive,
+    migrateBase64ToDrive: migrateBase64ToDrive
   };
   var fn = allowedFunctions[action];
   if (!fn) {
@@ -1335,6 +1336,8 @@ function uploadBuktiToDrive(base64Data, fileName, mimeType, npm, regId) {
     if (matches && matches.length === 3) {
       detectedMime = matches[1];
       base64Content = matches[2];
+    } else if (base64Data.indexOf('base64,') !== -1) {
+      base64Content = base64Data.split('base64,')[1];
     }
 
     var decodedBytes = Utilities.base64Decode(base64Content);
@@ -1367,6 +1370,78 @@ function uploadBuktiToDrive(base64Data, fileName, mimeType, npm, regId) {
   } catch (err) {
     Logger.log("Error uploadBuktiToDrive: " + err.message);
     return 'ERR_DRIVE_UPLOAD: ' + err.message;
+  }
+}
+
+// ==========================================
+// [MIGRASI MASSAL BUKTI BASE64 KE GOOGLE DRIVE]:
+// Memindai seluruh baris sheet Pendaftaran yang masih berisi string Base64,
+// mengunggahnya otomatis ke folder Google Drive "Berkas Bukti Pendaftaran FEB UIKA",
+// dan menimpa sel spreadsheet dengan URL Drive resmi agar kuota spreadsheet aman.
+// ==========================================
+function migrateBase64ToDrive() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Pendaftaran');
+    if (!sheet) return { success: false, message: 'Sheet Pendaftaran tidak ditemukan.' };
+
+    var headerMap = getHeaderIndexMap(sheet);
+    var colBukti = headerMap['Bukti Foto'];
+    if (!colBukti) return { success: false, message: 'Kolom Bukti Foto tidak ditemukan.' };
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, count: 0, message: 'Tidak ada data pendaftaran yang perlu dimigrasikan.' };
+
+    var colId = headerMap['ID'] || 1;
+    var colNpm = headerMap['NPM'] || headerMap['NIM'] || 5;
+    var values = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+
+    var convertedCount = 0;
+    var errorItems = [];
+
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+      var currentBukti = String(row[colBukti - 1] || '').trim();
+      var rowId = String(row[colId - 1] || ('REG-' + (1000 + i + 1)));
+      var rowNpm = String(row[colNpm - 1] || 'MHS');
+
+      // Cek apakah sel berisi base64 (diawali data: atau teks panjang bukan http)
+      if (currentBukti && (currentBukti.indexOf('data:') === 0 || currentBukti.length > 200) && currentBukti.indexOf('http') !== 0) {
+        try {
+          var uploadedUrl = uploadBuktiToDrive(currentBukti, 'Bukti_' + rowId, 'image/jpeg', rowNpm, rowId);
+          if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0 && uploadedUrl.indexOf('http') === 0) {
+            sheet.getRange(i + 2, colBukti).setValue(uploadedUrl);
+            convertedCount++;
+          } else {
+            errorItems.push(rowId + ': ' + (uploadedUrl || 'Gagal'));
+          }
+        } catch (rowErr) {
+          errorItems.push(rowId + ': ' + rowErr.message);
+        }
+      }
+    }
+
+    SpreadsheetApp.flush();
+    if (convertedCount > 0) {
+      bumpSyncVersion('Master Admin', 'Migrasi ' + convertedCount + ' berkas bukti ke Google Drive');
+      addActivityLog('Master Admin', 'Migrasi Bukti Drive', convertedCount + ' berkas', 'Konversi bukti pendaftaran base64 ke Google Drive', 'Master Admin');
+    }
+
+    return {
+      success: true,
+      count: convertedCount,
+      errors: errorItems,
+      message: convertedCount > 0
+        ? ('Berhasil mengonversi dan memindahkan ' + convertedCount + ' berkas bukti ke Google Drive!')
+        : 'Semua berkas bukti pendaftaran sudah tersimpan sebagai link Google Drive (tidak ada base64 tersisa).'
+    };
+  } catch (err) {
+    Logger.log('Error migrateBase64ToDrive: ' + err.message);
+    return { success: false, message: 'Gagal migrasi bukti: ' + err.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -1405,14 +1480,18 @@ function addPendaftaran(payload) {
 
     // [AUTO UPLOAD GOOGLE DRIVE]: Cek jika bukti foto dikirim dalam format base64
     var finalBuktiUrl = payload.buktiFoto || '';
-    if (finalBuktiUrl && (finalBuktiUrl.indexOf('data:') === 0 || finalBuktiUrl.length > 500) && finalBuktiUrl.indexOf('http') !== 0) {
+    if (finalBuktiUrl && (finalBuktiUrl.indexOf('data:') === 0 || finalBuktiUrl.length > 200) && finalBuktiUrl.indexOf('http') !== 0) {
       try {
         var uploadedUrl = uploadBuktiToDrive(finalBuktiUrl, payload.buktiFileName || 'Bukti_Pendaftaran', payload.buktiMimeType || 'image/jpeg', mhsNpm, newId);
-        if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0) {
+        if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0 && uploadedUrl.indexOf('http') === 0) {
           finalBuktiUrl = uploadedUrl;
+        } else {
+          Logger.log('Gagal upload bukti Drive: ' + uploadedUrl);
+          finalBuktiUrl = '[Menunggu Upload Drive]';
         }
       } catch (uploadErr) {
         Logger.log('Gagal upload bukti ke Google Drive: ' + uploadErr.message);
+        finalBuktiUrl = '[Menunggu Upload Drive]';
       }
     }
 
@@ -1523,14 +1602,18 @@ function updatePendaftaran(payload) {
     setCol('Alasan', payload.alasan);
     if (payload.buktiFoto !== undefined) {
       var finalBuktiUrl = payload.buktiFoto;
-      if (finalBuktiUrl && (finalBuktiUrl.indexOf('data:') === 0 || finalBuktiUrl.length > 500) && finalBuktiUrl.indexOf('http') !== 0) {
+      if (finalBuktiUrl && (finalBuktiUrl.indexOf('data:') === 0 || finalBuktiUrl.length > 200) && finalBuktiUrl.indexOf('http') !== 0) {
         try {
           var uploadedUrl = uploadBuktiToDrive(finalBuktiUrl, payload.buktiFileName || 'Bukti_Pendaftaran', payload.buktiMimeType || 'image/jpeg', mhsNpm, payload.id);
-          if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0) {
+          if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0 && uploadedUrl.indexOf('http') === 0) {
             finalBuktiUrl = uploadedUrl;
+          } else {
+            Logger.log('Gagal upload bukti update ke Drive: ' + uploadedUrl);
+            finalBuktiUrl = '[Menunggu Upload Drive]';
           }
         } catch (uploadErr) {
           Logger.log('Gagal upload bukti update ke Google Drive: ' + uploadErr.message);
+          finalBuktiUrl = '[Menunggu Upload Drive]';
         }
       }
       setCol('Bukti Foto', finalBuktiUrl);

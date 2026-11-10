@@ -3,6 +3,8 @@
 <head>
   <script type="module" src="/@vite/client"></script>
 
+  <script type="module" src="/@vite/client"></script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Pendaftaran & Reporting Akademik - FEB UIKA Bogor</title>
@@ -180,7 +182,7 @@
       }
     }
   </style>
-</head>
+<script src="/_aistudio-iframe.js?v=1f94f900"></script></head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased">
 
   <!-- LOGIN CONTAINER -->
@@ -1008,11 +1010,14 @@
               </select>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <div class="font-mono text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg">
+              <div class="font-mono text-xs bg-white border border-slate-300 px-3 py-1.5 rounded-lg shadow-2xs">
                 fx =SUM(Nominal): <b id="sheetFormulaSum" class="text-emerald-700">Rp 0</b>
               </div>
-              <button type="button" onclick="exportActiveSheetExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap shadow-sm">
-                <i class="fas fa-file-excel"></i> <span>Export Excel (.xls)</span>
+              <button type="button" id="btnMigrateDrive" onclick="triggerMigrateBase64ToDrive()" title="Unggah bukti foto base64 lama otomatis ke folder Google Drive" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap shadow-xs text-xs transition cursor-pointer">
+                <i class="fab fa-google-drive text-amber-200"></i> <span>Migrasi Base64 ke Drive</span>
+              </button>
+              <button type="button" id="btnExportActiveSheet" onclick="exportActiveSheetExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap shadow-xs text-xs transition cursor-pointer">
+                <i class="fas fa-file-excel"></i> <span>Export Excel (.xlsx / .xls)</span>
               </button>
             </div>
           </div>
@@ -8559,46 +8564,70 @@
         return;
       }
 
-      const exportRows = filtered.map(item => ({
-        'ID Pendaftaran': item.ID || item.id,
-        'Tanggal': item.Tanggal || item.tanggal || '',
-        'NPM': item.NPM || item.NIM || item.npm || '',
-        'Nama Mahasiswa': item['Nama Mahasiswa'] || item.nama || '',
-        'Program Studi': item['Program Studi'] || item.prodi || '',
-        'Semester': item.Semester || item.semester || '',
-        'Kelas': item.Kelas || item.kelas || '',
-        'Mata Kuliah': item['Mata Kuliah'] || item.matkul || '',
-        'Dosen Pengampu': item['Dosen Pengampu'] || item.dosen || '',
-        'Jenis Layanan': item['Jenis Layanan'] || item.layanan || '',
-        'Nominal Retribusi': Number(item.Nominal || item.nominal || 0),
-        'Status Persetujuan': item['Status Persetujuan'] || item.statusApproval || 'Pending',
-        'Status Pembayaran': item['Status Pembayaran'] || item.statusBayar || 'Belum Bayar'
-      }));
+      const exportRows = filtered.map(item => {
+        let buktiLink = '-';
+        const rawBukti = String(item['Bukti Foto'] || '').trim();
+        if (rawBukti.startsWith('http://') || rawBukti.startsWith('https://')) {
+          buktiLink = rawBukti;
+        } else if (rawBukti.startsWith('data:') || rawBukti.length > 200) {
+          buktiLink = '[Tersimpan di Sistem (Base64)]';
+        }
 
-      const fileName = `Pendaftaran_FEB_UIKA_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        return {
+          'ID Pendaftaran': item.ID || item.id,
+          'Tanggal': item.Tanggal || item.tanggal || '',
+          'NPM': item.NPM || item.NIM || item.npm || '',
+          'Nama Mahasiswa': item['Nama Mahasiswa'] || item.nama || '',
+          'Program Studi': item['Program Studi'] || item.prodi || '',
+          'Semester': item.Semester || item.semester || '',
+          'Kelas': item.Kelas || item.kelas || '',
+          'Mata Kuliah': item['Mata Kuliah'] || item.matkul || '',
+          'Dosen Pengampu': item['Dosen Pengampu'] || item.dosen || '',
+          'Jenis Layanan': item['Jenis Layanan'] || item.layanan || '',
+          'Bukti Foto': buktiLink,
+          'Nominal Retribusi': Number(item.Nominal || item.nominal || 0),
+          'Status Persetujuan': item['Status Persetujuan'] || item.statusApproval || 'Pending',
+          'Status Pembayaran': item['Status Pembayaran'] || item.statusBayar || 'Belum Bayar'
+        };
+      });
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const fileName = `Pendaftaran_FEB_UIKA_${dateStr}.xlsx`;
 
       if (typeof XLSX !== 'undefined') {
-        const ws = XLSX.utils.json_to_sheet(exportRows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Pendaftaran');
-        XLSX.writeFile(wb, fileName);
-        Swal.fire('Export Sukses', `File Excel (.xlsx) berisi ${exportRows.length} baris data berhasil diunduh.`, 'success');
-      } else {
-        // Fallback UTF-8 CSV
-        let csv = '\uFEFFID,Tanggal,NPM,Nama,Prodi,Semester,Kelas,Mata Kuliah,Dosen,Layanan,Nominal,Status Persetujuan,Status Pembayaran\n';
-        exportRows.forEach(r => {
-          csv += `"${r['ID Pendaftaran']}","${r['Tanggal']}","${r['NPM']}","${r['Nama Mahasiswa']}","${r['Program Studi']}","${r['Semester']}","${r['Kelas']}","${r['Mata Kuliah']}","${r['Dosen Pengampu']}","${r['Jenis Layanan']}",${r['Nominal Retribusi']},"${r['Status Persetujuan']}","${r['Status Pembayaran']}"\n`;
-        });
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `Pendaftaran_FEB_UIKA_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        Swal.fire('Export Sukses', `Data berisi ${exportRows.length} baris berhasil diekspor ke file Excel.`, 'success');
+        try {
+          const ws = XLSX.utils.json_to_sheet(exportRows);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Pendaftaran');
+          XLSX.writeFile(wb, fileName);
+          Swal.fire('Export Sukses', `File Excel (.xlsx) berisi ${exportRows.length} baris data berhasil diunduh.`, 'success');
+          return;
+        } catch(e) {
+          console.warn('XLSX.writeFile gagal, menggunakan fallback .xls:', e);
+        }
       }
+
+      // Fallback .xls
+      if (typeof downloadHtmlXls === 'function') {
+        downloadHtmlXls('Pendaftaran', exportRows, dateStr);
+        Swal.fire('Export Sukses', `File Excel (.xls) berisi ${exportRows.length} baris data berhasil diunduh.`, 'success');
+        return;
+      }
+
+      // Fallback UTF-8 CSV
+      let csv = '\uFEFFID,Tanggal,NPM,Nama,Prodi,Semester,Kelas,Mata Kuliah,Dosen,Layanan,Bukti Foto,Nominal,Status Persetujuan,Status Pembayaran\n';
+      exportRows.forEach(r => {
+        csv += `"${r['ID Pendaftaran']}","${r['Tanggal']}","${r['NPM']}","${r['Nama Mahasiswa']}","${r['Program Studi']}","${r['Semester']}","${r['Kelas']}","${r['Mata Kuliah']}","${r['Dosen Pengampu']}","${r['Jenis Layanan']}","${r['Bukti Foto']}",${r['Nominal Retribusi']},"${r['Status Persetujuan']}","${r['Status Pembayaran']}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Pendaftaran_FEB_UIKA_${dateStr}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 500);
+      Swal.fire('Export Sukses', `Data berisi ${exportRows.length} baris berhasil diekspor.`, 'success');
     }
 
     function exportPendaftaranProdiGAS() {
@@ -9087,12 +9116,128 @@
     // ==========================================
     // [SPREADSHEET LIVE WORKBOOK & EXPORT]
     // ==========================================
+    // ==========================================
+    // [SPREADSHEET LIVE WORKBOOK & EXPORT TANGGUH]
+    // ==========================================
+    function previewBase64Bukti(id) {
+      const list = appData.pendaftaran || [];
+      const item = list.find(p => String(p.ID) === String(id) || String(p.id) === String(id)) || list[id];
+      if (!item || !item['Bukti Foto']) {
+        Swal.fire('Tidak Ditemukan', 'Berkas bukti untuk baris ini tidak ditemukan.', 'info');
+        return;
+      }
+      const bukti = item['Bukti Foto'];
+      if (bukti.startsWith('http://') || bukti.startsWith('https://')) {
+        window.open(bukti, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      const isPdf = bukti.includes('application/pdf') || bukti.startsWith('data:application/pdf');
+      const previewContent = isPdf
+        ? `<div class="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-3">
+             <i class="fas fa-file-pdf text-rose-500 text-5xl"></i>
+             <p class="font-bold text-slate-800 text-sm">Dokumen PDF Terlampir (Base64)</p>
+             <a href="${bukti}" download="Bukti_${item.ID || 'Pendaftaran'}.pdf" class="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-900 text-white rounded-lg font-bold text-xs shadow-sm hover:bg-blue-800">
+               <i class="fas fa-download"></i> Unduh Berkas PDF
+             </a>
+           </div>`
+        : `<div class="max-h-[65vh] overflow-auto flex flex-col items-center">
+             <img src="${bukti}" alt="Bukti Foto" class="max-w-full rounded-xl border border-slate-200 shadow-md object-contain" />
+             <div class="mt-3 text-xs text-slate-500 font-mono bg-slate-100 px-3 py-1 rounded-lg">
+               ${item['Nama Mahasiswa'] || 'Mahasiswa'} · NPM: ${item.NPM || item.NIM || '-'} · ${item.ID || ''}
+             </div>
+           </div>`;
+
+      Swal.fire({
+        title: `Pratinjau Bukti Pendaftaran (${item.ID || ''})`,
+        html: previewContent,
+        confirmButtonText: 'Tutup',
+        confirmButtonColor: '#1E3A8A',
+        width: 650
+      });
+    }
+
+    function triggerMigrateBase64ToDrive() {
+      const canManage = currentUser && ['master admin', 'master_admin', 'admin tu', 'admintu'].includes((currentUser.role || '').toLowerCase());
+      if (!canManage) {
+        Swal.fire('Akses Dibatasi', 'Fitur migrasi berkas bukti Google Drive hanya dapat dijalankan oleh Master Admin atau Admin TU.', 'warning');
+        return;
+      }
+
+      const pendaftaranList = appData.pendaftaran || [];
+      const base64Count = pendaftaranList.filter(p => {
+        const b = String(p['Bukti Foto'] || '').trim();
+        return b && (b.startsWith('data:') || b.length > 200) && !b.startsWith('http');
+      }).length;
+
+      Swal.fire({
+        title: 'Migrasi Bukti ke Google Drive',
+        html: `<div class="text-left text-xs space-y-2 text-slate-600">
+          <p>Sistem akan memindai Google Spreadsheet dan mengunggah semua bukti foto yang masih berformat Base64 ke folder Google Drive:</p>
+          <div class="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-blue-950 font-bold font-mono">
+            📁 Berkas Bukti Pendaftaran FEB UIKA
+          </div>
+          <p class="text-slate-500">Terdeteksi saat ini: <b class="text-amber-700">${base64Count} berkas base64</b> di memori.</p>
+        </div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '<i class="fab fa-google-drive mr-1"></i> Mulai Migrasi',
+        cancelButtonText: 'Batal',
+        confirmButtonColor: '#d97706',
+        cancelButtonColor: '#64748b'
+      }).then(r => {
+        if (!r.isConfirmed) return;
+
+        Swal.fire({
+          title: 'Memproses Migrasi...',
+          html: '<p class="text-xs text-slate-600 mb-2">Sedang mengunggah berkas bukti ke Google Drive dan memperbarui link di Google Sheets...</p><i class="fas fa-circle-notch fa-spin text-amber-600 text-3xl"></i>',
+          allowOutsideClick: false,
+          showConfirmButton: false
+        });
+
+        const onMigrateSuccess = function(res) {
+          if (res && res.success) {
+            Swal.fire({
+              title: 'Migrasi Selesai!',
+              text: res.message || `Berhasil mengonversi berkas bukti ke Google Drive!`,
+              icon: 'success',
+              confirmButtonText: 'Segarkan Data',
+              confirmButtonColor: '#1E3A8A'
+            }).then(() => {
+              loadAppData(true);
+            });
+          } else {
+            Swal.fire('Gagal Migrasi', (res && res.message) || 'Terjadi kendala saat mengunggah ke Google Drive.', 'error');
+          }
+        };
+
+        const onMigrateError = function(err) {
+          Swal.fire('Error Migrasi', err?.message || String(err), 'error');
+        };
+
+        if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.migrateBase64ToDrive) {
+          google.script.run
+            .withSuccessHandler(onMigrateSuccess)
+            .withFailureHandler(onMigrateError)
+            .migrateBase64ToDrive();
+        } else {
+          callGasApi('migrateBase64ToDrive', [], onMigrateSuccess, onMigrateError);
+        }
+      });
+    }
+
     function renderSpreadsheetWorkbook() {
       const select = document.getElementById('activeSheetSelector');
       const sheetName = select ? select.value : 'Pendaftaran';
       const thead = document.getElementById('spreadsheetGridHead');
       const tbody = document.getElementById('spreadsheetGridBody');
       const sumElem = document.getElementById('sheetFormulaSum');
+      const btnMigrate = document.getElementById('btnMigrateDrive');
+
+      if (btnMigrate) {
+        btnMigrate.style.display = (sheetName === 'Pendaftaran') ? '' : 'none';
+      }
+
       if (!thead || !tbody) return;
 
       let rows = [];
@@ -9118,7 +9263,8 @@
       }
 
       const sample = rows[0];
-      const keys = Object.keys(sample);
+      // Filter kolom agar helper bersarang tidak merusak tabel
+      const keys = Object.keys(sample).filter(k => k !== 'mataKuliahList' && k !== '_id' && !k.startsWith('__'));
 
       thead.innerHTML = '<tr><th class="p-2 border border-blue-800 bg-blue-950 text-center w-12 text-[10px]">#</th>' + 
         keys.map(k => `<th class="p-2 border border-blue-800 text-left whitespace-nowrap text-xs">${k}</th>`).join('') + '</tr>';
@@ -9127,14 +9273,44 @@
       const bodyHtml = rows.map((r, idx) => {
         let cells = `<td class="p-2 border border-slate-200 text-center text-slate-400 font-mono text-[10px]">${idx + 1}</td>`;
         keys.forEach(k => {
-          let val = r[k] !== undefined && r[k] !== null ? r[k] : '';
-          if (typeof val === 'number') {
-            if (k.toLowerCase().includes('nominal') || k.toLowerCase().includes('biaya')) {
-              totalNominal += val;
-              val = 'Rp ' + val.toLocaleString('id-ID');
+          let rawVal = r[k] !== undefined && r[k] !== null ? r[k] : '';
+          let cellHtml = '';
+
+          // Kolom khusus Bukti Foto
+          if (k === 'Bukti Foto' || k.toLowerCase().includes('bukti')) {
+            const strVal = String(rawVal).trim();
+            if (strVal.startsWith('http://') || strVal.startsWith('https://')) {
+              cellHtml = `<a href="${strVal}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-800 hover:bg-blue-100 font-bold border border-blue-200 text-xs">
+                <i class="fab fa-google-drive text-emerald-600"></i> Buka Bukti Drive
+              </a>`;
+            } else if (strVal.startsWith('data:') || strVal.length > 200) {
+              const rowIdSafe = String(r.ID || r.id || idx).replace(/"/g, '&quot;');
+              cellHtml = `<button type="button" onclick="previewBase64Bukti('${rowIdSafe}')" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 hover:bg-amber-100 font-semibold border border-amber-300 text-xs cursor-pointer">
+                <i class="fas fa-image text-amber-600"></i> Lihat Foto (Base64)
+              </button>`;
+            } else if (strVal) {
+              cellHtml = `<span class="text-slate-600">${strVal}</span>`;
+            } else {
+              cellHtml = `<span class="text-slate-400 italic text-[11px]">-</span>`;
             }
+          } else if (typeof rawVal === 'number') {
+            if (k.toLowerCase().includes('nominal') || k.toLowerCase().includes('biaya')) {
+              totalNominal += rawVal;
+              cellHtml = '<b>Rp ' + rawVal.toLocaleString('id-ID') + '</b>';
+            } else {
+              cellHtml = String(rawVal);
+            }
+          } else if (typeof rawVal === 'object') {
+            try {
+              cellHtml = JSON.stringify(rawVal);
+            } catch(e) {
+              cellHtml = '';
+            }
+          } else {
+            cellHtml = String(rawVal);
           }
-          cells += `<td class="p-2 border border-slate-200 whitespace-nowrap text-slate-800">${val}</td>`;
+
+          cells += `<td class="p-2 border border-slate-200 whitespace-nowrap text-slate-800">${cellHtml}</td>`;
         });
         return `<tr class="hover:bg-slate-50 font-medium">${cells}</tr>`;
       }).join('');
@@ -9143,6 +9319,56 @@
       if (sumElem) sumElem.innerText = 'Rp ' + totalNominal.toLocaleString('id-ID');
     }
 
+    // Fungsi Fallback Unduh File Excel HTML/XML (.xls) Standar
+    function downloadHtmlXls(sheetName, cleanRows, dateStr) {
+      if (!cleanRows || cleanRows.length === 0) return;
+      const headers = Object.keys(cleanRows[0]);
+      let tableHtml = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <!--[if gte mso 9]>
+        <xml>
+          <x:ExcelWorkbook>
+            <x:ExcelWorksheets>
+              <x:ExcelWorksheet>
+                <x:Name>${sheetName.slice(0, 31)}</x:Name>
+                <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+              </x:ExcelWorksheet>
+            </x:ExcelWorksheets>
+          </x:ExcelWorkbook>
+        </xml>
+        <![endif]-->
+        <style>
+          table { border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 11pt; }
+          th { background-color: #1E3A8A; color: #FFFFFF; font-weight: bold; border: 1px solid #CBD5E1; padding: 6px; }
+          td { border: 1px solid #CBD5E1; padding: 5px; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
+          ${cleanRows.map(r => `<tr>${headers.map(h => {
+            const v = r[h] !== undefined && r[h] !== null ? r[h] : '';
+            return `<td>${String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`;
+          }).join('')}</tr>`).join('')}
+        </table>
+      </body>
+      </html>`;
+
+      const blob = new Blob([tableHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sheetName}_FEB_UIKA_${dateStr}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 500);
+    }
+
+    // Fungsi Utama Ekspor Excel (.xlsx standar dengan fallback .xls)
     function exportActiveSheetExcel() {
       const select = document.getElementById('activeSheetSelector');
       const sheetName = select ? select.value : 'Pendaftaran';
@@ -9166,41 +9392,102 @@
         return;
       }
 
-      const fileName = `${sheetName}_FEB_UIKA_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const fileNameXlsx = `${sheetName}_FEB_UIKA_${dateStr}.xlsx`;
 
+      // Sanitasi Data: Bersihkan teks Base64 panjang & flatten objek agar tidak merusak sel Excel
+      const cleanRows = rows.map(item => {
+        const rowObj = {};
+        Object.keys(item).forEach(key => {
+          if (key === 'mataKuliahList' || key === '_id' || key.startsWith('__')) return;
+
+          let val = item[key];
+          if (val === undefined || val === null) val = '';
+
+          if (key === 'Bukti Foto' || key.toLowerCase().includes('bukti')) {
+            const strVal = String(val).trim();
+            if (strVal.startsWith('http://') || strVal.startsWith('https://')) {
+              val = strVal; // URL Google Drive Asli
+            } else if (strVal.startsWith('data:') || strVal.length > 200) {
+              val = '[Tersimpan di Sistem (Base64)]'; // Bersihkan string panjang agar sel Excel tidak rusak
+            } else if (!strVal) {
+              val = '-';
+            }
+          } else if (typeof val === 'object') {
+            try {
+              val = JSON.stringify(val);
+            } catch(e) {
+              val = '';
+            }
+          }
+          rowObj[key] = val;
+        });
+        return rowObj;
+      });
+
+      let exportedSuccess = false;
+
+      // Coba Ekspor Format Modern .xlsx dengan SheetJS
       if (typeof XLSX !== 'undefined') {
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, sheetName);
-        XLSX.writeFile(wb, fileName);
+        try {
+          const ws = XLSX.utils.json_to_sheet(cleanRows);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, sheetName.slice(0, 31));
+          XLSX.writeFile(wb, fileNameXlsx);
+          exportedSuccess = true;
+          Swal.fire({
+            title: 'Export Berhasil!',
+            text: `Data sheet ${sheetName} (${cleanRows.length} baris) berhasil diekspor ke file Excel (.xlsx)!`,
+            icon: 'success',
+            timer: 2500,
+            showConfirmButton: false
+          });
+          return;
+        } catch (xlsxErr) {
+          console.warn('SheetJS XLSX.writeFile gagal, menggunakan fallback .xls:', xlsxErr);
+        }
+      }
+
+      // Fallback ke .xls (Microsoft Excel HTML Table Blob) jika SheetJS tidak tersedia atau gagal
+      try {
+        downloadHtmlXls(sheetName, cleanRows, dateStr);
+        exportedSuccess = true;
         Swal.fire({
           title: 'Export Berhasil!',
-          text: `Data sheet ${sheetName} (${rows.length} baris) berhasil diekspor ke file Excel (.xlsx)!`,
+          text: `Data sheet ${sheetName} (${cleanRows.length} baris) berhasil diekspor ke file Excel (.xls)!`,
           icon: 'success',
-          timer: 2000,
+          timer: 2500,
           showConfirmButton: false
         });
-      } else {
-        const keys = Object.keys(rows[0]);
+        return;
+      } catch (xlsErr) {
+        console.error('Fallback .xls gagal:', xlsErr);
+      }
+
+      // Fallback Terakhir: CSV UTF-8 dengan BOM
+      try {
+        const keys = Object.keys(cleanRows[0]);
         let csv = '\uFEFF' + keys.join(',') + '\n';
-        rows.forEach(r => {
+        cleanRows.forEach(r => {
           csv += keys.map(k => `"${String(r[k] !== undefined && r[k] !== null ? r[k] : '').replace(/"/g, '""')}"`).join(',') + '\n';
         });
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${sheetName}_FEB_UIKA_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.download = `${sheetName}_FEB_UIKA_${dateStr}.csv`;
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
+        setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 500);
         Swal.fire({
           title: 'Export Berhasil!',
-          text: `Data sheet ${sheetName} (${rows.length} baris) berhasil diekspor!`,
+          text: `Data sheet ${sheetName} (${cleanRows.length} baris) berhasil diekspor ke file CSV (.csv)!`,
           icon: 'success',
-          timer: 2000,
+          timer: 2500,
           showConfirmButton: false
         });
+      } catch (csvErr) {
+        Swal.fire('Gagal Export', 'Terjadi kesalahan peramban saat mengekspor data: ' + csvErr.message, 'error');
       }
     }
 

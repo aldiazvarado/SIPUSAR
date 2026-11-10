@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi perbaikan bug reset program studi pada form pendaftaran, implementasi Cache Pintar Stale-While-Revalidate (0 detik) di localStorage, dan paginasi tabel Pendaftaran & Jadwal Ujian (default 10 baris per halaman) dengan sinkronisasi senyap.",
-  "updatedAt":  "2026-11-10T12:33:46.528558895Z",
+  "summary":  "Rencana perbaikan fitur Export Excel di menu Database Website dan integrasi otomatis bukti foto Google Drive:\n- Memperbaiki fungsi Export Excel (.xlsx standar dan .xls fallback) agar tabel sheet Database Website dapat diunduh lancar tanpa error atau terblokir.\n- Membersihkan teks panjang base64 dari data ekspor Excel dan menampilkan link URL Google Drive aktif yang rapi.\n- Menyediakan tombol alat konversi instan di website untuk memigrasikan data bukti foto base64 lama di Google Spreadsheet ke Google Drive secara otomatis.\n- Memperbarui skrip Google Apps Script (Code.gs dan Setup.gs) agar bukti pendaftaran baru diwajibkan tersimpan sebagai link Google Drive permanen.",
+  "updatedAt":  "2026-11-10T14:08:28.972853118Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
