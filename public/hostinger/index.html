@@ -1333,7 +1333,7 @@
     <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full p-6 space-y-4 max-h-[92vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-100 pb-3">
         <div>
-          <h3 id="modalPendaftaranTitle" class="text-base font-black text-slate-800">Form Pendaftaran Akademik Baru</h3>
+          <h3 id="modalPendaftaranTitle" class="text-base font-black text-slate-800">Form Pendaftaran Layanan Ujian Susulan dan Remedial Teaching</h3>
           <p class="text-xs text-slate-500">Periode aktif terkunci otomatis mengikuti jadwal resmi Fakultas</p>
         </div>
         <button onclick="closePendaftaranModal()" class="text-slate-400 hover:text-slate-600"><i class="fas fa-times"></i></button>
@@ -2347,42 +2347,46 @@
         ],
         matkul: [
           // PRODI MANAJEMEN (MNJ)
-          { 'Kode Matkul': 'MNJ-101', 'Nama Mata Kuliah': 'Pengantar Manajemen', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Muhamad Azis Firdaus, S.E., M.M.' },
-          { 'Kode Matkul': 'MNJ-201', 'Nama Mata Kuliah': 'Manajemen Keuangan', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.' },
-          { 'Kode Matkul': 'MNJ-202', 'Nama Mata Kuliah': 'Manajemen Pemasaran', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.' },
-          { 'Kode Matkul': 'MNJ-203', 'Nama Mata Kuliah': 'Manajemen Operasional', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Muhamad Azis Firdaus, S.E., M.M.' },
-          { 'Kode Matkul': 'MNJ-204', 'Nama Mata Kuliah': 'Matematika Bisnis', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.' },
-          { 'Kode Matkul': 'MNJ-301', 'Nama Mata Kuliah': 'Manajemen Strategik', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.' },
-          { 'Kode Matkul': 'MNJ-302', 'Nama Mata Kuliah': 'Perilaku Organisasi', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Muhamad Azis Firdaus, S.E., M.M.' },
-          { 'Kode Matkul': 'MNJ-303', 'Nama Mata Kuliah': 'Metodologi Penelitian Bisnis', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.' },
+          { 'Kode Matkul': 'MNJ-101', 'Nama Mata Kuliah': 'Pengantar Manajemen', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Muhamad Azis Firdaus, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'MNJ-101', 'Nama Mata Kuliah': 'Pengantar Manajemen', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Muhamad Azis Firdaus, S.E., M.M.', 'Kelas': 'Reguler B' },
+          { 'Kode Matkul': 'MNJ-201', 'Nama Mata Kuliah': 'Manajemen Keuangan', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'MNJ-201', 'Nama Mata Kuliah': 'Manajemen Keuangan', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.', 'Kelas': 'Reguler B' },
+          { 'Kode Matkul': 'MNJ-202', 'Nama Mata Kuliah': 'Manajemen Pemasaran', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'MNJ-202', 'Nama Mata Kuliah': 'Manajemen Pemasaran', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.', 'Kelas': 'Reguler B' },
+          { 'Kode Matkul': 'MNJ-203', 'Nama Mata Kuliah': 'Manajemen Operasional', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Muhamad Azis Firdaus, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'MNJ-204', 'Nama Mata Kuliah': 'Matematika Bisnis', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'MNJ-301', 'Nama Mata Kuliah': 'Manajemen Strategik', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'MNJ-302', 'Nama Mata Kuliah': 'Perilaku Organisasi', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Muhamad Azis Firdaus, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'MNJ-303', 'Nama Mata Kuliah': 'Metodologi Penelitian Bisnis', 'SKS': 3, 'Kode Prodi': 'MNJ', 'Dosen Pengampu': 'Dr. Agung Wibowo, S.E., M.M.', 'Kelas': 'Reguler A' },
           
           // PRODI AKUNTANSI (AKT)
-          { 'Kode Matkul': 'AKT-101', 'Nama Mata Kuliah': 'Pengantar Akuntansi I', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Dr. Desmy Riani, S.E., M.Ak.' },
-          { 'Kode Matkul': 'AKT-102', 'Nama Mata Kuliah': 'Pengantar Akuntansi II', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Siti Aisyah, S.E., M.Ak., Ak., CA.' },
-          { 'Kode Matkul': 'AKT-201', 'Nama Mata Kuliah': 'Akuntansi Keuangan Menengah I', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Dr. Desmy Riani, S.E., M.Ak.' },
-          { 'Kode Matkul': 'AKT-202', 'Nama Mata Kuliah': 'Akuntansi Keuangan Menengah II', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Dr. Desmy Riani, S.E., M.Ak.' },
-          { 'Kode Matkul': 'AKT-203', 'Nama Mata Kuliah': 'Akuntansi Biaya', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Siti Aisyah, S.E., M.Ak., Ak., CA.' },
-          { 'Kode Matkul': 'AKT-301', 'Nama Mata Kuliah': 'Perpajakan & Auditing I', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Dr. Desmy Riani, S.E., M.Ak.' },
-          { 'Kode Matkul': 'AKT-302', 'Nama Mata Kuliah': 'Sistem Informasi Akuntansi', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Siti Aisyah, S.E., M.Ak., Ak., CA.' },
+          { 'Kode Matkul': 'AKT-101', 'Nama Mata Kuliah': 'Pengantar Akuntansi I', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Dr. Desmy Riani, S.E., M.Ak.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'AKT-101', 'Nama Mata Kuliah': 'Pengantar Akuntansi I', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Dr. Desmy Riani, S.E., M.Ak.', 'Kelas': 'Reguler B' },
+          { 'Kode Matkul': 'AKT-102', 'Nama Mata Kuliah': 'Pengantar Akuntansi II', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Siti Aisyah, S.E., M.Ak., Ak., CA.', 'Kelas': 'Reguler B' },
+          { 'Kode Matkul': 'AKT-201', 'Nama Mata Kuliah': 'Akuntansi Keuangan Menengah I', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Dr. Desmy Riani, S.E., M.Ak.', 'Kelas': 'Reguler B' },
+          { 'Kode Matkul': 'AKT-202', 'Nama Mata Kuliah': 'Akuntansi Keuangan Menengah II', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Dr. Desmy Riani, S.E., M.Ak.', 'Kelas': 'Reguler B' },
+          { 'Kode Matkul': 'AKT-203', 'Nama Mata Kuliah': 'Akuntansi Biaya', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Siti Aisyah, S.E., M.Ak., Ak., CA.', 'Kelas': 'Reguler B' },
+          { 'Kode Matkul': 'AKT-301', 'Nama Mata Kuliah': 'Perpajakan & Auditing I', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Dr. Desmy Riani, S.E., M.Ak.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'AKT-302', 'Nama Mata Kuliah': 'Sistem Informasi Akuntansi', 'SKS': 3, 'Kode Prodi': 'AKT', 'Dosen Pengampu': 'Siti Aisyah, S.E., M.Ak., Ak., CA.', 'Kelas': 'Reguler A' },
           
           // PRODI BISNIS DIGITAL (BD)
-          { 'Kode Matkul': 'BD-101', 'Nama Mata Kuliah': 'Dasar Pemrograman Bisnis Digital', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hendri Maulana, S.E., M.M.' },
-          { 'Kode Matkul': 'BD-201', 'Nama Mata Kuliah': 'Big Data untuk Bisnis', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.' },
-          { 'Kode Matkul': 'BD-202', 'Nama Mata Kuliah': 'E-Commerce & Digital Marketing', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hendri Maulana, S.E., M.M.' },
-          { 'Kode Matkul': 'BD-203', 'Nama Mata Kuliah': 'UI/UX Design for Digital Product', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.' },
-          { 'Kode Matkul': 'BD-301', 'Nama Mata Kuliah': 'Fintech & Blockchain Business', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.' },
+          { 'Kode Matkul': 'BD-101', 'Nama Mata Kuliah': 'Dasar Pemrograman Bisnis Digital', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hendri Maulana, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'BD-201', 'Nama Mata Kuliah': 'Big Data untuk Bisnis', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'BD-202', 'Nama Mata Kuliah': 'E-Commerce & Digital Marketing', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hendri Maulana, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'BD-203', 'Nama Mata Kuliah': 'UI/UX Design for Digital Product', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'BD-301', 'Nama Mata Kuliah': 'Fintech & Blockchain Business', 'SKS': 3, 'Kode Prodi': 'BD', 'Dosen Pengampu': 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.', 'Kelas': 'Reguler A' },
           
           // PRODI PERDAGANGAN INTERNASIONAL (PI)
-          { 'Kode Matkul': 'PI-101', 'Nama Mata Kuliah': 'Hukum Perdagangan Internasional', 'SKS': 3, 'Kode Prodi': 'PI', 'Dosen Pengampu': 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.' },
-          { 'Kode Matkul': 'PI-201', 'Nama Mata Kuliah': 'Ekspor Impor & Kepabeanan', 'SKS': 3, 'Kode Prodi': 'PI', 'Dosen Pengampu': 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.' },
-          { 'Kode Matkul': 'PI-202', 'Nama Mata Kuliah': 'Logistik & Supply Chain Global', 'SKS': 3, 'Kode Prodi': 'PI', 'Dosen Pengampu': 'Dr. Bambang Wahyudi, S.E., M.M.' },
-          { 'Kode Matkul': 'PI-301', 'Nama Mata Kuliah': 'Negosiasi Bisnis Lintas Budaya', 'SKS': 3, 'Kode Prodi': 'PI', 'Dosen Pengampu': 'Dr. Bambang Wahyudi, S.E., M.M.' },
+          { 'Kode Matkul': 'PI-101', 'Nama Mata Kuliah': 'Hukum Perdagangan Internasional', 'SKS': 3, 'Kode Prodi': 'PI', 'Dosen Pengampu': 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'PI-201', 'Nama Mata Kuliah': 'Ekspor Impor & Kepabeanan', 'SKS': 3, 'Kode Prodi': 'PI', 'Dosen Pengampu': 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', 'Kelas': 'Reguler B' },
+          { 'Kode Matkul': 'PI-202', 'Nama Mata Kuliah': 'Logistik & Supply Chain Global', 'SKS': 3, 'Kode Prodi': 'PI', 'Dosen Pengampu': 'Dr. Bambang Wahyudi, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'PI-301', 'Nama Mata Kuliah': 'Negosiasi Bisnis Lintas Budaya', 'SKS': 3, 'Kode Prodi': 'PI', 'Dosen Pengampu': 'Dr. Bambang Wahyudi, S.E., M.M.', 'Kelas': 'Reguler A' },
           
           // PRODI PERBANKAN & KEUANGAN DIGITAL (PKD)
-          { 'Kode Matkul': 'PKD-101', 'Nama Mata Kuliah': 'Manajemen Perbankan Digital', 'SKS': 3, 'Kode Prodi': 'PKD', 'Dosen Pengampu': 'Denia Maulani, S.E., M.M.' },
-          { 'Kode Matkul': 'PKD-201', 'Nama Mata Kuliah': 'Analisis Kredit & Risiko Finansial', 'SKS': 3, 'Kode Prodi': 'PKD', 'Dosen Pengampu': 'Denia Maulani, S.E., M.M.' },
-          { 'Kode Matkul': 'PKD-202', 'Nama Mata Kuliah': 'Operasional Lembaga Keuangan Syariah', 'SKS': 3, 'Kode Prodi': 'PKD', 'Dosen Pengampu': 'Ahmad Fauzi, S.E., M.E.Sy.' },
-          { 'Kode Matkul': 'PKD-301', 'Nama Mata Kuliah': 'Sistem Pembayaran Digital & Regulasi BI/OJK', 'SKS': 3, 'Kode Prodi': 'PKD', 'Dosen Pengampu': 'Ahmad Fauzi, S.E., M.E.Sy.' }
+          { 'Kode Matkul': 'PKD-101', 'Nama Mata Kuliah': 'Manajemen Perbankan Digital', 'SKS': 3, 'Kode Prodi': 'PKD', 'Dosen Pengampu': 'Denia Maulani, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'PKD-201', 'Nama Mata Kuliah': 'Analisis Kredit & Risiko Finansial', 'SKS': 3, 'Kode Prodi': 'PKD', 'Dosen Pengampu': 'Denia Maulani, S.E., M.M.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'PKD-202', 'Nama Mata Kuliah': 'Operasional Lembaga Keuangan Syariah', 'SKS': 3, 'Kode Prodi': 'PKD', 'Dosen Pengampu': 'Ahmad Fauzi, S.E., M.E.Sy.', 'Kelas': 'Reguler A' },
+          { 'Kode Matkul': 'PKD-301', 'Nama Mata Kuliah': 'Sistem Pembayaran Digital & Regulasi BI/OJK', 'SKS': 3, 'Kode Prodi': 'PKD', 'Dosen Pengampu': 'Ahmad Fauzi, S.E., M.E.Sy.', 'Kelas': 'Reguler A' }
         ],
         dosen: [
           { 'ID': 'DSN-001', 'Nama Dosen': 'Dr. Muhamad Azis Firdaus, S.E., M.M.', 'Kode Prodi': 'MNJ', 'NIK/NIDN': '198501012010121001' },
@@ -4001,21 +4005,43 @@
           dropdownElem: dropM,
           clearBtnElem: btnClearM,
           containerElem: contM,
-          placeholderEmpty: 'Mata kuliah tidak ditemukan untuk Prodi ini',
+          placeholderEmpty: 'Mata kuliah tidak ditemukan untuk Prodi dan Kelas ini',
           getItems: (query) => {
             const master = appData.master || {};
             const allMatkul = master.matkul || [];
             const currProdi = (document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
 
-            let filtered = allMatkul.filter(m => String(m['Kode Prodi'] || '').toUpperCase() === currProdi);
+            // Filter otomatis sesuai kelas mahasiswa yang login (atau pilihan kelas pada form jika staf)
+            const activeUserKelas = (
+              (typeof currentUser !== 'undefined' && currentUser && (currentUser.kelas || currentUser.Kelas)) ||
+              document.getElementById('pendaftaranKelas')?.value ||
+              ''
+            ).toString().trim().toLowerCase();
+
+            let filtered = allMatkul.filter(m => {
+              const p = String(m['Kode Prodi'] || m.Kode_Prodi || '').toUpperCase();
+              const matchProdi = !currProdi || p === currProdi;
+
+              const mKelas = (m.Kelas || m.kelas || m['Kelas'] || '').toString().trim().toLowerCase();
+              const matchKelas = !activeUserKelas || !mKelas || mKelas === 'semua' || mKelas === 'semua kelas' || mKelas === 'all' || mKelas === activeUserKelas;
+
+              return matchProdi && matchKelas;
+            });
+
+            // Fallback jika tidak ada matkul dengan spesifikasi kelas tertentu, tampilkan prodi aktif
+            if (filtered.length === 0) {
+              filtered = allMatkul.filter(m => String(m['Kode Prodi'] || m.Kode_Prodi || '').toUpperCase() === currProdi);
+            }
             if (filtered.length === 0) filtered = allMatkul;
 
             if (!query || !query.trim()) return filtered;
             const q = query.toLowerCase().trim();
             return filtered.filter(m => {
-              const nama = (m['Nama Mata Kuliah'] || '').toLowerCase();
-              const kode = (m['Kode Matkul'] || '').toLowerCase();
-              return nama.includes(q) || kode.includes(q);
+              const nama = (m['Nama Mata Kuliah'] || m.nama || '').toLowerCase();
+              const kode = (m['Kode Matkul'] || m.kode || '').toLowerCase();
+              const kls = (m.Kelas || m.kelas || m['Kelas'] || '').toLowerCase();
+              const dosen = (m['Dosen Pengampu'] || m.dosen || '').toLowerCase();
+              return nama.includes(q) || kode.includes(q) || kls.includes(q) || dosen.includes(q);
             });
           },
           getItemValue: (item) => item['Nama Mata Kuliah'] || '',
@@ -4023,10 +4049,14 @@
             const highName = highlightSearchMatch(item['Nama Mata Kuliah'] || '', query);
             const highKode = highlightSearchMatch(item['Kode Matkul'] || '', query);
             const sks = item.SKS ? `${item.SKS} SKS` : '3 SKS';
+            const kls = item.Kelas || item.kelas || item['Kelas'] || 'Semua Kelas';
             const dosen = item['Dosen Pengampu'] ? `<div class="text-[10px] text-slate-400 mt-0.5"><i class="fas fa-chalkboard-user mr-1"></i>${escapeHtml(item['Dosen Pengampu'])}</div>` : '';
             return `
               <div class="flex-1 pr-2">
-                <div class="font-bold text-slate-800 text-xs sm:text-sm group-hover:text-blue-900">${highName}</div>
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">${escapeHtml(kls)}</span>
+                  <span class="font-bold text-slate-800 text-xs sm:text-sm group-hover:text-blue-900">${highName}</span>
+                </div>
                 ${dosen}
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
@@ -4391,9 +4421,13 @@
           renderItem: (item, query) => {
             const highName = highlightSearchMatch(item['Nama Mata Kuliah'] || '', query);
             const highKode = highlightSearchMatch(item['Kode Matkul'] || '', query);
+            const kls = item.Kelas || item.kelas || item['Kelas'] || '';
+            const klsBadge = kls ? `<span class="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 mr-1">${escapeHtml(kls)}</span>` : '';
             return `
               <div class="flex-1 pr-2">
-                <div class="font-bold text-slate-800 text-xs">${highName}</div>
+                <div class="flex items-center flex-wrap gap-1 font-bold text-slate-800 text-xs">
+                  ${klsBadge}<span>${highName}</span>
+                </div>
                 ${item['Dosen Pengampu'] ? `<div class="text-[10px] text-slate-400">${escapeHtml(item['Dosen Pengampu'])}</div>` : ''}
               </div>
               <span class="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-1 py-0.5 rounded">${highKode}</span>
@@ -8422,13 +8456,14 @@
       let filename = `Template_${target}_FEB_UIKA.xlsx`;
 
       if (target === 'Master_Matkul') {
-        headers = ['Kode Matkul', 'Nama Mata Kuliah', 'SKS', 'Kode Prodi'];
+        headers = ['Kode Matkul', 'Nama Mata Kuliah', 'SKS', 'Kode Prodi', 'Dosen Pengampu', 'Kelas'];
         sampleData = [
-          ['MNJ-101', 'Pengantar Manajemen', 3, 'MNJ'],
-          ['AKT-201', 'Akuntansi Keuangan Menengah', 3, 'AKT'],
-          ['BD-102', 'Dasar Pemrograman Bisnis Digital', 3, 'BD'],
-          ['PI-105', 'Hukum Perdagangan Internasional', 3, 'PI'],
-          ['PKD-103', 'Manajemen Perbankan Digital', 3, 'PKD']
+          ['MNJ-101', 'Pengantar Manajemen', 3, 'MNJ', 'Dr. Muhamad Azis Firdaus, S.E., M.M.', 'Reguler A'],
+          ['MNJ-201', 'Manajemen Keuangan', 3, 'MNJ', 'Dr. Agung Wibowo, S.E., M.M.', 'Reguler A'],
+          ['AKT-201', 'Akuntansi Keuangan Menengah', 3, 'AKT', 'Dr. Desmy Riani, S.E., M.Ak.', 'Reguler B'],
+          ['BD-102', 'Dasar Pemrograman Bisnis Digital', 3, 'BD', 'Hendri Maulana, S.E., M.M.', 'Reguler A'],
+          ['PI-105', 'Hukum Perdagangan Internasional', 3, 'PI', 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.', 'Reguler A'],
+          ['PKD-103', 'Manajemen Perbankan Digital', 3, 'PKD', 'Denia Maulani, S.E., M.M.', 'Reguler A']
         ];
       } else if (target === 'Master_Kelas') {
         headers = ['Nama Kelas', 'Kategori', 'Kode Prodi'];

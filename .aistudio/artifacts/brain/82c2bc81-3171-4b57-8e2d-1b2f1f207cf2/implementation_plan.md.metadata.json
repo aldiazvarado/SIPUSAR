@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi perbaikan autentikasi dan validasi login presisi berbasis spreadsheet Google Sheets (User_Staff dan User_Mahasiswa), menghapus bypass universal fallback, dan menyinkronkan verifikasi kredensial di lingkungan Google Apps Script maupun Standalone Hostinger.",
-  "updatedAt":  "2026-11-09T02:52:35.467434674Z",
+  "summary":  "Rencana implementasi pembaruan judul form pendaftaran menjadi 'Form Pendaftaran Layanan Ujian Susulan dan Remedial Teaching' serta penambahan kolom Kelas pada Master_Matkul di spreadsheet dan filter otomatis mata kuliah sesuai kelas mahasiswa yang login.",
+  "updatedAt":  "2026-11-10T05:31:12.982559803Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

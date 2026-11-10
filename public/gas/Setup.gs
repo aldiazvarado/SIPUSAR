@@ -152,36 +152,40 @@ function setupDatabase() {
 
   // 5.c POPULATE SHEET: Master_Matkul
   populateSheetData(ss, 'Master_Matkul',
-    ["ID", "Kode Matkul", "Nama Mata Kuliah", "SKS", "Kode Prodi", "Dosen Pengampu"],
+    ["ID", "Kode Matkul", "Nama Mata Kuliah", "SKS", "Kode Prodi", "Dosen Pengampu", "Kelas"],
     [
-      // MNJ
-      ["MKL-001", "MNJ-101", "Pengantar Manajemen", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M."],
-      ["MKL-002", "MNJ-201", "Manajemen Keuangan", 3, "MNJ", "Dr. Agung Wibowo, S.E., M.M."],
-      ["MKL-003", "MNJ-202", "Manajemen Pemasaran", 3, "MNJ", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M."],
-      ["MKL-004", "MNJ-203", "Manajemen Operasional", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M."],
-      ["MKL-005", "MNJ-204", "Matematika Bisnis", 3, "MNJ", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M."],
-      ["MKL-006", "MNJ-301", "Manajemen Strategik", 3, "MNJ", "Dr. Agung Wibowo, S.E., M.M."],
-      ["MKL-007", "MNJ-302", "Perilaku Organisasi", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M."],
-      // AKT
-      ["MKL-008", "AKT-101", "Pengantar Akuntansi I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak."],
-      ["MKL-009", "AKT-102", "Pengantar Akuntansi II", 3, "AKT", "Siti Aisyah, S.E., M.Ak., Ak., CA."],
-      ["MKL-010", "AKT-201", "Akuntansi Keuangan Menengah I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak."],
-      ["MKL-011", "AKT-202", "Akuntansi Keuangan Menengah II", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak."],
-      ["MKL-012", "AKT-203", "Akuntansi Biaya", 3, "AKT", "Siti Aisyah, S.E., M.Ak., Ak., CA."],
-      ["MKL-013", "AKT-301", "Perpajakan & Auditing I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak."],
-      // BD
-      ["MKL-014", "BD-101", "Dasar Pemrograman Bisnis Digital", 3, "BD", "Hendri Maulana, S.E., M.M."],
-      ["MKL-015", "BD-201", "Big Data untuk Bisnis", 3, "BD", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom."],
-      ["MKL-016", "BD-202", "E-Commerce & Digital Marketing", 3, "BD", "Hendri Maulana, S.E., M.M."],
-      ["MKL-017", "BD-301", "Fintech & Blockchain Business", 3, "BD", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom."],
-      // PI
-      ["MKL-018", "PI-101", "Hukum Perdagangan Internasional", 3, "PI", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB."],
-      ["MKL-019", "PI-201", "Ekspor Impor & Kepabeanan", 3, "PI", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB."],
-      ["MKL-020", "PI-202", "Logistik & Supply Chain Global", 3, "PI", "Dr. Bambang Wahyudi, S.E., M.M."],
-      // PKD
-      ["MKL-021", "PKD-101", "Manajemen Perbankan Digital", 3, "PKD", "Denia Maulani, S.E., M.M."],
-      ["MKL-022", "PKD-201", "Analisis Kredit & Risiko Finansial", 3, "PKD", "Denia Maulani, S.E., M.M."],
-      ["MKL-023", "PKD-202", "Operasional Lembaga Keuangan Syariah", 3, "PKD", "Ahmad Fauzi, S.E., M.E.Sy."]
+      // MNJ (Manajemen)
+      ["MKL-001", "MNJ-101", "Pengantar Manajemen", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M.", "Reguler A"],
+      ["MKL-002", "MNJ-101", "Pengantar Manajemen", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M.", "Reguler B"],
+      ["MKL-003", "MNJ-201", "Manajemen Keuangan", 3, "MNJ", "Dr. Agung Wibowo, S.E., M.M.", "Reguler A"],
+      ["MKL-004", "MNJ-201", "Manajemen Keuangan", 3, "MNJ", "Dr. Agung Wibowo, S.E., M.M.", "Reguler B"],
+      ["MKL-005", "MNJ-202", "Manajemen Pemasaran", 3, "MNJ", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.", "Reguler A"],
+      ["MKL-006", "MNJ-202", "Manajemen Pemasaran", 3, "MNJ", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.", "Reguler B"],
+      ["MKL-007", "MNJ-203", "Manajemen Operasional", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M.", "Reguler A"],
+      ["MKL-008", "MNJ-204", "Matematika Bisnis", 3, "MNJ", "Prof. Dr. Hj. Immas Nurhayati, S.E., M.S.M.", "Reguler A"],
+      ["MKL-009", "MNJ-301", "Manajemen Strategik", 3, "MNJ", "Dr. Agung Wibowo, S.E., M.M.", "Reguler A"],
+      ["MKL-010", "MNJ-302", "Perilaku Organisasi", 3, "MNJ", "Dr. Muhamad Azis Firdaus, S.E., M.M.", "Reguler A"],
+      // AKT (Akuntansi)
+      ["MKL-011", "AKT-101", "Pengantar Akuntansi I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak.", "Reguler A"],
+      ["MKL-012", "AKT-101", "Pengantar Akuntansi I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak.", "Reguler B"],
+      ["MKL-013", "AKT-102", "Pengantar Akuntansi II", 3, "AKT", "Siti Aisyah, S.E., M.Ak., Ak., CA.", "Reguler B"],
+      ["MKL-014", "AKT-201", "Akuntansi Keuangan Menengah I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak.", "Reguler B"],
+      ["MKL-015", "AKT-202", "Akuntansi Keuangan Menengah II", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak.", "Reguler B"],
+      ["MKL-016", "AKT-203", "Akuntansi Biaya", 3, "AKT", "Siti Aisyah, S.E., M.Ak., Ak., CA.", "Reguler B"],
+      ["MKL-017", "AKT-301", "Perpajakan & Auditing I", 3, "AKT", "Dr. Desmy Riani, S.E., M.Ak.", "Reguler A"],
+      // BD (Bisnis Digital)
+      ["MKL-018", "BD-101", "Dasar Pemrograman Bisnis Digital", 3, "BD", "Hendri Maulana, S.E., M.M.", "Reguler A"],
+      ["MKL-019", "BD-201", "Big Data untuk Bisnis", 3, "BD", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.", "Reguler A"],
+      ["MKL-020", "BD-202", "E-Commerce & Digital Marketing", 3, "BD", "Hendri Maulana, S.E., M.M.", "Reguler A"],
+      ["MKL-021", "BD-301", "Fintech & Blockchain Business", 3, "BD", "Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.", "Reguler A"],
+      // PI (Perdagangan Internasional)
+      ["MKL-022", "PI-101", "Hukum Perdagangan Internasional", 3, "PI", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.", "Reguler A"],
+      ["MKL-023", "PI-201", "Ekspor Impor & Kepabeanan", 3, "PI", "Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.", "Reguler B"],
+      ["MKL-024", "PI-202", "Logistik & Supply Chain Global", 3, "PI", "Dr. Bambang Wahyudi, S.E., M.M.", "Reguler A"],
+      // PKD (Perbankan & Keuangan Digital)
+      ["MKL-025", "PKD-101", "Manajemen Perbankan Digital", 3, "PKD", "Denia Maulani, S.E., M.M.", "Reguler A"],
+      ["MKL-026", "PKD-201", "Analisis Kredit & Risiko Finansial", 3, "PKD", "Denia Maulani, S.E., M.M.", "Reguler A"],
+      ["MKL-027", "PKD-202", "Operasional Lembaga Keuangan Syariah", 3, "PKD", "Ahmad Fauzi, S.E., M.E.Sy.", "Reguler A"]
     ]
   );
 
@@ -321,5 +325,58 @@ function populateSheetData(ss, sheetName, headers, rows) {
 
   for (var c = 1; c <= headers.length; c++) {
     sheet.autoResizeColumn(c);
+  }
+}
+
+/**
+ * Helper: Upgrade skema sheet Master_Matkul di spreadsheet yang sudah ada tanpa menghapus data.
+ * Otomatis menambahkan kolom 'Kelas' di sebelah kanan 'Dosen Pengampu' (Kolom G).
+ */
+function upgradeMasterMatkulSchema() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Master_Matkul');
+  if (!sheet) {
+    var msg = "Sheet 'Master_Matkul' tidak ditemukan di spreadsheet ini.";
+    Logger.log(msg);
+    return msg;
+  }
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) {
+    sheet.appendRow(["ID", "Kode Matkul", "Nama Mata Kuliah", "SKS", "Kode Prodi", "Dosen Pengampu", "Kelas"]);
+    return "Header Master_Matkul baru berhasil dibuat.";
+  }
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var kelasColIdx = -1;
+  for (var i = 0; i < headers.length; i++) {
+    if (String(headers[i]).trim().toLowerCase() === 'kelas') {
+      kelasColIdx = i + 1;
+      break;
+    }
+  }
+  if (kelasColIdx === -1) {
+    sheet.insertColumnAfter(lastCol);
+    var newCol = lastCol + 1;
+    var headerCell = sheet.getRange(1, newCol);
+    headerCell.setValue("Kelas");
+    headerCell.setBackground('#1E3A8A');
+    headerCell.setFontColor('#FFFFFF');
+    headerCell.setFontWeight('bold');
+    headerCell.setHorizontalAlignment('center');
+    
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      // Isi default baris eksisting dengan 'Reguler A' agar sinkron
+      sheet.getRange(2, newCol, lastRow - 1, 1).setValue("Reguler A");
+    }
+    sheet.autoResizeColumn(newCol);
+    var resMsg = "Kolom 'Kelas' berhasil ditambahkan pada kolom ke-" + newCol + " sheet Master_Matkul!";
+    Logger.log(resMsg);
+    try { SpreadsheetApp.getUi().alert(resMsg); } catch(e) {}
+    return resMsg;
+  } else {
+    var resMsg2 = "Kolom 'Kelas' sudah tersedia di sheet Master_Matkul (Kolom " + kelasColIdx + ").";
+    Logger.log(resMsg2);
+    try { SpreadsheetApp.getUi().alert(resMsg2); } catch(e) {}
+    return resMsg2;
   }
 }

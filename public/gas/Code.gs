@@ -260,7 +260,7 @@ function getOrCreateSheet(ss, sheetName) {
     'Master_Ruangan': ["ID", "Kode Ruangan", "Nama Ruangan", "Kapasitas", "Gedung", "Keterangan"],
     'Jadwal_Ujian': ["ID", "Tanggal Ujian", "Jam Mulai", "Jam Selesai", "Ruangan", "Kode Prodi", "Program Studi", "Semester", "Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Ujian", "Keterangan"],
     'Master_Prodi': ["ID", "Kode Prodi", "Nama Prodi", "Jenjang"],
-    'Master_Matkul': ["ID", "Kode Matkul", "Nama Mata Kuliah", "SKS", "Kode Prodi"],
+    'Master_Matkul': ["ID", "Kode Matkul", "Nama Mata Kuliah", "SKS", "Kode Prodi", "Dosen Pengampu", "Kelas"],
     'Master_Kelas': ["ID", "Nama Kelas", "Kategori", "Semester", "Kode Prodi"],
     'Master_Dosen': ["ID", "NIK/NIDN", "Nama Dosen", "Kode Prodi"],
     'Notifikasi': ["ID", "Waktu", "Judul", "Pesan", "Tipe", "TargetRole", "TargetNPM", "Dibaca"],
