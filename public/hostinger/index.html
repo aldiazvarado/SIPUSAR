@@ -1572,10 +1572,17 @@
 
         <!-- LANGKAH 1: Admin Memilih Data Mahasiswa Terdaftar Terlebih Dahulu -->
         <div class="bg-blue-50/70 p-3.5 rounded-2xl border border-blue-200 space-y-2">
-          <label class="block font-bold text-blue-950">1. Pilih Data dari Mahasiswa yang Mendaftar <span class="text-rose-500">*</span></label>
+          <div class="flex items-center justify-between">
+            <label class="block font-bold text-blue-950">1. Pilih Data dari Mahasiswa yang Mendaftar <span class="text-rose-500">*</span></label>
+            <span id="jadwalPendaftarCountBadge" class="text-[10px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full"></span>
+          </div>
           <select id="jadwalSelectPendaftar" required onchange="onSelectMahasiswaPendaftar(this.value)" class="w-full border border-blue-300 rounded-xl px-3 py-2 font-bold bg-white text-slate-800 focus:ring-2 focus:ring-blue-900">
             <option value="">-- Pilih Mahasiswa Terdaftar (Disetujui / Pending) --</option>
           </select>
+          <p id="jadwalPendaftarHint" class="text-[11px] text-slate-500 flex items-center gap-1.5">
+            <i class="fas fa-filter text-emerald-600"></i>
+            <span>Mahasiswa yang sudah memiliki jadwal otomatis disembunyikan agar tidak terjadi duplikasi.</span>
+          </p>
         </div>
 
         <!-- LANGKAH 2: Data Terkunci Otomatis (Readonly) -->
@@ -5634,14 +5641,108 @@
           }).join('');
       }
 
-      // Populate pilihan mahasiswa yang mendaftar
+      // Populate pilihan mahasiswa yang mendaftar (Hanya yang BELUM terjadwalkan)
       const selectPendaftar = document.getElementById('jadwalSelectPendaftar');
+      const badgeCount = document.getElementById('jadwalPendaftarCountBadge');
+      const hintText = document.getElementById('jadwalPendaftarHint');
       const pendaftaranList = appData.pendaftaran || [];
-      selectPendaftar.innerHTML = '<option value="">-- Pilih Mahasiswa Terdaftar (Disetujui / Pending) --</option>' +
-        pendaftaranList.map(p => {
-          const cleanMatkul = String(p['Mata Kuliah'] || '').replace(/\n/g, ', ');
-          return `<option value="${p.ID}" data-json='${JSON.stringify(p).replace(/'/g, "&#39;")}'>${p['Nama Mahasiswa']} (NPM: ${p.NPM || p.NIM}) - ${cleanMatkul} [${p['Jenis Layanan']}]</option>`;
-        }).join('');
+      const jadwalList = appData.jadwal || [];
+
+      // Cari jadwal yang sedang diedit jika realId ada
+      const currentEditingJadwal = realId ? jadwalList.find(j => String(j.ID).trim() === realId) : null;
+
+      // Fungsi deteksi apakah berkas pendaftaran p sudah memiliki jadwal ujian aktif
+      function isPendaftaranAlreadyScheduled(p) {
+        const pId = String(p.ID || p.id || '').trim();
+        const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+        const pProdi = String(p['Kode Prodi'] || p.prodi || '').trim().toUpperCase();
+        const pMatkul = String(p['Mata Kuliah'] || '').trim().toLowerCase();
+        const pKelas = String(p.Kelas || '').trim().toLowerCase();
+
+        return jadwalList.some(j => {
+          // Kecualikan jadwal yang saat ini sedang diedit agar mahasiswa pendaftar terkait tetap muncul
+          if (realId && String(j.ID).trim() === realId) {
+            return false;
+          }
+
+          // 1. Relasi eksplisit ID pendaftaran
+          if (j.pendaftarId && String(j.pendaftarId).trim() === pId) return true;
+          const jKet = String(j.Keterangan || '').toLowerCase();
+          if (pId && jKet.includes(pId.toLowerCase())) return true;
+
+          // 2. Kecocokan NPM & Mata Kuliah
+          const jMatkul = String(j['Mata Kuliah'] || '').trim().toLowerCase();
+          const jProdi = String(j['Kode Prodi'] || '').trim().toUpperCase();
+          const jKelas = String(j.Kelas || '').trim().toLowerCase();
+
+          const npmMatched = pNpm && (jKet.includes(pNpm) || String(j.npm || '').toLowerCase() === pNpm);
+          const matkulMatched = pMatkul && jMatkul && (pMatkul.includes(jMatkul) || jMatkul.includes(pMatkul));
+          const prodiMatched = !pProdi || !jProdi || pProdi === jProdi;
+
+          if (npmMatched && matkulMatched) return true;
+
+          // 3. Status jadwal pendaftaran sudah "Terjadwal"
+          if (String(p['Status Jadwal'] || '').toLowerCase() === 'terjadwal') {
+            if (matkulMatched && (prodiMatched || npmMatched)) return true;
+          }
+
+          // 4. Kecocokan Prodi + Kelas + Matkul
+          if (prodiMatched && matkulMatched && pKelas && jKelas && pKelas === jKelas) {
+            return true;
+          }
+
+          return false;
+        });
+      }
+
+      // Saring hanya pendaftar yang belum terjadwal
+      let availablePendaftar = pendaftaranList.filter(p => !isPendaftaranAlreadyScheduled(p));
+
+      // Jika sedang mengedit jadwal yang sudah ada, pastikan pendaftar jadwal ini tetap disertakan
+      let matchedPendaftarForEdit = null;
+      if (currentEditingJadwal) {
+        matchedPendaftarForEdit = pendaftaranList.find(p => {
+          const pId = String(p.ID || p.id || '').trim();
+          const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+          const jKet = String(currentEditingJadwal.Keterangan || '').toLowerCase();
+          if (pId && jKet.includes(pId.toLowerCase())) return true;
+          if (pNpm && jKet.includes(pNpm)) return true;
+          const sameMatkul = String(p['Mata Kuliah'] || '').toLowerCase().includes(String(currentEditingJadwal['Mata Kuliah'] || '').toLowerCase());
+          const sameProdi = String(p['Kode Prodi'] || '').toUpperCase() === String(currentEditingJadwal['Kode Prodi'] || '').toUpperCase();
+          return sameMatkul && sameProdi;
+        });
+
+        if (matchedPendaftarForEdit && !availablePendaftar.some(p => String(p.ID) === String(matchedPendaftarForEdit.ID))) {
+          availablePendaftar.unshift(matchedPendaftarForEdit);
+        }
+      }
+
+      if (availablePendaftar.length > 0) {
+        selectPendaftar.disabled = false;
+        if (badgeCount) {
+          badgeCount.innerText = `${availablePendaftar.length} Mahasiswa Menunggu`;
+          badgeCount.className = 'text-[10px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full';
+        }
+        if (hintText) {
+          hintText.innerHTML = '<i class="fas fa-filter text-emerald-600"></i><span>Mahasiswa yang sudah memiliki jadwal otomatis disembunyikan agar tidak terjadi duplikasi.</span>';
+        }
+        selectPendaftar.innerHTML = '<option value="">-- Pilih Mahasiswa Terdaftar (Disetujui / Pending) --</option>' +
+          availablePendaftar.map(p => {
+            const cleanMatkul = String(p['Mata Kuliah'] || '').replace(/\n/g, ', ');
+            const isCurrentEdit = matchedPendaftarForEdit && String(p.ID) === String(matchedPendaftarForEdit.ID);
+            const editLabel = isCurrentEdit ? ' [Jadwal Aktif Ini]' : '';
+            return `<option value="${p.ID}" data-json='${JSON.stringify(p).replace(/'/g, "&#39;")}' ${isCurrentEdit ? 'selected' : ''}>${p['Nama Mahasiswa']} (NPM: ${p.NPM || p.NIM}) - ${cleanMatkul} [${p['Jenis Layanan']}]${editLabel}</option>`;
+          }).join('');
+      } else {
+        if (badgeCount) {
+          badgeCount.innerText = 'Semua Sudah Terjadwalkan';
+          badgeCount.className = 'text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full';
+        }
+        if (hintText) {
+          hintText.innerHTML = '<i class="fas fa-check-circle text-emerald-600"></i><span class="text-emerald-700 font-semibold">Seluruh mahasiswa pendaftar telah berhasil dijadwalkan ke ruangan ujian.</span>';
+        }
+        selectPendaftar.innerHTML = '<option value="">-- Semua Mahasiswa Terdaftar Sudah Terjadwalkan (0 Menunggu) --</option>';
+      }
 
       document.getElementById('jadwalTanggal').value = new Date().toISOString().split('T')[0];
       document.getElementById('jadwalJamMulai').value = '08:00';
@@ -5746,6 +5847,15 @@
         actor: currentUser?.nama || 'Admin TU'
       };
 
+      // Optimistic update status jadwal pada berkas pendaftaran lokal
+      if (pId) {
+        const pMatch = (appData.pendaftaran || []).find(p => String(p.ID) === String(pId));
+        if (pMatch) {
+          pMatch['Status Jadwal'] = 'Terjadwal';
+          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        }
+      }
+
       const isEdit = (editId && editId.indexOf('JDW-') === 0);
 
       const onResult = res => {
@@ -5770,16 +5880,22 @@
         Swal.fire('Error Sistem', err.message || String(err), 'error');
       };
 
-      if (isEdit) {
-        google.script.run
-          .withSuccessHandler(onResult)
-          .withFailureHandler(onError)
-          .updateJadwal(editId, payload);
+      if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.addJadwal) {
+        if (isEdit) {
+          google.script.run
+            .withSuccessHandler(onResult)
+            .withFailureHandler(onError)
+            .updateJadwal(editId, payload);
+        } else {
+          google.script.run
+            .withSuccessHandler(onResult)
+            .withFailureHandler(onError)
+            .addJadwal(payload);
+        }
       } else {
-        google.script.run
-          .withSuccessHandler(onResult)
-          .withFailureHandler(onError)
-          .addJadwal(payload);
+        const fnName = isEdit ? 'updateJadwal' : 'addJadwal';
+        const fnArgs = isEdit ? [editId, payload] : [payload];
+        callGasApi(fnName, fnArgs, onResult, onError);
       }
     }
 
@@ -5934,18 +6050,46 @@
     function deleteJadwalItem(id) {
       Swal.fire({
         title: 'Hapus Jadwal ' + id + '?',
+        text: 'Mahasiswa terkait jadwal ini akan dikembalikan ke status menunggu jadwal.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Hapus',
-        confirmButtonColor: '#e11d48'
+        confirmButtonText: 'Hapus Jadwal',
+        confirmButtonColor: '#e11d48',
+        cancelButtonText: 'Batal'
       }).then(r => {
         if (r.isConfirmed) {
-          google.script.run
-            .withSuccessHandler(res => {
-              Swal.fire('Terhapus', res.message, 'success');
-              loadAppData();
-            })
-            .deleteJadwal(id);
+          // Revert Status Jadwal lokal optimis
+          const jTarget = (appData.jadwal || []).find(j => String(j.ID).trim() === String(id).trim());
+          if (jTarget) {
+            const jKet = String(jTarget.Keterangan || '').toLowerCase();
+            const jMatkul = String(jTarget['Mata Kuliah'] || '').toLowerCase();
+            (appData.pendaftaran || []).forEach(p => {
+              const pId = String(p.ID || '').toLowerCase();
+              const pNpm = String(p.NPM || p.NIM || '').toLowerCase();
+              if ((pId && jKet.includes(pId)) || (pNpm && jKet.includes(pNpm)) || (jMatkul && String(p['Mata Kuliah'] || '').toLowerCase().includes(jMatkul))) {
+                p['Status Jadwal'] = 'Tepat Waktu';
+              }
+            });
+            if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+          }
+
+          const onDeleteSuccess = res => {
+            Swal.fire('Terhapus', (res && res.message) || 'Jadwal berhasil dihapus.', 'success');
+            loadAppData();
+          };
+
+          const onDeleteError = err => {
+            Swal.fire('Error', err?.message || String(err), 'error');
+          };
+
+          if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.deleteJadwal) {
+            google.script.run
+              .withSuccessHandler(onDeleteSuccess)
+              .withFailureHandler(onDeleteError)
+              .deleteJadwal(id);
+          } else {
+            callGasApi('deleteJadwal', [id], onDeleteSuccess, onDeleteError);
+          }
         }
       });
     }

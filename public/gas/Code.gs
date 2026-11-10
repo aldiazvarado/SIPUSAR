@@ -2828,12 +2828,39 @@ function addJadwal(payload) {
     var dosen = payload['Dosen Pengampu'] || payload.dosenPengampu || '';
     var jnsUjian = payload['Jenis Ujian'] || payload.jenisUjian || 'UTS Susulan';
     var ket = payload.Keterangan || payload.keterangan || (payload.npm ? ('Peserta: ' + payload.npm) : '');
+    var pendaftarId = payload.pendaftarId || '';
+    if (pendaftarId && ket.indexOf(pendaftarId) === -1) {
+      ket = (ket ? (ket + ' ') : '') + '[ID: ' + pendaftarId + ']';
+    }
 
     var row = [
       newId, tgl, jmMulai, jmSelesai, ruang, kdProdi, nmProdi, sem, kls, matkul, dosen, jnsUjian, ket
     ];
     sheet.appendRow(row);
     SpreadsheetApp.flush();
+
+    // Otomatis ubah Status Jadwal pada sheet Pendaftaran menjadi "Terjadwal"
+    if (pendaftarId) {
+      try {
+        var pSheet = ss.getSheetByName('Pendaftaran');
+        if (pSheet) {
+          var pData = pSheet.getDataRange().getValues();
+          var pHeaderMap = getHeaderIndexMap(pSheet);
+          var colStatusJadwal = pHeaderMap['Status Jadwal'];
+          var colPId = pHeaderMap['ID'] || 1;
+          if (colStatusJadwal) {
+            for (var pIdx = 1; pIdx < pData.length; pIdx++) {
+              if (String(pData[pIdx][colPId - 1]).trim() === String(pendaftarId).trim()) {
+                pSheet.getRange(pIdx + 1, colStatusJadwal).setValue('Terjadwal');
+                break;
+              }
+            }
+          }
+        }
+      } catch (pErr) {
+        Logger.log('Gagal update Status Jadwal Pendaftaran: ' + pErr.message);
+      }
+    }
 
     bumpSyncVersion(payload.actor || 'Admin TU', 'Tambah Jadwal Ujian ' + matkul);
     addActivityLog(payload.actor || 'Admin TU', 'Tambah Jadwal Ujian', newId + ' (' + matkul + ')', 'Penjadwalan ruangan ' + ruang + ' tanggal ' + tgl, 'Admin');
@@ -2940,11 +2967,35 @@ function deleteJadwal(id) {
     var data = sheet.getDataRange().getValues();
     for (var i = 1; i < data.length; i++) {
       if (String(data[i][0]).trim() === String(id).trim()) {
+        // Pulihkan status jadwal di sheet Pendaftaran jika ada referensi ID pendaftar
+        var ket = String(data[i][12] || '');
+        var matchReg = ket.match(/\[ID:\s*(REG-[0-9]+)\]/i);
+        var regId = matchReg ? matchReg[1] : '';
+        if (regId) {
+          try {
+            var pSheet = ss.getSheetByName('Pendaftaran');
+            if (pSheet) {
+              var pData = pSheet.getDataRange().getValues();
+              var pMap = getHeaderIndexMap(pSheet);
+              var colSts = pMap['Status Jadwal'];
+              var colPId = pMap['ID'] || 1;
+              if (colSts) {
+                for (var pi = 1; pi < pData.length; pi++) {
+                  if (String(pData[pi][colPId - 1]).trim() === regId) {
+                    pSheet.getRange(pi + 1, colSts).setValue('Tepat Waktu');
+                    break;
+                  }
+                }
+              }
+            }
+          } catch(e) {}
+        }
+
         sheet.deleteRow(i + 1);
         SpreadsheetApp.flush();
         bumpSyncVersion('Admin', 'Hapus Jadwal ' + id);
         addActivityLog('Admin TU', 'Hapus Jadwal Ujian', id, 'Penghapusan data jadwal ujian dari sistem', 'Admin');
-        return { success: true };
+        return { success: true, message: 'Jadwal ' + id + ' berhasil dihapus.' };
       }
     }
     return { success: false, message: 'Jadwal tidak ditemukan' };

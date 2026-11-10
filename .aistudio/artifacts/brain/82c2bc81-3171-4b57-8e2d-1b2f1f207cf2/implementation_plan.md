@@ -1,61 +1,57 @@
-# Perbaikan Export Excel Database Website & Integrasi Upload Google Drive
+# Penyaringan Otomatis Mahasiswa Terjadwal pada Input Jadwal Ujian
 
-Rencana perbaikan komprehensif untuk memastikan fitur **Export Excel** di menu *Database Website* berfungsi 100% lancar, serta memastikan bukti foto tersimpan rapi sebagai link Google Drive permanen (bukan teks base64) baik pada data baru maupun data lama yang sudah tersimpan di Google Spreadsheet.
+Rencana implementasi untuk memastikan mahasiswa yang berkas pendaftarannya **sudah memiliki jadwal ujian aktif otomatis hilang (terfilter)** dari dropdown *"1. Pilih Data dari Mahasiswa yang Mendaftar \*"* pada modal Jadwal Ujian, serta pembaruan otomatis status jadwal di sistem.
 
 ---
 
 ### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Berdasarkan jawaban klarifikasi yang telah dikonfirmasi oleh pengguna:
-> 1. **Penanganan Bukti Foto di Export Excel**: Tampilkan link URL Google Drive aktif yang dapat diklik langsung, dan bersihkan teks base64 panjang dari baris Excel agar tidak merusak sel dan struktur dokumen.
-> 2. **Penanganan Bukti Foto Base64 Lama di Spreadsheet**: Sediakan tombol konversi otomatis di web (*"Migrasi Bukti Base64 ke Drive"*) untuk memindai baris spreadsheet yang masih berisi teks base64 dan mengunggahnya otomatis ke folder Google Drive *"Berkas Bukti Pendaftaran FEB UIKA"*.
-> 3. **Format Dokumen Unduhan**: File Microsoft Excel `.xlsx` standar dengan fallback otomatis ke format `.xls` (HTML Spreadsheet) atau CSV UTF-8 ber-BOM jika pustaka SheetJS mengalami pembatasan di peramban.
+> Keputusan yang telah dikonfirmasi oleh pengguna melalui klarifikasi:
+> 1. **Kriteria Deteksi "Sudah Terjadwalkan"**: Pendaftaran mahasiswa dideteksi sudah terjadwalkan berdasarkan kecocokan data pendaftaran (Mata Kuliah, Program Studi/Kelas, dan NPM/ID Pendaftar) dengan daftar Jadwal Ujian aktif di memori dan spreadsheet.
+> 2. **Mode Edit Jadwal Tersimpan**: Saat Admin TU mengedit jadwal ujian (`JDW-...`), pendaftar terkait jadwal tersebut tetap dimunculkan di dropdown dan langsung terpilih secara otomatis agar admin dapat melihat dan meninjau mahasiswa peserta ujian tersebut.
+> 3. **Pembaruan Status Jadwal Otomatis**: Saat Admin TU menyimpan jadwal ujian, sistem secara otomatis memperbarui kolom `Status Jadwal` pada berkas pendaftaran mahasiswa terkait menjadi **"Terjadwal"** baik di antarmuka web maupun di Google Spreadsheet.
 
 ---
 
 ### 1. Overview & Core Concept
 
 - **Masalah Saat Ini**:
-  1. Tombol *Export Excel (.xls)* di tab **Database Website** tidak merespons atau gagal mengunduh karena kolom `Bukti Foto` berisi teks raw base64 data URI yang sangat panjang (ratusan ribu karakter), melebihi batas panjang sel Excel (32.767 karakter) serta struktur data objek bersarang (`mataKuliahList`).
-  2. Saat pendaftaran dikirim, beberapa bukti foto masih tersimpan dalam format base64 langsung di sel Google Spreadsheet (kolom O) jika pengunggahan ke Google Drive terhambat atau skrip Google Apps Script (GAS) belum memperbarui penanganan upload.
-  3. Tampilan tabel sheet di tab *Database Website* menampilkan teks panjang base64 mentah yang membuat tata letak baris tidak rapi.
+  Pada modal *"Input Data Jadwal Ujian Baru"*, dropdown *1. Pilih Data dari Mahasiswa yang Mendaftar \** memuat seluruh mahasiswa terdaftar tanpa menyaring apakah mahasiswa tersebut sudah dibuatkan jadwal ujiannya atau belum. Akibatnya, Admin TU dapat kebingungan atau berisiko memasukkan jadwal ujian berulang (duplikat) untuk mata kuliah mahasiswa yang sama.
 - **Solusi yang Diterapkan**:
-  1. **Sanitasi Data & Dual-Engine Export Excel**: Fungsi `exportActiveSheetExcel()` menyaring setiap baris tabel, membersihkan teks base64 menjadi label ringkas atau URL Google Drive asli, menghapus properti objek kompleks, serta dilengkapi mekanisme `try...catch` berlapis dengan fallback `.xlsx` dan `.xls`.
-  2. **Tampilan Tabel Database Website Rapi**: Kolom *Bukti Foto* pada tabel *Database Website* tidak lagi menampilkan teks mentah base64; jika sudah berupa link Drive ditampilkan tombol link tautan, jika masih base64 ditampilkan tombol pratinjau modal *Lihat Bukti Foto*.
-  3. **Fitur Migrasi Base64 ke Drive**: Menambahkan fungsi backend `migrateBase64ToDrive()` di Google Apps Script dan tombol antarmuka di web untuk memproses data foto lama di spreadsheet menjadi link Google Drive resmi dalam 1 kali klik.
-  4. **Pembaruan Skrip GAS (Code.gs & Setup.gs)**: Memastikan fungsi `addPendaftaran` dan `updatePendaftaran` memvalidasi pengunggahan ke folder Google Drive *"Berkas Bukti Pendaftaran FEB UIKA"* dan tidak pernah memasukkan teks base64 mentah ke sel spreadsheet.
+  1. **Smart Filtering pada Dropdown**: Saat modal jadwal dibuka, sistem membandingkan daftar `appData.pendaftaran` dengan `appData.jadwal`. Berkas pendaftaran yang sudah memiliki jadwal ujian aktif otomatis dikeluarkan dari pilihan dropdown.
+  2. **Preservasi Saat Mode Edit**: Jika Admin mengklik *"Edit"* pada salah satu jadwal yang sudah ada, mahasiswa terkait jadwal tersebut tetap dimasukkan ke dalam dropdown dan otomatis terseleksi (`selected`).
+  3. **Auto-Update Status Jadwal**: Saat jadwal berhasil disimpan (`addJadwal`), status jadwal pada sheet `Pendaftaran` dan data memori lokal langsung diperbarui menjadi `"Terjadwal"`. Jika suatu jadwal ujian dihapus (`deleteJadwal`), status pada pendaftaran terkait dikembalikan menjadi belum terjadwal (`"Tepat Waktu"`).
+  4. **Indikator Visual & UX Bersih**: Jika seluruh pendaftar telah berhasil dijadwalkan, dropdown menampilkan keterangan ramah: *"-- Semua Mahasiswa Terdaftar Sudah Terjadwalkan --"* dan tombol simpan terproteksi dari input kosong.
 
 ---
 
 ### 2. User Experience & Visual Design
 
-#### A. Toolbar Database Website yang Disempurnakan
-- Di samping tombol **Export Excel (.xlsx)** dan rumus kalkulasi `fx =SUM(Nominal)`, ditambahkan tombol aksi praktis untuk Master Admin:
-  - **Export Excel (.xlsx / .xls)**: Tombol warna emerald dengan status loading spinner saat proses ekspor berlangsung.
-  - **Migrasi Bukti Base64 ke Drive**: Tombol warna amber dengan ikon Google Drive (`fa-google-drive`) yang hanya muncul saat melihat sheet *Data Pendaftaran*, memungkinkan verifikator mengonversi bukti pendaftaran lama dengan indikator progres SweetAlert interaktif.
-
-#### B. Visualisasi Kolom "Bukti Foto" di Tabel Sheet
-- **Jika berisi URL Google Drive**: Ditampilkan badge biru bernavigasi aman `<a href="..." target="_blank">` dengan ikon eksternal: `Buka Berkas Drive`.
-- **Jika berisi Data Base64**: Ditampilkan tombol ringkas `<button>`: `Lihat Foto (Base64)` yang membuka pratinjau modal pop-up visual, tanpa mencemari tampilan tabel dengan ratusan ribu teks string.
-
-#### C. Alur Notifikasi Export & Migrasi
-- Export berhasil: SweetAlert hijau menampilkan jumlah baris dan nama file yang diunduh (`Pendaftaran_FEB_UIKA_YYYY-MM-DD.xlsx`).
-- Migrasi selesai: SweetAlert menginformasikan jumlah baris bukti foto yang berhasil diunggah ke Google Drive beserta tautan foldernya.
+#### A. Tampilan Dropdown Modal Jadwal Ujian Baru
+- **Kondisi Ada Mahasiswa Belum Terjadwalkan**:
+  - Pilihan placeholder: `-- Pilih Mahasiswa Terdaftar (Disetujui / Pending) [Sisa: X Mahasiswa] --`
+  - Daftar hanya berisi mahasiswa yang belum memiliki jadwal ujian aktif.
+  - Ditambahkan keterangan status kecil di bawah label:
+    `<span class="text-[11px] text-emerald-700 font-semibold"><i class="fas fa-filter mr-1"></i>Mahasiswa yang sudah terjadwal otomatis disaring</span>`
+- **Kondisi Semua Mahasiswa Sudah Terjadwalkan**:
+  - Placeholder: `-- Semua Mahasiswa Terdaftar Sudah Terjadwalkan (0 Menunggu) --`
+  - Dropdown dinonaktifkan (`disabled`) dengan pesan konfirmasi bahwa seluruh pendaftar telah memiliki jadwal ujian resmi.
+- **Kondisi Edit Jadwal Ujian**:
+  - Dropdown tetap memuat mahasiswa yang dijadwalkan pada entri jadwal tersebut, ditandai dengan badge atau teks `[Jadwal Aktif Ini]`.
 
 ---
 
 ### 3. Key Product Decisions & Trade-Offs
 
-- **Sanitasi Kolom Sebelum Pembuatan Spreadsheet**:
-  - *Keputusan*: Memetakan (mapping) data sheet sebelum diserahkan ke pustaka SheetJS, mengganti teks base64 panjang dengan link URL aktif Google Drive atau string informatif `[Berkas Bukti Tersimpan di Sistem]`.
-  - *Alasan*: Menghindari crash memori pada SheetJS dan mengatasi limitasi 32.767 karakter per sel pada aplikasi Microsoft Excel desktop maupun mobile.
-- **Dual-Engine Export (SheetJS + HTML Table Blob)**:
-  - *Keputusan*: Memprioritaskan `XLSX.writeFile(wb, fileName)` untuk format modern `.xlsx`. Jika browser memblokir atau pustaka gagal, sistem secara otomatis mengekspor via format XML/HTML Spreadsheet (`.xls`) dengan encoding UTF-8.
-  - *Alasan*: Menjamin 100% tombol selalu menghasilkan file unduhan tanpa pernah macet atau tidak bereaksi.
-- **Pembersihan Server-Side di Google Spreadsheet**:
-  - *Keputusan*: Menyediakan skrip migrasi GAS yang membaca kolom *Bukti Foto*, mendekode base64, menyimpannya ke folder Google Drive target, dan menimpa sel spreadsheet dengan URL Drive publik.
-  - *Alasan*: Menjaga ukuran spreadsheet tetap kecil (bebas dari kuota 10 juta sel / ukuran byte berlebih) dan memastikan tautan dapat diakses oleh tim akademik.
+- **Logika Pencocokan Ganda (ID Pendaftar & Mata Kuliah)**:
+  - *Pendekatan*: Pendaftaran dicocokkan melalui dua lapis:
+    1. Relasi eksplisit `pendaftarId` atau `Keterangan` yang memuat ID pendaftaran / NPM.
+    2. Pencocokan prodi + mata kuliah + kelas untuk menjaga konsistensi data lama.
+  - *Alasan*: Menjamin akurasi 100% sehingga tidak ada mahasiswa yang sudah dijadwalkan muncul kembali secara keliru.
+- **Pembaruan Status Jadwal Real-time**:
+  - *Pendekatan*: Selain memutakhirkan Google Spreadsheet melalui backend GAS `addJadwal`, frontend juga langsung melakukan pembaruan lokal (*optimistic UI update*) ke objek `appData.pendaftaran`.
+  - *Alasan*: Transisi instan (0 detik) tanpa perlu menunggu putaran penuh network request.
 
 ---
 
@@ -63,49 +59,36 @@ Rencana perbaikan komprehensif untuk memastikan fitur **Export Excel** di menu *
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        ANTARMUKA WEB (FRONTEND)                        │
+│                      MODAL JADWAL UJIAN (FRONTEND)                     │
 ├────────────────────────────────────────────────────────────────────────┤
-│  [Database Website Tab]                                               │
-│   ├── Pilihan Sheet: Data Pendaftaran, Jadwal Ujian, Master Data...    │
-│   ├── Tabel Spreadsheet Interaktif (Pratinjau Foto Rapi, Bukan Base64) │
-│   ├── Tombol [Export Excel (.xlsx / .xls)]                             │
-│   │     └── exportActiveSheetExcel() -> Sanitasi Kolom -> SheetJS/XLS  │
-│   └── Tombol [Migrasi Bukti Base64 ke Drive]                          │
-│         └── migrateBase64ToDrive() -> callGasApi / google.script.run   │
+│  openJadwalModal(realId)                                               │
+│   ├── Ambil appData.pendaftaran & appData.jadwal                        │
+│   ├── Identifikasi pendaftaran yang sudah memiliki jadwal aktif         │
+│   │     (Pengecualian: Jadwal yang sedang diedit realId tetap lolos)   │
+│   ├── Filter list pendaftar: Exclude yang sudah terjadwalkan           │
+│   └── Render opsi <option> ke #jadwalSelectPendaftar                   │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
-                                    ▼ HTTP POST / Runner
+                                    ▼ Simpan Jadwal
 ┌────────────────────────────────────────────────────────────────────────┐
-│                   BACKEND GOOGLE APPS SCRIPT (GAS)                     │
+│                   HANDLE SAVE & UPDATE STATUS JADWAL                   │
 ├────────────────────────────────────────────────────────────────────────┤
-│  [Code.gs & Setup.gs]                                                  │
-│   ├── uploadBuktiToDrive(base64, name, mime, npm, regId)               │
-│   │     └── Folder: "Berkas Bukti Pendaftaran FEB UIKA"               │
-│   │     └── Return: driveFile.getUrl()                                 │
-│   ├── addPendaftaran(payload) / updatePendaftaran(payload)             │
-│   │     └── Validasi ketat: Selalu simpan URL Drive, jangan raw base64 │
-│   └── migrateBase64ToDrive()                                           │
-│         └── Scan baris sheet Pendaftaran -> Konversi sel base64        │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                  GOOGLE DRIVE & SPREADSHEET STORAGE                    │
-├────────────────────────────────────────────────────────────────────────┤
-│   ├── Google Drive Folder: "Berkas Bukti Pendaftaran FEB UIKA"         │
-│   │     └── File: NPM_REG_TIMESTAMP_Bukti.jpg / .png / .pdf            │
-│   └── Google Spreadsheet: "Pendaftaran UTS/UAS Susulan & Remedial"     │
-│         └── Kolom O "Bukti Foto": Berisi link URL Google Drive bersih  │
+│  handleSaveJadwal()                                                    │
+│   ├── Kirim payload ke addJadwal / updateJadwal                        │
+│   ├── Backend GAS: Update sheet Jadwal_Ujian                           │
+│   ├── Backend GAS: Update kolom "Status Jadwal" di sheet Pendaftaran    │
+│   │     menjadi "Terjadwal"                                            │
+│   └── Frontend: Update optimis appData.pendaftaran[].StatusJadwal      │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
 #### Komponen yang Diperbarui:
 1. `index.html`:
-   - Fungsi `exportActiveSheetExcel()`: Pembersihan base64, flattening objek, perbaikan dual-engine export (`.xlsx` dan `.xls`), penambahan error handling lengkap.
-   - Fungsi `renderSpreadsheetWorkbook()`: Perbaikan perenderan kolom *Bukti Foto* (link Drive atau tombol modal preview, bukan string base64 mentah).
-   - Tombol dan fungsi `triggerMigrateBase64ToDrive()` dengan dialog konfirmasi SweetAlert.
-2. `public/gas/Code.gs` & `public/gas/Setup.gs`:
-   - Penambahan fungsi `migrateBase64ToDrive()` untuk mengeksekusi konversi data lama di Google Spreadsheet secara massal.
-   - Penyempurnaan `addPendaftaran` dan `updatePendaftaran` agar jika proses upload Drive menemui kendala, error dilaporkan secara transparan dan sel spreadsheet tidak dicemari teks base64.
-3. Sinkronisasi repositori file:
+   - Fungsi `openJadwalModal(id)`: Penerapan filter penyaringan pendaftar yang belum terjadwal.
+   - Fungsi `handleSaveJadwal(e)`: Pengiriman `pendaftarId` dan pembaruan optimis `Status Jadwal = 'Terjadwal'`.
+   - Fungsi `deleteJadwalItem(id)`: Pemulihan `Status Jadwal` pada pendaftar terkait saat jadwal dihapus.
+2. `public/gas/Code.gs`:
+   - Fungsi `addJadwal(payload)`: Pembaruan baris sheet `Pendaftaran` terkait menjadi `"Terjadwal"`.
+   - Fungsi `deleteJadwal(id)`: Pemulihan status pendaftaran jika jadwal dibatalkan/dihapus.
+3. Sinkronisasi file repositori:
    - Menyalin pembaruan ke `public/hostinger/index.html` dan `public/gas/Index.html`.
