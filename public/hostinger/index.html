@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
+  <script type="module" src="/@vite/client"></script>
+
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Pendaftaran & Reporting Akademik - FEB UIKA Bogor</title>
@@ -159,64 +161,57 @@
             };
             appData.pendaftaran.unshift(newRec);
           } else {
-            const item = appData.pendaftaran.find(d => String(d.ID || d.id) === String(payload.id));
-            if (item) {
-              if (payload.mataKuliah) item['Mata Kuliah'] = payload.mataKuliah;
-              if (payload.dosenPengampu) item['Dosen Pengampu'] = payload.dosenPengampu;
-              if (payload.mataKuliahList) item.mataKuliahList = payload.mataKuliahList;
-              if (payload.nominal !== undefined) item.Nominal = payload.nominal;
-              if (payload.statusPersetujuan) item['Status Persetujuan'] = payload.statusPersetujuan;
-              if (payload.statusJadwal) item['Status Jadwal'] = payload.statusJadwal;
-              if (payload.alasan) item.Alasan = payload.alasan;
+            const idx = appData.pendaftaran.findIndex(p => String(p.ID || p.id) === String(payload.id));
+            if (idx !== -1) {
+              appData.pendaftaran[idx] = Object.assign({}, appData.pendaftaran[idx], payload);
             }
           }
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
-        if (onSuccess) onSuccess({ success: true, message: 'Data pendaftaran tersimpan di sistem lokal.' });
+        if (onSuccess) onSuccess({ success: true, message: 'Data pendaftaran tersimpan di memori lokal.' });
         return;
       }
 
-      // 4. Tambah / Update Jadwal Ujian
+      // 4. Tambah / Update Jadwal
       if (action === "addJadwal" || action === "updateJadwal") {
         const payload = args && args[0];
         if (payload) {
           appData.jadwal = appData.jadwal || [];
           if (!payload.id) {
-            const newId = 'JAD-' + (1000 + (appData.jadwal.length + 1));
+            const newId = 'JADWAL-' + (100 + (appData.jadwal.length + 1));
             const newJadwal = {
               ID: newId,
-              pendaftaranId: payload.pendaftaranId,
-              npm: payload.npm,
-              nama: payload.nama,
-              prodi: payload.prodi,
-              kelas: payload.kelas,
-              kategoriKelas: payload.kategoriKelas,
-              matkul: payload.matkul,
-              dosen: payload.dosen,
-              jenisUjian: payload.jenisUjian,
-              tanggalUjian: payload.tanggalUjian,
-              jamMulai: payload.jamMulai,
-              jamSelesai: payload.jamSelesai,
-              ruangan: payload.ruangan,
-              catatan: payload.catatan || '',
-              statusJadwal: 'Terjadwal'
+              id: newId,
+              pendaftaranId: payload.pendaftaranId || '',
+              NPM: payload.npm || '',
+              'Nama Mahasiswa': payload.namaMahasiswa || '',
+              'Program Studi': payload.prodi || '',
+              'Kode Prodi': payload.kodeProdi || '',
+              'Mata Kuliah': payload.mataKuliah || '',
+              'Dosen Pengampu': payload.dosenPengampu || '',
+              'Jenis Ujian': payload.jenisUjian || '',
+              'Tanggal Ujian': payload.tanggalUjian || '',
+              'Jam Mulai': payload.jamMulai || '',
+              'Jam Selesai': payload.jamSelesai || '',
+              'Ruangan Ujian': payload.ruangan || '',
+              'Catatan Ruangan': payload.tataTertib || ''
             };
             appData.jadwal.unshift(newJadwal);
           } else {
             const idx = appData.jadwal.findIndex(j => String(j.ID || j.id) === String(payload.id));
-            if (idx >= 0) {
+            if (idx !== -1) {
               appData.jadwal[idx] = Object.assign({}, appData.jadwal[idx], payload);
             }
           }
+
+          // Sinkronkan status jadwal pendaftar jadi 'Terjadwal'
           if (payload.pendaftaranId && Array.isArray(appData.pendaftaran)) {
             const p = appData.pendaftaran.find(item => String(item.ID || item.id) === String(payload.pendaftaranId));
-            if (p) {
-              p['Status Jadwal'] = 'Terjadwal';
-            }
+            if (p) p['Status Jadwal'] = 'Terjadwal';
           }
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
-        if (onSuccess) onSuccess({ success: true, message: 'Jadwal ujian berhasil disimpan di sistem lokal.' });
+        if (onSuccess) onSuccess({ success: true, message: 'Jadwal ujian berhasil disimpan di memori lokal.' });
         return;
       }
 
@@ -383,7 +378,7 @@
       }
     }
   </style>
-</head>
+<script src="/_aistudio-iframe.js?v=1f94f900"></script></head>
 <body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased">
 
   <!-- LOGIN CONTAINER -->
@@ -423,29 +418,6 @@
           <span>Masuk Sistem</span>
           <i class="fas fa-arrow-right text-xs"></i>
         </button>
-
-        <!-- Akses Cepat Demo Multi-Role -->
-        <div class="pt-2 border-t border-slate-200 space-y-1.5">
-          <p class="text-[11px] font-semibold text-slate-500">Klik Cepat Akun Demo Resmi (Sheet User_Staff & User_Mahasiswa):</p>
-          <div class="grid grid-cols-2 gap-2 text-xs">
-            <button type="button" onclick="fillQuickLogin('aldiaz', 'q007121997')" class="p-2 rounded-lg border border-slate-200 hover:border-blue-900 hover:bg-blue-50/50 text-left transition">
-              <div class="font-bold text-slate-800">Master Admin</div>
-              <div class="text-[10px] text-slate-500 font-mono">aldiaz · q007121997</div>
-            </button>
-            <button type="button" onclick="fillQuickLogin('410100612', '123456')" class="p-2 rounded-lg border border-slate-200 hover:border-blue-900 hover:bg-blue-50/50 text-left transition">
-              <div class="font-bold text-slate-800">Admin TU</div>
-              <div class="text-[10px] text-slate-500 font-mono">NIK: 410100612 · 123456</div>
-            </button>
-            <button type="button" onclick="fillQuickLogin('dekan', 'dekan123')" class="p-2 rounded-lg border border-slate-200 hover:border-blue-900 hover:bg-blue-50/50 text-left transition">
-              <div class="font-bold text-slate-800">Dekan FEB</div>
-              <div class="text-[10px] text-slate-500 font-mono">dekan · dekan123</div>
-            </button>
-            <button type="button" onclick="fillQuickLogin('2311010012', '123456')" class="p-2 rounded-lg border border-slate-200 hover:border-blue-900 hover:bg-blue-50/50 text-left transition">
-              <div class="font-bold text-slate-800">Mahasiswa</div>
-              <div class="text-[10px] text-slate-500 font-mono">2311010012 · 123456</div>
-            </button>
-          </div>
-        </div>
       </form>
     </div>
   </div>

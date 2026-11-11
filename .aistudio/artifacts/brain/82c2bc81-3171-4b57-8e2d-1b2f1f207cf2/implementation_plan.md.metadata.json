@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana implementasi perbaikan agar pendaftaran mahasiswa langsung tampil di tabel Riwayat Pendaftaran setelah submit, menggunakan pencocokan ganda NPM/Nama Mahasiswa, pembaruan instan (optimistic UI), sinkronisasi spreadsheet di latar belakang, dan normalisasi ID filter tabel.",
-  "updatedAt":  "2026-11-11T08:39:13.748125630Z",
+  "summary":  "Rencana penghapusan elemen antarmuka Klik Cepat Akun Demo Resmi dari form login utama pada file index.html, public/hostinger/index.html, dan public/gas/Index.html agar tampilan login bersih dan siap untuk lingkungan produksi.",
+  "updatedAt":  "2026-11-11T09:27:42.521655598Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
