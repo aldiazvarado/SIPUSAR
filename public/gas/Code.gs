@@ -1049,14 +1049,33 @@ function getInitialData(userRole, username, userProdi) {
     }
     
     // Menu 1: Riwayat Pendaftaran Mahasiswa
-    // - Role Mahasiswa: Filter otomatis hanya data miliknya sendiri berdasarkan NPM atau ID User login
+    // - Role Mahasiswa: Filter otomatis data miliknya sendiri berdasarkan NPM, NIM, Nama Mahasiswa, atau Username login
     // - Role Staff / Manajemen: Melihat seluruh data pendaftaran semua prodi
     if (userRole === 'Mahasiswa') {
       var cleanUser = String(username || '').trim().toLowerCase();
+      var studentNpm = cleanUser;
+      var studentName = '';
+      if (mhsList && mhsList.length) {
+        var matchedMhs = mhsList.find(function(m) {
+          var mUser = String(m.Username || '').trim().toLowerCase();
+          var mNpm = String(m.NPM || m.NIM || '').trim().toLowerCase();
+          var mNama = String(m['Nama Lengkap'] || '').trim().toLowerCase();
+          return mUser === cleanUser || mNpm === cleanUser || mNama === cleanUser;
+        });
+        if (matchedMhs) {
+          studentNpm = String(matchedMhs.NPM || matchedMhs.NIM || cleanUser).trim().toLowerCase();
+          studentName = String(matchedMhs['Nama Lengkap'] || '').trim().toLowerCase();
+        }
+      }
       pendaftaran = pendaftaran.filter(function(item) {
         var npm = String(item.NPM || item.NIM || '').trim().toLowerCase();
         var id = String(item.ID || '').trim().toLowerCase();
-        return npm === cleanUser || id === cleanUser;
+        var namaMhs = String(item['Nama Mahasiswa'] || item.nama || '').trim().toLowerCase();
+        var isNpmMatch = (studentNpm && npm === studentNpm) || (cleanUser && npm === cleanUser);
+        var isIdMatch = cleanUser && id === cleanUser;
+        var isNameMatch = (studentName && (namaMhs === studentName || namaMhs.indexOf(studentName) !== -1 || studentName.indexOf(namaMhs) !== -1)) ||
+                          (cleanUser && (namaMhs === cleanUser || namaMhs.indexOf(cleanUser) !== -1));
+        return Boolean(isNpmMatch || isIdMatch || isNameMatch);
       });
     }
 
@@ -1547,7 +1566,7 @@ function addPendaftaran(payload) {
     SpreadsheetApp.flush();
     bumpSyncVersion(payload.namaMahasiswa, 'Pendaftaran baru ' + newId);
     addActivityLog(payload.namaMahasiswa || 'Mahasiswa', 'Tambah Pendaftaran', newId + ' (' + (payload.namaMahasiswa || '') + ')', 'Pengajuan berkas pendaftaran ' + (payload.jenisLayanan || ''), 'Mahasiswa');
-    return { success: true, message: 'Pendaftaran berhasil disimpan dengan Kode: ' + newId };
+    return { success: true, id: newId, message: 'Pendaftaran berhasil disimpan dengan Kode: ' + newId };
   } catch (err) {
     return { success: false, message: err.message };
   } finally {

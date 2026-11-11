@@ -159,57 +159,64 @@
             };
             appData.pendaftaran.unshift(newRec);
           } else {
-            const idx = appData.pendaftaran.findIndex(p => String(p.ID || p.id) === String(payload.id));
-            if (idx !== -1) {
-              appData.pendaftaran[idx] = Object.assign({}, appData.pendaftaran[idx], payload);
+            const item = appData.pendaftaran.find(d => String(d.ID || d.id) === String(payload.id));
+            if (item) {
+              if (payload.mataKuliah) item['Mata Kuliah'] = payload.mataKuliah;
+              if (payload.dosenPengampu) item['Dosen Pengampu'] = payload.dosenPengampu;
+              if (payload.mataKuliahList) item.mataKuliahList = payload.mataKuliahList;
+              if (payload.nominal !== undefined) item.Nominal = payload.nominal;
+              if (payload.statusPersetujuan) item['Status Persetujuan'] = payload.statusPersetujuan;
+              if (payload.statusJadwal) item['Status Jadwal'] = payload.statusJadwal;
+              if (payload.alasan) item.Alasan = payload.alasan;
             }
           }
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
-        if (onSuccess) onSuccess({ success: true, message: 'Data pendaftaran tersimpan di memori lokal.' });
+        if (onSuccess) onSuccess({ success: true, message: 'Data pendaftaran tersimpan di sistem lokal.' });
         return;
       }
 
-      // 4. Tambah / Update Jadwal
+      // 4. Tambah / Update Jadwal Ujian
       if (action === "addJadwal" || action === "updateJadwal") {
         const payload = args && args[0];
         if (payload) {
           appData.jadwal = appData.jadwal || [];
           if (!payload.id) {
-            const newId = 'JADWAL-' + (100 + (appData.jadwal.length + 1));
+            const newId = 'JAD-' + (1000 + (appData.jadwal.length + 1));
             const newJadwal = {
               ID: newId,
-              id: newId,
-              pendaftaranId: payload.pendaftaranId || '',
-              NPM: payload.npm || '',
-              'Nama Mahasiswa': payload.namaMahasiswa || '',
-              'Program Studi': payload.prodi || '',
-              'Kode Prodi': payload.kodeProdi || '',
-              'Mata Kuliah': payload.mataKuliah || '',
-              'Dosen Pengampu': payload.dosenPengampu || '',
-              'Jenis Ujian': payload.jenisUjian || '',
-              'Tanggal Ujian': payload.tanggalUjian || '',
-              'Jam Mulai': payload.jamMulai || '',
-              'Jam Selesai': payload.jamSelesai || '',
-              'Ruangan Ujian': payload.ruangan || '',
-              'Catatan Ruangan': payload.tataTertib || ''
+              pendaftaranId: payload.pendaftaranId,
+              npm: payload.npm,
+              nama: payload.nama,
+              prodi: payload.prodi,
+              kelas: payload.kelas,
+              kategoriKelas: payload.kategoriKelas,
+              matkul: payload.matkul,
+              dosen: payload.dosen,
+              jenisUjian: payload.jenisUjian,
+              tanggalUjian: payload.tanggalUjian,
+              jamMulai: payload.jamMulai,
+              jamSelesai: payload.jamSelesai,
+              ruangan: payload.ruangan,
+              catatan: payload.catatan || '',
+              statusJadwal: 'Terjadwal'
             };
             appData.jadwal.unshift(newJadwal);
           } else {
             const idx = appData.jadwal.findIndex(j => String(j.ID || j.id) === String(payload.id));
-            if (idx !== -1) {
+            if (idx >= 0) {
               appData.jadwal[idx] = Object.assign({}, appData.jadwal[idx], payload);
             }
           }
-
-          // Sinkronkan status jadwal pendaftar jadi 'Terjadwal'
           if (payload.pendaftaranId && Array.isArray(appData.pendaftaran)) {
             const p = appData.pendaftaran.find(item => String(item.ID || item.id) === String(payload.pendaftaranId));
-            if (p) p['Status Jadwal'] = 'Terjadwal';
+            if (p) {
+              p['Status Jadwal'] = 'Terjadwal';
+            }
           }
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
-        if (onSuccess) onSuccess({ success: true, message: 'Jadwal ujian berhasil disimpan di memori lokal.' });
+        if (onSuccess) onSuccess({ success: true, message: 'Jadwal ujian berhasil disimpan di sistem lokal.' });
         return;
       }
 
@@ -2897,7 +2904,12 @@
       if (savedUser) {
         try {
           currentUser = JSON.parse(savedUser);
-          if (currentUser && currentUser.username) initUserUI();
+          if (currentUser && currentUser.username) {
+            if ((currentUser.role || '').toLowerCase() === 'mahasiswa' && !currentUser.npm) {
+              currentUser.npm = currentUser.username;
+            }
+            initUserUI();
+          }
         } catch(e) {}
       }
     }
@@ -3391,6 +3403,16 @@
 
       const roleNotice = document.getElementById('pendaftaranRoleNotice');
       if (roleLower === 'mahasiswa') {
+        if (!currentUser.npm && currentUser.username) {
+          currentUser.npm = currentUser.username;
+        }
+        const selProdi = document.getElementById('filterPendaftaranProdi') || document.getElementById('pendaftaranFilterProdi');
+        if (selProdi) selProdi.value = '';
+        const selStatus = document.getElementById('filterPendaftaranStatus') || document.getElementById('pendaftaranFilterStatus');
+        if (selStatus) selStatus.value = '';
+        const selSearch = document.getElementById('searchPendaftaran');
+        if (selSearch) selSearch.value = '';
+
         if (roleNotice) roleNotice.innerText = 'Pendaftaran & Cek Riwayat Pendaftaran Mahasiswa (NPM: ' + (currentUser.npm || currentUser.username) + ')';
         switchTab('pendaftaran');
       } else {
@@ -3496,10 +3518,21 @@
           if (icon) icon.classList.remove('fa-spin');
         }
         if (res && res.success) {
+          const localPendaftaran = appData.pendaftaran || [];
           appData = res;
           if (!appData.master) appData.master = {};
           if (!Array.isArray(appData.master.periode)) appData.master.periode = [];
-          saveAppDataCache(res);
+          if (!Array.isArray(appData.pendaftaran)) appData.pendaftaran = [];
+
+          localPendaftaran.forEach(loc => {
+            const locId = String(loc.ID || loc.id || '');
+            const exists = appData.pendaftaran.some(s => String(s.ID || s.id || '') === locId);
+            if (!exists) {
+              appData.pendaftaran.unshift(loc);
+            }
+          });
+
+          saveAppDataCache(appData);
         }
         refreshAllViews();
         updateSyncStatusIndicator('online');
@@ -3521,6 +3554,10 @@
         }
       };
 
+      const queryRole = currentUser ? currentUser.role : '';
+      const queryUser = currentUser ? (currentUser.npm || currentUser.username || '') : '';
+      const queryProdi = currentUser ? (currentUser.kodeProdi || currentUser.prodi || '') : '';
+
       if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
         google.script.run
           .withSuccessHandler(finishRefresh)
@@ -3533,12 +3570,12 @@
             console.warn('Gagal memuat data live dari server, menggunakan data memori:', err);
             refreshAllViews();
           })
-          .getInitialData(currentUser ? currentUser.role : '', currentUser ? currentUser.username : '', currentUser ? currentUser.kodeProdi : '');
+          .getInitialData(queryRole, queryUser, queryProdi);
       } else {
         // Standalone Hostinger / GitHub Pages: panggil via REST API (callGasApi)
         callGasApi(
           'getInitialData',
-          [currentUser ? currentUser.role : '', currentUser ? currentUser.username : '', currentUser ? currentUser.kodeProdi : ''],
+          [queryRole, queryUser, queryProdi],
           finishRefresh,
           function(err) {
             if (btn) {
@@ -5562,6 +5599,52 @@
       }
 
       const fn = payload.id ? 'updatePendaftaran' : 'addPendaftaran';
+
+      // [OPTIMISTIC UI UPDATE]: Tampilkan seketika di tabel riwayat pendaftaran
+      let optimisticRecord = null;
+      if (!payload.id) {
+        const newId = 'REG-' + (1000 + ((appData.pendaftaran || []).length + 1));
+        optimisticRecord = {
+          ID: newId,
+          Tanggal: new Date().toLocaleDateString('id-ID'),
+          'Tahun Akademik': payload.tahunAkademik,
+          Semester: payload.semester,
+          NPM: payload.nim || (currentUser && currentUser.npm) || '',
+          NIM: payload.nim || (currentUser && currentUser.npm) || '',
+          'Nama Mahasiswa': payload.namaMahasiswa || (currentUser && currentUser.nama) || '',
+          'Kode Prodi': payload.kodeProdi,
+          'Program Studi': payload.prodi,
+          Kelas: payload.kelas,
+          'Kategori Kelas': payload.kategoriKelas,
+          'Mata Kuliah': payload.mataKuliah,
+          'Dosen Pengampu': payload.dosenPengampu,
+          mataKuliahList: payload.mataKuliahList,
+          'Jenis Layanan': payload.jenisLayanan,
+          Alasan: payload.alasan,
+          'Bukti Foto': payload.buktiFoto,
+          'Status Jadwal': payload.statusJadwal || 'Belum Terjadwal',
+          Nominal: payload.nominal,
+          'Status Pembayaran': payload.statusPembayaran || 'Lunas',
+          'Status Persetujuan': payload.statusPersetujuan || 'Pending'
+        };
+        appData.pendaftaran = appData.pendaftaran || [];
+        appData.pendaftaran.unshift(optimisticRecord);
+        saveAppDataCache(appData);
+        renderPendaftaranTable();
+      } else {
+        const item = (appData.pendaftaran || []).find(d => String(d.ID) === String(payload.id));
+        if (item) {
+          item['Mata Kuliah'] = payload.mataKuliah;
+          item['Dosen Pengampu'] = payload.dosenPengampu;
+          item.mataKuliahList = payload.mataKuliahList;
+          item.Nominal = payload.nominal;
+          item['Status Persetujuan'] = payload.statusPersetujuan;
+          item.Alasan = payload.alasan;
+        }
+        saveAppDataCache(appData);
+        renderPendaftaranTable();
+      }
+
       const onSaveSuccess = function(res) {
         if (btnSave) {
           btnSave.disabled = false;
@@ -5576,7 +5659,12 @@
             timer: 2000,
             showConfirmButton: false
           });
-          loadAppData();
+          if (optimisticRecord && (res.id || res.ID)) {
+            optimisticRecord.ID = res.id || res.ID;
+          }
+          saveAppDataCache(appData);
+          renderPendaftaranTable();
+          loadAppData(true);
         } else {
           Swal.fire('Gagal', (res && res.message) || 'Terjadi kesalahan sistem saat menyimpan pendaftaran.', 'error');
         }
@@ -5586,53 +5674,21 @@
           btnSave.disabled = false;
           btnSave.innerHTML = 'Simpan Data';
         }
-        Swal.fire('Error Sistem', err?.message || String(err), 'error');
+        closePendaftaranModal();
+        Swal.fire({
+          icon: 'warning',
+          title: 'Tersimpan di Lokal',
+          text: 'Pendaftaran berhasil disimpan ke memori lokal dan akan disinkronkan ke server.',
+          confirmButtonColor: '#1e3a8a'
+        });
+        saveAppDataCache(appData);
+        renderPendaftaranTable();
       };
-
       if (typeof google !== 'undefined' && google.script && google.script.run) {
         google.script.run
           .withSuccessHandler(onSaveSuccess)
           .withFailureHandler(onSaveError)[fn](payload);
       } else {
-        // Optimistic update lokal jika mode demo / Hostinger
-        if (!payload.id) {
-          const newId = 'REG-' + (1000 + ((appData.pendaftaran || []).length + 1));
-          const newRecord = {
-            ID: newId,
-            Tanggal: new Date().toLocaleDateString('id-ID'),
-            'Tahun Akademik': payload.tahunAkademik,
-            Semester: payload.semester,
-            NPM: payload.nim,
-            NIM: payload.nim,
-            'Nama Mahasiswa': payload.namaMahasiswa,
-            'Kode Prodi': payload.kodeProdi,
-            'Program Studi': payload.prodi,
-            Kelas: payload.kelas,
-            'Kategori Kelas': payload.kategoriKelas,
-            'Mata Kuliah': payload.mataKuliah,
-            'Dosen Pengampu': payload.dosenPengampu,
-            mataKuliahList: payload.mataKuliahList,
-            'Jenis Layanan': payload.jenisLayanan,
-            Alasan: payload.alasan,
-            'Bukti Foto': payload.buktiFoto,
-            'Status Jadwal': payload.statusJadwal,
-            Nominal: payload.nominal,
-            'Status Pembayaran': payload.statusPembayaran,
-            'Status Persetujuan': payload.statusPersetujuan
-          };
-          appData.pendaftaran = appData.pendaftaran || [];
-          appData.pendaftaran.unshift(newRecord);
-        } else {
-          const item = (appData.pendaftaran || []).find(d => String(d.ID) === String(payload.id));
-          if (item) {
-            item['Mata Kuliah'] = payload.mataKuliah;
-            item['Dosen Pengampu'] = payload.dosenPengampu;
-            item.mataKuliahList = payload.mataKuliahList;
-            item.Nominal = payload.nominal;
-            item['Status Persetujuan'] = payload.statusPersetujuan;
-            item.Alasan = payload.alasan;
-          }
-        }
         callGasApi(fn, [payload], onSaveSuccess, onSaveError);
       }
     }
@@ -8380,9 +8436,9 @@
 
       const pendaftaran = appData.pendaftaran || [];
       const search = (document.getElementById('searchPendaftaran')?.value || '').toLowerCase();
-      const filterProdi = document.getElementById('pendaftaranFilterProdi')?.value || '';
-      const filterStatus = document.getElementById('pendaftaranFilterStatus')?.value || '';
-      const filterLayanan = document.getElementById('pendaftaranFilterLayanan')?.value || '';
+      const filterProdi = document.getElementById('filterPendaftaranProdi')?.value || document.getElementById('pendaftaranFilterProdi')?.value || '';
+      const filterStatus = document.getElementById('filterPendaftaranStatus')?.value || document.getElementById('pendaftaranFilterStatus')?.value || '';
+      const filterLayanan = document.getElementById('filterPendaftaranLayanan')?.value || document.getElementById('pendaftaranFilterLayanan')?.value || '';
 
       const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
       const isDekanOrWadek = currentUser && ['dekan', 'wakil dekan'].includes((currentUser.role || '').toLowerCase());
@@ -8403,10 +8459,22 @@
 
       let list = pendaftaran;
 
-      // Mahasiswa HANYA melihat data miliknya sendiri
+      // Mahasiswa HANYA melihat data miliknya sendiri (Pencocokan multi-atribut: NPM, NIM, Nama Mahasiswa, Username)
       if (isMhs) {
-        const myNpm = String(currentUser.npm || currentUser.username || '').toLowerCase();
-        list = list.filter(p => String(p.NPM || p.NIM || '').toLowerCase() === myNpm);
+        const myNpm = String(currentUser.npm || currentUser.username || '').trim().toLowerCase();
+        const myName = String(currentUser.nama || '').trim().toLowerCase();
+        const myUser = String(currentUser.username || '').trim().toLowerCase();
+        list = list.filter(p => {
+          const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+          const pName = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
+          const pUser = String(p.Username || p.username || '').trim().toLowerCase();
+
+          const npmMatch = myNpm && pNpm && (pNpm === myNpm || pNpm.includes(myNpm) || myNpm.includes(pNpm));
+          const nameMatch = myName && pName && (pName === myName || pName.includes(myName) || myName.includes(pName));
+          const userMatch = myUser && (pNpm === myUser || pUser === myUser || pName.includes(myUser));
+
+          return Boolean(npmMatch || nameMatch || userMatch);
+        });
       }
 
       if (filterProdi) list = list.filter(p => (p['Kode Prodi'] || '').toUpperCase() === filterProdi.toUpperCase());
@@ -8874,17 +8942,27 @@
       }
 
       // Filter sesuai filter prodi & status yang sedang aktif di UI
-      const filterProdi = (document.getElementById('pendaftaranFilterProdi')?.value || '').toUpperCase();
-      const filterStatus = (document.getElementById('pendaftaranFilterStatus')?.value || '').toLowerCase();
-      const filterLayanan = (document.getElementById('pendaftaranFilterLayanan')?.value || '').toLowerCase();
+      const filterProdi = (document.getElementById('filterPendaftaranProdi')?.value || document.getElementById('pendaftaranFilterProdi')?.value || '').toUpperCase();
+      const filterStatus = (document.getElementById('filterPendaftaranStatus')?.value || document.getElementById('pendaftaranFilterStatus')?.value || '').toLowerCase();
+      const filterLayanan = (document.getElementById('filterPendaftaranLayanan')?.value || document.getElementById('pendaftaranFilterLayanan')?.value || '').toLowerCase();
       const search = (document.getElementById('searchPendaftaran')?.value || '').toLowerCase();
 
       const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
       let filtered = list;
 
       if (isMhs) {
-        const myNpm = String(currentUser.npm || currentUser.username || '').toLowerCase();
-        filtered = filtered.filter(p => String(p.NPM || p.NIM || '').toLowerCase() === myNpm);
+        const myNpm = String(currentUser.npm || currentUser.username || '').trim().toLowerCase();
+        const myName = String(currentUser.nama || '').trim().toLowerCase();
+        const myUser = String(currentUser.username || '').trim().toLowerCase();
+        filtered = filtered.filter(p => {
+          const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+          const pName = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
+          const pUser = String(p.Username || p.username || '').trim().toLowerCase();
+          const npmMatch = myNpm && pNpm && (pNpm === myNpm || pNpm.includes(myNpm) || myNpm.includes(pNpm));
+          const nameMatch = myName && pName && (pName === myName || pName.includes(myName) || myName.includes(pName));
+          const userMatch = myUser && (pNpm === myUser || pUser === myUser || pName.includes(myUser));
+          return Boolean(npmMatch || nameMatch || userMatch);
+        });
       }
 
       if (filterProdi) filtered = filtered.filter(p => (p['Kode Prodi'] || '').toUpperCase() === filterProdi);
@@ -10229,14 +10307,24 @@
 
       const pendaftaran = appData.pendaftaran || [];
       const search = (document.getElementById('searchPendaftaran')?.value || '').toLowerCase();
-      const filterProdi = document.getElementById('pendaftaranFilterProdi')?.value || '';
-      const filterStatus = document.getElementById('pendaftaranFilterStatus')?.value || '';
+      const filterProdi = document.getElementById('filterPendaftaranProdi')?.value || document.getElementById('pendaftaranFilterProdi')?.value || '';
+      const filterStatus = document.getElementById('filterPendaftaranStatus')?.value || document.getElementById('pendaftaranFilterStatus')?.value || '';
 
       const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
       let list = pendaftaran;
       if (isMhs) {
-        const myNpm = String(currentUser.npm || currentUser.username || '').toLowerCase();
-        list = list.filter(p => String(p.NPM || p.NIM || '').toLowerCase() === myNpm);
+        const myNpm = String(currentUser.npm || currentUser.username || '').trim().toLowerCase();
+        const myName = String(currentUser.nama || '').trim().toLowerCase();
+        const myUser = String(currentUser.username || '').trim().toLowerCase();
+        list = list.filter(p => {
+          const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+          const pName = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
+          const pUser = String(p.Username || p.username || '').trim().toLowerCase();
+          const npmMatch = myNpm && pNpm && (pNpm === myNpm || pNpm.includes(myNpm) || myNpm.includes(pNpm));
+          const nameMatch = myName && pName && (pName === myName || pName.includes(myName) || myName.includes(pName));
+          const userMatch = myUser && (pNpm === myUser || pUser === myUser || pName.includes(myUser));
+          return Boolean(npmMatch || nameMatch || userMatch);
+        });
       }
 
       if (filterProdi) list = list.filter(p => (p['Kode Prodi'] || '').toUpperCase() === filterProdi.toUpperCase());

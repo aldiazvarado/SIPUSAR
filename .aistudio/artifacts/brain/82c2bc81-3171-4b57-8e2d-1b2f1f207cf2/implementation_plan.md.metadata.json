@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana penyempurnaan dropdown pilihan mahasiswa pada modal Input Data Jadwal Ujian Baru:\n- Menyaring otomatis daftar mahasiswa pendaftar agar mahasiswa yang mata kuliah/pendaftarannya sudah memiliki jadwal ujian aktif tidak lagi muncul di dropdown.\n- Pada mode edit jadwal yang sudah tersimpan, data pendaftar terkait jadwal tersebut tetap ditampilkan dan otomatis terpilih agar admin dapat meninjau data.\n- Secara otomatis memperbarui kolom Status Jadwal pendaftaran menjadi Terjadwal saat jadwal ujian disimpan di Google Spreadsheet maupun memori lokal.\n- Mengembalikan status menjadi belum terjadwal jika jadwal ujian terkait dihapus oleh Admin TU.",
-  "updatedAt":  "2026-11-10T14:28:06.814464544Z",
+  "summary":  "Rencana implementasi perbaikan agar pendaftaran mahasiswa langsung tampil di tabel Riwayat Pendaftaran setelah submit, menggunakan pencocokan ganda NPM/Nama Mahasiswa, pembaruan instan (optimistic UI), sinkronisasi spreadsheet di latar belakang, dan normalisasi ID filter tabel.",
+  "updatedAt":  "2026-11-11T08:39:13.748125630Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
