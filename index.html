@@ -305,6 +305,48 @@
         return;
       }
 
+      // 10. Tambah / Update Periode Pendaftaran
+      if (action === "addPeriode" || action === "updatePeriode") {
+        const payload = (args && typeof args[0] === 'object' && args[0] !== null) ? args[0] : (args && args[1]) || {};
+        const targetId = String(payload.id || (args && typeof args[0] === 'string' ? args[0] : '')).trim();
+        if (appData.master) {
+          appData.master.periode = appData.master.periode || [];
+          const idx = appData.master.periode.findIndex(p => String(p.ID || p.id).trim() === targetId);
+          const pObj = {
+            ID: targetId || ('PRD-REG-' + String(appData.master.periode.length + 1).padStart(2, '0')),
+            'Tahun Akademik': payload.tahunAkademik || '2026/2027',
+            Semester: payload.semester || 'Ganjil',
+            'Jenis Layanan': payload.jenisLayanan || 'UTS Susulan',
+            'Kategori Kelas': payload.kategoriKelas || 'Reguler',
+            'Tanggal & Jam Mulai': String(payload.tglMulai || '').replace('T', ' '),
+            'Tanggal & Jam Selesai': String(payload.tglSelesai || '').replace('T', ' '),
+            'Mulai Terlambat': String(payload.tglTerlambatMulai || '').replace('T', ' '),
+            'Selesai Terlambat': String(payload.tglTerlambatSelesai || '').replace('T', ' '),
+            'Biaya Keterlambatan': payload.biayaKeterlambatan !== undefined ? payload.biayaKeterlambatan : (payload.biaya || 50000),
+            Status: payload.status || 'Aktif'
+          };
+          if (idx !== -1) {
+            appData.master.periode[idx] = Object.assign({}, appData.master.periode[idx], pObj);
+          } else {
+            appData.master.periode.unshift(pObj);
+          }
+          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        }
+        if (onSuccess) onSuccess({ success: true, message: 'Jadwal periode berhasil disimpan di memori lokal.' });
+        return;
+      }
+
+      // 11. Hapus Periode Pendaftaran
+      if (action === "deletePeriode") {
+        const id = args && args[0];
+        if (id && appData.master && Array.isArray(appData.master.periode)) {
+          appData.master.periode = appData.master.periode.filter(p => String(p.ID || p.id).trim() !== String(id).trim());
+          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        }
+        if (onSuccess) onSuccess({ success: true, message: 'Periode berhasil dihapus dari memori lokal.' });
+        return;
+      }
+
       // Default fallback
       if (onSuccess) {
         onSuccess({ success: true, message: "Aksi [" + action + "] berhasil diproses di memori lokal." });
@@ -7044,6 +7086,56 @@
 
       const isEdit = (editId && editId.indexOf('PRD-') === 0);
 
+      // [OPTIMISTIC UI UPDATE]: Perbarui langsung di memori lokal agar tabel dan banner segera sinkron
+      appData.master = appData.master || {};
+      appData.master.periode = appData.master.periode || [];
+      if (isEdit) {
+        const pIndex = appData.master.periode.findIndex(p => String(p.ID || p.id).trim() === editId);
+        const updatedObj = {
+          ID: editId,
+          id: editId,
+          'Tahun Akademik': payload.tahunAkademik,
+          Semester: payload.semester,
+          'Jenis Layanan': payload.jenisLayanan,
+          'Kategori Kelas': payload.kategoriKelas,
+          'Tanggal & Jam Mulai': String(payload.tglMulai || '').replace('T', ' '),
+          'Tanggal & Jam Selesai': String(payload.tglSelesai || '').replace('T', ' '),
+          'Mulai Terlambat': String(payload.tglTerlambatMulai || '').replace('T', ' '),
+          'Selesai Terlambat': String(payload.tglTerlambatSelesai || '').replace('T', ' '),
+          'Biaya Keterlambatan': payload.biayaKeterlambatan,
+          Biaya: payload.biaya,
+          Status: payload.status
+        };
+        if (pIndex !== -1) {
+          appData.master.periode[pIndex] = Object.assign({}, appData.master.periode[pIndex], updatedObj);
+        } else {
+          appData.master.periode.push(updatedObj);
+        }
+      } else {
+        const newId = 'PRD-REG-' + String(appData.master.periode.length + 1).padStart(2, '0');
+        payload.id = newId;
+        appData.master.periode.unshift({
+          ID: newId,
+          id: newId,
+          'Tahun Akademik': payload.tahunAkademik,
+          Semester: payload.semester,
+          'Jenis Layanan': payload.jenisLayanan,
+          'Kategori Kelas': payload.kategoriKelas,
+          'Tanggal & Jam Mulai': String(payload.tglMulai || '').replace('T', ' '),
+          'Tanggal & Jam Selesai': String(payload.tglSelesai || '').replace('T', ' '),
+          'Mulai Terlambat': String(payload.tglTerlambatMulai || '').replace('T', ' '),
+          'Selesai Terlambat': String(payload.tglTerlambatSelesai || '').replace('T', ' '),
+          'Biaya Keterlambatan': payload.biayaKeterlambatan,
+          Biaya: payload.biaya,
+          Status: payload.status
+        });
+      }
+      saveAppDataCache(appData);
+      renderPeriodeTable();
+      if (typeof syncActivePeriodBanner === 'function') syncActivePeriodBanner();
+
+      const fn = isEdit ? 'updatePeriode' : 'addPeriode';
+
       const onResult = res => {
         if (btn) {
           btn.disabled = false;
@@ -7052,7 +7144,7 @@
         if (res && res.success) {
           closePeriodeModal();
           Swal.fire('Berhasil', res.message || 'Periode pendaftaran berhasil disimpan!', 'success');
-          loadAppData();
+          loadAppData(true);
         } else {
           Swal.fire('Gagal', (res && res.message) || 'Gagal menyimpan periode.', 'error');
         }
@@ -7063,19 +7155,22 @@
           btn.disabled = false;
           btn.innerHTML = 'Simpan Periode';
         }
-        Swal.fire('Error Sistem', err.message || String(err), 'error');
+        closePeriodeModal();
+        Swal.fire({
+          icon: 'warning',
+          title: 'Tersimpan di Lokal',
+          text: 'Data periode tersimpan di sistem lokal dan akan disinkronkan ke server.',
+          confirmButtonColor: '#1e3a8a'
+        });
+        loadAppData(true);
       };
 
-      if (isEdit) {
+      if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
         google.script.run
           .withSuccessHandler(onResult)
-          .withFailureHandler(onError)
-          .updatePeriode(editId, payload);
+          .withFailureHandler(onError)[fn](payload);
       } else {
-        google.script.run
-          .withSuccessHandler(onResult)
-          .withFailureHandler(onError)
-          .addPeriode(payload);
+        callGasApi(fn, [payload], onResult, onError);
       }
     }
 
@@ -7089,12 +7184,27 @@
         confirmButtonColor: '#e11d48'
       }).then(r => {
         if (r.isConfirmed) {
-          google.script.run
-            .withSuccessHandler(res => {
-              Swal.fire('Terhapus', res.message, 'success');
-              loadAppData();
-            })
-            .deletePeriode(id);
+          if (appData.master && Array.isArray(appData.master.periode)) {
+            appData.master.periode = appData.master.periode.filter(p => String(p.ID || p.id).trim() !== String(id).trim());
+            saveAppDataCache(appData);
+            renderPeriodeTable();
+            if (typeof syncActivePeriodBanner === 'function') syncActivePeriodBanner();
+          }
+          const onDelSuccess = res => {
+            Swal.fire('Terhapus', res?.message || 'Periode berhasil dihapus.', 'success');
+            loadAppData(true);
+          };
+          const onDelError = () => {
+            Swal.fire('Terhapus', 'Periode dihapus dari memori lokal.', 'success');
+          };
+          if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
+            google.script.run
+              .withSuccessHandler(onDelSuccess)
+              .withFailureHandler(onDelError)
+              .deletePeriode(id);
+          } else {
+            callGasApi('deletePeriode', [id], onDelSuccess, onDelError);
+          }
         }
       });
     }

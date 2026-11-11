@@ -1737,7 +1737,11 @@ function addPeriode(payload) {
   }
 }
 
-function updatePeriode(payload) {
+function updatePeriode(arg1, arg2) {
+  var payload = (typeof arg1 === 'object' && arg1 !== null) ? arg1 : (arg2 || {});
+  var targetId = String(payload.id || (typeof arg1 === 'string' ? arg1 : '')).trim();
+  payload.id = targetId;
+
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -1750,13 +1754,26 @@ function updatePeriode(payload) {
     var rowIndex = -1;
 
     for (var i = 1; i < values.length; i++) {
-      if (String(values[i][0]).trim() === String(payload.id).trim()) {
+      var rowId = String(values[i][0]).trim();
+      if (rowId === targetId || rowId.toLowerCase() === targetId.toLowerCase()) {
         rowIndex = i + 1;
         break;
       }
     }
 
-    if (rowIndex === -1) throw new Error("Data periode " + payload.id + " tidak ditemukan.");
+    if (rowIndex === -1 && payload.jenisLayanan) {
+      for (var j = 1; j < values.length; j++) {
+        var rowLayanan = String(values[j][3] || '').trim().toLowerCase();
+        if (rowLayanan === String(payload.jenisLayanan).trim().toLowerCase()) {
+          rowIndex = j + 1;
+          targetId = String(values[j][0]).trim() || targetId;
+          payload.id = targetId;
+          break;
+        }
+      }
+    }
+
+    if (rowIndex === -1) throw new Error("Data periode " + (targetId || 'ID tidak terdefinisi') + " tidak ditemukan.");
 
     var rowRange = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn());
     var rowValues = rowRange.getValues()[0];

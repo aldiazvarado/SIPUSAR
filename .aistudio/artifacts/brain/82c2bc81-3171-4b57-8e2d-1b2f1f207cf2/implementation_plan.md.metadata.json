@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana penghapusan elemen antarmuka Klik Cepat Akun Demo Resmi dari form login utama pada file index.html, public/hostinger/index.html, dan public/gas/Index.html agar tampilan login bersih dan siap untuk lingkungan produksi.",
-  "updatedAt":  "2026-11-11T09:27:42.521655598Z",
+  "summary":  "Rencana perbaikan bug notifikasi 'Data periode undefined tidak ditemukan' saat mengedit jadwal periode pendaftaran, dengan menyelaraskan parameter updatePeriode antara frontend dan backend Apps Script, menambahkan fallback offline/lokal, dan pembaruan instan antarmuka.",
+  "updatedAt":  "2026-11-11T10:05:13.225472075Z",
   "requestFeedback":  true,
   "userFacing":  true
 }
