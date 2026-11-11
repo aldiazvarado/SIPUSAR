@@ -1,6 +1,6 @@
 {
-  "summary":  "Rencana perbaikan bug notifikasi 'Data periode undefined tidak ditemukan' saat mengedit jadwal periode pendaftaran, dengan menyelaraskan parameter updatePeriode antara frontend dan backend Apps Script, menambahkan fallback offline/lokal, dan pembaruan instan antarmuka.",
-  "updatedAt":  "2026-11-11T10:05:13.225472075Z",
+  "summary":  "Rencana pembaruan tampilan banner Ketentuan Jadwal Periode agar menampilkan label kelas Reguler & Karyawan, format tanggal dan waktu lengkap dalam bahasa Indonesia (Hari, Tanggal Bulan Tahun Pukul Jam:Menit WIB s.d. ...), serta pemformatan denda keterlambatan 'Denda Retribusi: Rp 50.000/mata kuliah'.",
+  "updatedAt":  "2026-11-11T10:20:15.390470165Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

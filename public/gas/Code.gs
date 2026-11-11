@@ -1003,6 +1003,23 @@ function getInitialData(userRole, username, userProdi) {
     } catch(e) {
       periode = [];
     }
+    if (!periode || periode.length === 0) {
+      periode = [
+        {
+          ID: 'PRD-REG-01',
+          'Tahun Akademik': '2026/2027',
+          Semester: 'Ganjil',
+          'Jenis Layanan': 'UTS Susulan',
+          'Kategori Kelas': 'Reguler & Karyawan',
+          'Tanggal & Jam Mulai': '2026-11-15 00:00:00',
+          'Tanggal & Jam Selesai': '2026-11-20 23:59:00',
+          'Mulai Terlambat': '2026-11-21 00:00:00',
+          'Selesai Terlambat': '2026-11-22 23:59:00',
+          'Biaya Keterlambatan': 50000,
+          Status: 'Aktif'
+        }
+      ];
+    }
     var pendaftaran = [];
     try { pendaftaran = getSheetData('Pendaftaran'); } catch(e) {}
     if (pendaftaran && pendaftaran.length > 0) {

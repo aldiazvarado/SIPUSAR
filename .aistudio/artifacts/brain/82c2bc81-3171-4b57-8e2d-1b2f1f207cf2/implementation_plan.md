@@ -1,55 +1,54 @@
-# Perbaikan Edit Jadwal Periode Pendaftaran (Fix 'Data periode undefined tidak ditemukan')
+# Pembaruan Tampilan Banner Ketentuan Jadwal Periode
 
-Memperbaiki kegagalan saat menyimpan perubahan Jadwal Periode Pendaftaran (contoh `PRD-REG-01`) yang memicu pop-up pesan gagal *"Data periode undefined tidak ditemukan."*
+Memperbarui format tampilan banner informasi jadwal periode pada halaman utama (Riwayat Pendaftaran & Pendaftaran Mahasiswa) agar menampilkan label kategori kelas, penanggalan lengkap standar Indonesia (*Hari, Tanggal Bulan Tahun Pukul HH:mm WIB*), serta keterangan biaya retribusi per mata kuliah.
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Masalah utama dan strategi solusi yang akan diterapkan:
+> Keputusan penyesuaian yang telah dikonfirmasi oleh pengguna:
 
-- **Penyebab Utama**: Pada fungsi `handleSavePeriode()` di frontend, pemanggilan `google.script.run.updatePeriode(editId, payload)` mengirimkan 2 argumen (`editId` dan `payload`), sedangkan fungsi `updatePeriode(payload)` di backend Google Apps Script (`Code.gs`) hanya menerima 1 parameter `payload`. Akibatnya, `payload` di backend terisi string ID (`"PRD-REG-01"`), sehingga `payload.id` bernilai `undefined`, yang memicu error `Data periode undefined tidak ditemukan.`
-- **Dua Sisi Perbaikan (Backend & Frontend)**:
-  1. **Backend (`Code.gs`)**: Fungsi `updatePeriode(arg1, arg2)` dibuat fleksibel untuk menerima baik 1 parameter `payload` (berisi `.id`) maupun 2 parameter `(id, payload)` secara bersamaan.
-  2. **Frontend (`index.html`, `public/hostinger/index.html`, `public/gas/Index.html`)**: Memperbaiki pemanggilan agar mengirim payload lengkap ber-ID (`payload.id = editId`).
-  3. **Penyediaan Jalur API Mandiri & Fallback Lokal**: Menambahkan penanganan `addPeriode`, `updatePeriode`, dan `deletePeriode` pada `handleLocalGasFallback` serta rute `callGasApi()` saat aplikasi dijalankan di luar lingkungan Google Apps Script langsung (Hostinger / GitHub Pages / Dev Server).
+- **Confirmed Decision 1: Label Kategori Kelas**: Menampilkan badge/label kelas pada header ketentuan periode, yaitu **Reguler & Karyawan** (atau sesuai kategori kelas periode aktif).
+- **Confirmed Decision 2: Format Penanggalan Lengkap Standar Indonesia**: Rentang jadwal normal dan keterlambatan diformat lengkap menyertakan nama hari, tanggal, bulan Indonesia, tahun, dan penanda jam WIB:
+  - *Jadwal Normal*: `Minggu, 15 November 2026 Pukul 00:00 WIB s.d. Jumat, 20 November 2026 Pukul 23:59 WIB`
+  - *Batas Keterlambatan*: `Sabtu, 21 November 2026 Pukul 00:00 WIB s.d. Minggu, 22 November 2026 Pukul 23:59 WIB`
+- **Confirmed Decision 3: Keterangan Retribusi**: Menyesuaikan label biaya denda keterlambatan menjadi:
+  `(Denda Retribusi: Rp 50.000/mata kuliah)`
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **Apa yang Dilakukan**: Memastikan tombol **Simpan Periode** pada modal *Edit Jadwal Periode* berfungsi tanpa pesan error, memperbarui data periode di Google Sheets (`Periode_Pendaftaran`), dan langsung memperbarui tampilan tabel periode serta banner periode aktif di aplikasi.
-- **Target Pengguna**: Admin TU dan Master Admin yang mengatur jadwal periode pendaftaran (UTS Susulan, UAS Susulan, Remedial Teaching).
-- **Nilai Utama**: Admin dapat leluasa mengatur rentang waktu pendaftaran normal, masa keterlambatan, biaya retribusi, dan status periode (Aktif / Ditutup) tanpa kendala teknis.
+- **Apa yang Dilakukan**: Mempercantik dan memperjelas informasi pada banner *Ketentuan Jadwal Periode* sehingga mahasiswa dan pengelola akademik dapat dengan cepat memahami tenggat waktu bebas denda, masa keterlambatan, dan ketentuan retribusi per mata kuliah secara jelas tanpa salah tafsir waktu.
+- **Target Pengguna**: Mahasiswa pendaftar ujian susulan/remedial, Dosen, dan Admin Program Studi/TU.
+- **Nilai Utama**: Transparansi rentang jadwal pelaksanaan, kejelasan status biaya retribusi per mata kuliah, dan keterbacaan tanggal yang ramah pengguna lokal (*Indonesian Locale*).
 
 ---
 
 ## 2. User Experience & Visual Design
 
-- **Alur Edit Periode**:
-  1. Admin membuka menu **Jadwal & Periode**.
-  2. Admin mengklik tombol **Edit** pada salah satu baris periode (misal `PRD-REG-01`).
-  3. Modal *Edit Jadwal Periode (PRD-REG-01)* terbuka dengan data form terisi lengkap (Tahun Akademik, Semester, Jenis Layanan, Tanggal Mulai/Selesai, Tanggal Terlambat, Biaya, Status).
-  4. Admin mengubah tanggal atau status, lalu menekan **Simpan Periode**.
-  5. Sistem menampilkan loading singkat, modal tertutup, dan muncul notifikasi sukses: *"Jadwal periode PRD-REG-01 berhasil diperbarui."*
-  6. Tabel periode dan banner status periode aktif di dashboard langsung diperbarui seketika.
+- **Struktur Tampilan Banner Baru**:
+  1. **Header Banner**:
+     - Badge Oranye: `KETENTUAN JADWAL PERIODE`
+     - Nama Layanan & Tahun: `UTS Susulan (2026/2027)`
+     - Badge Kategori Kelas: `Reguler & Karyawan` (Badge biru muda bergaris tepi rapi)
+     - Badge Status Periode (Kanan): `PERIODE AKTIF` (Hijau)
+  2. **Baris Jadwal Normal**:
+     - Ikon kalender centang hijau: `<i class="fas fa-calendar-check text-emerald-600"></i>`
+     - Teks: **Jadwal Normal (Bebas Denda):** `Minggu, 15 November 2026 Pukul 00:00 WIB s.d. Jumat, 20 November 2026 Pukul 23:59 WIB`
+  3. **Baris Batas Keterlambatan**:
+     - Ikon jam peringatan oranye: `<i class="fas fa-clock text-amber-700"></i>`
+     - Teks: **Batas Keterlambatan:** `Sabtu, 21 November 2026 Pukul 00:00 WIB s.d. Minggu, 22 November 2026 Pukul 23:59 WIB`
+     - Keterangan denda: `(Denda Retribusi: Rp 50.000/mata kuliah)` dalam format font tebal berwarna mawar (*rose-700*).
 
 ---
 
 ## 3. Key Product Decisions & Trade-Offs
 
-- **Penanganan Parameter Ganda di Backend (`Code.gs`)**:
-  - *Pendekatan*:
-    ```javascript
-    function updatePeriode(arg1, arg2) {
-      var payload = (typeof arg1 === 'object' && arg1 !== null) ? arg1 : (arg2 || {});
-      var targetId = String(payload.id || (typeof arg1 === 'string' ? arg1 : '')).trim();
-      payload.id = targetId;
-      ...
-    }
-    ```
-  - *Alasan*: Kompatibel ke belakang (*backward-compatible*) dengan pemanggilan lama maupun baru, memastikan `targetId` tidak pernah bernilai `undefined`.
-- **Dukungan Lingkungan Lengkap**:
-  - Menyediakan fallback pada `handleLocalGasFallback` agar pengujian lokal maupun server dev Vite selalu berhasil menyimpan data periode ke memori lokal tanpa terhambat CORS atau error jaringan.
+- **Fungsi Helper Penanggalan Dinamis**:
+  - *Pendekatan*: Menambahkan fungsi helper `formatIndonesianFullDateTime(dateVal)` dan `formatIndonesianDateTimeRange(startVal, endVal)` yang mampu mem-parsing tanggal baik format ISO, string tanggal spasi (`YYYY-MM-DD HH:mm:ss`), maupun objek `Date`.
+  - *Alasan*: Menjamin tampilan banner selalu menampilkan hari, tanggal, bulan Indonesia, dan waktu WIB secara akurat dari data periode mana pun yang di-setting oleh Admin, tanpa bergantung pada browser locale mentah.
+- **Sinkronisasi Otomatis**:
+  - `syncActivePeriodBanner()` akan memanggil helper ini secara dinamis setiap kali data aplikasi dimuat atau diperbarui melalui modal Edit Periode.
 
 ---
 
@@ -57,27 +56,28 @@ Memperbaiki kegagalan saat menyimpan perubahan Jadwal Periode Pendaftaran (conto
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│             Modal Edit Jadwal Periode                  │
-│       ID: PRD-REG-01 | Status: Aktif / Ditutup         │
+│             Data Periode Aktif di Memory               │
+│  Tgl Mulai: 2026-11-15 00:00 | Selesai: 2026-11-20     │
+│  Terlambat: 2026-11-21 00:00 s/d 2026-11-22 23:59     │
+│  Biaya: 50000 | Kelas: Reguler & Karyawan              │
 └───────────────────────────┬────────────────────────────┘
                             │
-               Klik Tombol [Simpan Periode]
+              Helper: formatIndonesianDateTimeRange()
                             │
                             ▼
 ┌────────────────────────────────────────────────────────┐
-│             Frontend: handleSavePeriode()              │
-│ 1. Susun payload: { id: "PRD-REG-01", ...fields }      │
-│ 2. Optimistic update ke appData.master.periode         │
-│ 3. Panggil google.script.run ATAU callGasApi()         │
-└──────────────┬──────────────────────────┬──────────────┘
-               │                          │
-         Native GAS                 Hostinger / Standalone
-               │                          │
-               ▼                          ▼
-┌─────────────────────────────┐ ┌────────────────────────┐
-│     Code.gs: updatePeriode  │ │   callGasApi Endpoint  │
-│ - Ekstrak targetId aman     │ │   & Local Fallback     │
-│ - Update sheet baris        │ │ - Update cache lokal   │
-│   Periode_Pendaftaran       │ │ - Return success res   │
-└─────────────────────────────┘ └────────────────────────┘
+│               Komponen Banner Ketentuan                │
+│                                                        │
+│  [KETENTUAN JADWAL PERIODE] UTS Susulan (2026/2027)    │
+│  [Reguler & Karyawan]                 [PERIODE AKTIF]  │
+│                                                        │
+│  ✓ Jadwal Normal (Bebas Denda):                        │
+│    Minggu, 15 November 2026 Pukul 00:00 WIB s.d.       │
+│    Jumat, 20 November 2026 Pukul 23:59 WIB             │
+│                                                        │
+│  ⏰ Batas Keterlambatan:                               │
+│    Sabtu, 21 November 2026 Pukul 00:00 WIB s.d.        │
+│    Minggu, 22 November 2026 Pukul 23:59 WIB            │
+│    (Denda Retribusi: Rp 50.000/mata kuliah)            │
+└────────────────────────────────────────────────────────┘
 ```

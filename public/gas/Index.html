@@ -2,7 +2,6 @@
 <html lang="id">
 <head>
   <script type="module" src="/@vite/client"></script>
-
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Pendaftaran & Reporting Akademik - FEB UIKA Bogor</title>
@@ -823,18 +822,19 @@
         <!-- BANNER KETENTUAN JADWAL GRATIS & BIAYA DENDA KETERLAMBATAN OTOMATIS -->
         <div id="bannerKetentuanPeriodeMhs" class="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs shadow-sm">
           <div class="space-y-1">
-            <div class="flex items-center gap-2">
+            <div class="flex flex-wrap items-center gap-2">
               <span class="bg-amber-600 text-white font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">
                 Ketentuan Jadwal Periode
               </span>
-              <span id="bannerPeriodeNama" class="font-bold text-slate-800">UTS Susulan & Remedial (2026/2027)</span>
+              <span id="bannerPeriodeNama" class="font-bold text-slate-800">UTS Susulan (2026/2027)</span>
+              <span id="bannerPeriodeKelas" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200">Reguler & Karyawan</span>
             </div>
-            <p class="text-slate-700">
-              <i class="fas fa-calendar-check text-emerald-600 mr-1"></i> <b>Jadwal Normal (Bebas Denda):</b> <span id="bannerJadwalNormal" class="font-semibold text-emerald-800">10 Okt 2026 s/d 20 Okt 2026</span>
+            <p class="text-slate-700 leading-relaxed">
+              <i class="fas fa-calendar-check text-emerald-600 mr-1"></i> <b>Jadwal Normal (Bebas Denda):</b> <span id="bannerJadwalNormal" class="font-semibold text-emerald-800">Minggu, 15 November 2026 Pukul 00:00 WIB s.d. Jumat, 20 November 2026 Pukul 23:59 WIB</span>
             </p>
-            <p class="text-slate-700">
-              <i class="fas fa-clock text-amber-700 mr-1"></i> <b>Batas Keterlambatan:</b> <span id="bannerJadwalTerlambat" class="font-semibold text-amber-900">21 Okt 2026 s/d 25 Okt 2026</span> 
-              (Denda Retribusi: <b id="bannerNominalDenda" class="text-rose-700 font-mono">Rp 50.000</b>)
+            <p class="text-slate-700 leading-relaxed">
+              <i class="fas fa-clock text-amber-700 mr-1"></i> <b>Batas Keterlambatan:</b> <span id="bannerJadwalTerlambat" class="font-semibold text-amber-900">Sabtu, 21 November 2026 Pukul 00:00 WIB s.d. Minggu, 22 November 2026 Pukul 23:59 WIB</span> 
+              (Denda Retribusi: <b id="bannerNominalDenda" class="text-rose-700 font-mono font-bold">Rp 50.000/mata kuliah</b>)
             </p>
           </div>
           <div class="shrink-0 flex items-center gap-2">
@@ -2668,7 +2668,21 @@
           { 'Kode Ruangan': 'R-202', 'Nama Ruangan': 'Ruang Kuliah 202', 'Kapasitas': 45, 'Lokasi': 'Gedung FEB Lt. 2' },
           { 'Kode Ruangan': 'AULA-FEB', 'Nama Ruangan': 'Aula Utama FEB', 'Kapasitas': 120, 'Lokasi': 'Gedung FEB Lt. 3' }
         ],
-        periode: [],
+        periode: [
+          {
+            ID: 'PRD-REG-01',
+            'Tahun Akademik': '2026/2027',
+            Semester: 'Ganjil',
+            'Jenis Layanan': 'UTS Susulan',
+            'Kategori Kelas': 'Reguler & Karyawan',
+            'Tanggal & Jam Mulai': '2026-11-15 00:00:00',
+            'Tanggal & Jam Selesai': '2026-11-20 23:59:00',
+            'Mulai Terlambat': '2026-11-21 00:00:00',
+            'Selesai Terlambat': '2026-11-22 23:59:00',
+            'Biaya Keterlambatan': 50000,
+            Status: 'Aktif'
+          }
+        ],
         tahunAkademik: [
           { 'ID': 'TA-01', 'Tahun': '2026/2027 Ganjil', 'Status': 'Aktif' },
           { 'ID': 'TA-02', 'Tahun': '2025/2026 Genap', 'Status': 'Selesai' }
@@ -9997,19 +10011,95 @@
       }
     }
 
+    function formatIndonesianFullDateTime(val) {
+      if (!val) return '';
+      let d = null;
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        d = val;
+      } else if (typeof val === 'string') {
+        const clean = val.trim();
+        // Format YYYY-MM-DD atau YYYY/MM/DD
+        const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+        if (isoMatch) {
+          const y = parseInt(isoMatch[1], 10);
+          const m = parseInt(isoMatch[2], 10) - 1;
+          const day = parseInt(isoMatch[3], 10);
+          const h = parseInt(isoMatch[4] || '0', 10);
+          const min = parseInt(isoMatch[5] || '0', 10);
+          const sec = parseInt(isoMatch[6] || '0', 10);
+          d = new Date(y, m, day, h, min, sec);
+        } else {
+          // Format DD-MM-YYYY atau DD/MM/YYYY
+          const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+          if (dmyMatch) {
+            const day = parseInt(dmyMatch[1], 10);
+            const m = parseInt(dmyMatch[2], 10) - 1;
+            const y = parseInt(dmyMatch[3], 10);
+            const h = parseInt(dmyMatch[4] || '0', 10);
+            const min = parseInt(dmyMatch[5] || '0', 10);
+            const sec = parseInt(dmyMatch[6] || '0', 10);
+            d = new Date(y, m, day, h, min, sec);
+          } else {
+            const parsed = new Date(clean.replace(' ', 'T'));
+            if (!isNaN(parsed.getTime())) d = parsed;
+          }
+        }
+      }
+
+      if (!d || isNaN(d.getTime())) return String(val);
+
+      const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+
+      const dayName = days[d.getDay()];
+      const dateNum = d.getDate();
+      const monthName = months[d.getMonth()];
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+
+      return `${dayName}, ${dateNum} ${monthName} ${year} Pukul ${hours}:${minutes} WIB`;
+    }
+
+    function formatIndonesianDateTimeRange(startVal, endVal) {
+      const s = formatIndonesianFullDateTime(startVal);
+      const e = formatIndonesianFullDateTime(endVal);
+      if (s && e) return `${s} s.d. ${e}`;
+      return s || e || '-';
+    }
+
     function syncActivePeriodBanner() {
       const list = (appData.master && appData.master.periode) || [];
       const active = list.find(p => (p.Status || p.status || '').toLowerCase() === 'aktif') || list[0];
       if (active) {
         const namaElem = document.getElementById('bannerPeriodeNama');
+        const kelasElem = document.getElementById('bannerPeriodeKelas');
         const normalElem = document.getElementById('bannerJadwalNormal');
         const lateElem = document.getElementById('bannerJadwalTerlambat');
         const dendaElem = document.getElementById('bannerNominalDenda');
 
         if (namaElem) namaElem.innerText = `${active['Jenis Layanan'] || 'UTS Susulan'} (${active['Tahun Akademik'] || '2026/2027'})`;
-        if (normalElem) normalElem.innerText = `${active['Tanggal & Jam Mulai'] || active['Tanggal Mulai'] || '10 Okt 2026'} s/d ${active['Tanggal & Jam Selesai'] || active['Tanggal Selesai'] || '20 Okt 2026'}`;
-        if (lateElem) lateElem.innerText = `${active['Mulai Terlambat'] || '21 Okt 2026 00:00'} s/d ${active['Selesai Terlambat'] || '25 Okt 2026 23:59'}`;
-        if (dendaElem) dendaElem.innerText = `Rp ${(Number(active['Denda Keterlambatan'] || active.denda || 50000)).toLocaleString('id-ID')}`;
+
+        if (kelasElem) {
+          const rawKat = String(active['Kategori Kelas'] || active.kategoriKelas || '').trim();
+          if (!rawKat || rawKat.toLowerCase() === 'reguler' || rawKat.toLowerCase() === 'semua' || rawKat.toLowerCase().includes('karyawan')) {
+            kelasElem.innerText = 'Reguler & Karyawan';
+          } else {
+            kelasElem.innerText = rawKat;
+          }
+        }
+
+        const startNormal = active['Tanggal & Jam Mulai'] || active['Tanggal Mulai'] || '2026-11-15 00:00:00';
+        const endNormal = active['Tanggal & Jam Selesai'] || active['Tanggal Selesai'] || '2026-11-20 23:59:00';
+        if (normalElem) normalElem.innerText = formatIndonesianDateTimeRange(startNormal, endNormal);
+
+        const startLate = active['Mulai Terlambat'] || '2026-11-21 00:00:00';
+        const endLate = active['Selesai Terlambat'] || '2026-11-22 23:59:00';
+        if (lateElem) lateElem.innerText = formatIndonesianDateTimeRange(startLate, endLate);
+
+        const rawDenda = active['Biaya Keterlambatan'] !== undefined ? active['Biaya Keterlambatan'] : (active.biaya || active.denda || active['Denda Keterlambatan'] || 50000);
+        const dendaNum = Number(rawDenda) || 50000;
+        if (dendaElem) dendaElem.innerText = `Rp ${dendaNum.toLocaleString('id-ID')}/mata kuliah`;
       }
     }
 
