@@ -6882,49 +6882,13 @@
     function formatPeriodeWaktuLengkap(mulaiStr, selesaiStr) {
       if (!mulaiStr) return '-';
       try {
-        const parseDateTime = (str) => {
-          if (!str) return null;
-          if (str instanceof Date) return str;
-          const s = String(str).trim().replace('T', ' ');
-          let [datePart, timePart] = s.split(' ');
-          if (!timePart) timePart = '08:00';
-          let y, m, d;
-          if (datePart.includes('-')) {
-            const p = datePart.split('-');
-            if (p[0].length === 4) { y = parseInt(p[0], 10); m = parseInt(p[1], 10) - 1; d = parseInt(p[2], 10); }
-            else { d = parseInt(p[0], 10); m = parseInt(p[1], 10) - 1; y = parseInt(p[2], 10); }
-          } else if (datePart.includes('/')) {
-            const p = datePart.split('/');
-            d = parseInt(p[0], 10); m = parseInt(p[1], 10) - 1; y = parseInt(p[2], 10);
-          } else {
-            return new Date(str);
-          }
-          const [h, min] = timePart.split(':').map(x => parseInt(x, 10));
-          return new Date(y, m, d, h || 0, min || 0);
-        };
-
-        const dMulai = parseDateTime(mulaiStr);
-        const dSelesai = parseDateTime(selesaiStr);
-        if (!dMulai || isNaN(dMulai.getTime())) return `${mulaiStr} s/d ${selesaiStr || ''}`;
-
-        const hariList = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-        const bulanList = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
-
-        const hari = hariList[dMulai.getDay()];
-        const tgl = dMulai.getDate();
-        const bln = bulanList[dMulai.getMonth()];
-        const thn = dMulai.getFullYear();
-        const jamMulai = String(dMulai.getHours()).padStart(2, '0') + ':' + String(dMulai.getMinutes()).padStart(2, '0');
-
-        let jamSelesai = '23:59';
-        if (dSelesai && !isNaN(dSelesai.getTime())) {
-          jamSelesai = String(dSelesai.getHours()).padStart(2, '0') + ':' + String(dSelesai.getMinutes()).padStart(2, '0');
+        if (typeof formatIndonesianDateTimeRange === 'function' && typeof resolveDateTimeString === 'function') {
+          const s = resolveDateTimeString(mulaiStr, '2026-11-15 00:00:00');
+          const e = resolveDateTimeString(selesaiStr, '2026-11-20 23:59:00');
+          return formatIndonesianDateTimeRange(s, e);
         }
-
-        return `${hari}, ${tgl} ${bln} ${thn} ${jamMulai} s/d ${jamSelesai}`;
-      } catch(e) {
-        return `${mulaiStr} s/d ${selesaiStr || ''}`;
-      }
+      } catch (e) {}
+      return `${mulaiStr} s/d ${selesaiStr || ''}`;
     }
 
     function renderPeriodeTable() {
@@ -10011,37 +9975,104 @@
       }
     }
 
+    function resolveDateTimeString(val, fallbackDateTime) {
+      if (!val) return fallbackDateTime;
+      if (val instanceof Date && !isNaN(val.getTime())) return val;
+      const s = String(val).trim();
+      if (!s || s === '-' || s === 'undefined' || s === 'null') return fallbackDateTime;
+
+      // Jika sudah berformat lengkap Indonesia dengan Pukul ... WIB
+      if (s.includes('WIB') && (s.includes('Pukul') || s.includes('pukul'))) return s;
+
+      // Jika formatnya range parsial seperti "00:00 s/d 23:59" atau "00:00 s.d. 23:59" tanpa tahun
+      if (s.toLowerCase().includes('s/d') || s.toLowerCase().includes('s.d.')) {
+        if (!/\b(20\d\d)\b/.test(s)) {
+          return fallbackDateTime;
+        }
+        return s;
+      }
+
+      // Jika hanya berupa jam (misal "00:00", "23:59", atau "00:00:00")
+      if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(s)) {
+        const timePart = s.length === 5 ? s + ':00' : s;
+        const datePart = (fallbackDateTime && typeof fallbackDateTime === 'string' ? fallbackDateTime.split(' ')[0] : '2026-11-15');
+        return `${datePart} ${timePart}`;
+      }
+
+      // Jika tidak ada komponen tahun 20xx
+      if (!/\b(20\d\d)\b/.test(s)) {
+        return fallbackDateTime;
+      }
+
+      return s;
+    }
+
     function formatIndonesianFullDateTime(val) {
       if (!val) return '';
+      if (typeof val === 'string') {
+        const clean = val.trim();
+        if (clean.includes('WIB') && (clean.includes('Pukul') || clean.includes('pukul'))) {
+          return clean;
+        }
+      }
+
       let d = null;
       if (val instanceof Date && !isNaN(val.getTime())) {
         d = val;
       } else if (typeof val === 'string') {
         const clean = val.trim();
-        // Format YYYY-MM-DD atau YYYY/MM/DD
-        const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
-        if (isoMatch) {
-          const y = parseInt(isoMatch[1], 10);
-          const m = parseInt(isoMatch[2], 10) - 1;
-          const day = parseInt(isoMatch[3], 10);
-          const h = parseInt(isoMatch[4] || '0', 10);
-          const min = parseInt(isoMatch[5] || '0', 10);
-          const sec = parseInt(isoMatch[6] || '0', 10);
+
+        const idMonthMap = {
+          januari: 0, jan: 0,
+          februari: 1, feb: 1,
+          maret: 2, mar: 2,
+          april: 3, apr: 3,
+          mei: 4, may: 4,
+          juni: 5, jun: 5,
+          juli: 6, jul: 6,
+          agustus: 7, agu: 7, ags: 7, aug: 7,
+          september: 8, sep: 8,
+          oktober: 9, okt: 9, oct: 9,
+          november: 10, nov: 10,
+          desember: 11, des: 11, dec: 11
+        };
+
+        // Format Indonesia: e.g. [Minggu,] 15 November 2026 [Pukul 00:00[:00]]
+        const idMatch = clean.match(/^(?:[a-zA-Z]+,?\s+)?(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})(?:[^\d]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/i);
+        if (idMatch && idMonthMap[idMatch[2].toLowerCase()] !== undefined) {
+          const day = parseInt(idMatch[1], 10);
+          const m = idMonthMap[idMatch[2].toLowerCase()];
+          const y = parseInt(idMatch[3], 10);
+          const h = parseInt(idMatch[4] || '0', 10);
+          const min = parseInt(idMatch[5] || '0', 10);
+          const sec = parseInt(idMatch[6] || '0', 10);
           d = new Date(y, m, day, h, min, sec);
         } else {
-          // Format DD-MM-YYYY atau DD/MM/YYYY
-          const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
-          if (dmyMatch) {
-            const day = parseInt(dmyMatch[1], 10);
-            const m = parseInt(dmyMatch[2], 10) - 1;
-            const y = parseInt(dmyMatch[3], 10);
-            const h = parseInt(dmyMatch[4] || '0', 10);
-            const min = parseInt(dmyMatch[5] || '0', 10);
-            const sec = parseInt(dmyMatch[6] || '0', 10);
+          // Format YYYY-MM-DD atau YYYY/MM/DD
+          const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+          if (isoMatch) {
+            const y = parseInt(isoMatch[1], 10);
+            const m = parseInt(isoMatch[2], 10) - 1;
+            const day = parseInt(isoMatch[3], 10);
+            const h = parseInt(isoMatch[4] || '0', 10);
+            const min = parseInt(isoMatch[5] || '0', 10);
+            const sec = parseInt(isoMatch[6] || '0', 10);
             d = new Date(y, m, day, h, min, sec);
           } else {
-            const parsed = new Date(clean.replace(' ', 'T'));
-            if (!isNaN(parsed.getTime())) d = parsed;
+            // Format DD-MM-YYYY atau DD/MM/YYYY
+            const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+            if (dmyMatch) {
+              const day = parseInt(dmyMatch[1], 10);
+              const m = parseInt(dmyMatch[2], 10) - 1;
+              const y = parseInt(dmyMatch[3], 10);
+              const h = parseInt(dmyMatch[4] || '0', 10);
+              const min = parseInt(dmyMatch[5] || '0', 10);
+              const sec = parseInt(dmyMatch[6] || '0', 10);
+              d = new Date(y, m, day, h, min, sec);
+            } else {
+              const parsed = new Date(clean.replace(' ', 'T'));
+              if (!isNaN(parsed.getTime())) d = parsed;
+            }
           }
         }
       }
@@ -10062,6 +10093,9 @@
     }
 
     function formatIndonesianDateTimeRange(startVal, endVal) {
+      if (typeof startVal === 'string' && (startVal.includes(' s.d. ') || startVal.includes(' s/d '))) {
+        return startVal.replace(/\s+s\/d\s+/gi, ' s.d. ');
+      }
       const s = formatIndonesianFullDateTime(startVal);
       const e = formatIndonesianFullDateTime(endVal);
       if (s && e) return `${s} s.d. ${e}`;
@@ -10070,37 +10104,38 @@
 
     function syncActivePeriodBanner() {
       const list = (appData.master && appData.master.periode) || [];
-      const active = list.find(p => (p.Status || p.status || '').toLowerCase() === 'aktif') || list[0];
-      if (active) {
-        const namaElem = document.getElementById('bannerPeriodeNama');
-        const kelasElem = document.getElementById('bannerPeriodeKelas');
-        const normalElem = document.getElementById('bannerJadwalNormal');
-        const lateElem = document.getElementById('bannerJadwalTerlambat');
-        const dendaElem = document.getElementById('bannerNominalDenda');
+      const active = list.find(p => (p.Status || p.status || '').toLowerCase() === 'aktif') || list[0] || {};
+      
+      const namaElem = document.getElementById('bannerPeriodeNama');
+      const kelasElem = document.getElementById('bannerPeriodeKelas');
+      const normalElem = document.getElementById('bannerJadwalNormal');
+      const lateElem = document.getElementById('bannerJadwalTerlambat');
+      const dendaElem = document.getElementById('bannerNominalDenda');
 
-        if (namaElem) namaElem.innerText = `${active['Jenis Layanan'] || 'UTS Susulan'} (${active['Tahun Akademik'] || '2026/2027'})`;
-
-        if (kelasElem) {
-          const rawKat = String(active['Kategori Kelas'] || active.kategoriKelas || '').trim();
-          if (!rawKat || rawKat.toLowerCase() === 'reguler' || rawKat.toLowerCase() === 'semua' || rawKat.toLowerCase().includes('karyawan')) {
-            kelasElem.innerText = 'Reguler & Karyawan';
-          } else {
-            kelasElem.innerText = rawKat;
-          }
-        }
-
-        const startNormal = active['Tanggal & Jam Mulai'] || active['Tanggal Mulai'] || '2026-11-15 00:00:00';
-        const endNormal = active['Tanggal & Jam Selesai'] || active['Tanggal Selesai'] || '2026-11-20 23:59:00';
-        if (normalElem) normalElem.innerText = formatIndonesianDateTimeRange(startNormal, endNormal);
-
-        const startLate = active['Mulai Terlambat'] || '2026-11-21 00:00:00';
-        const endLate = active['Selesai Terlambat'] || '2026-11-22 23:59:00';
-        if (lateElem) lateElem.innerText = formatIndonesianDateTimeRange(startLate, endLate);
-
-        const rawDenda = active['Biaya Keterlambatan'] !== undefined ? active['Biaya Keterlambatan'] : (active.biaya || active.denda || active['Denda Keterlambatan'] || 50000);
-        const dendaNum = Number(rawDenda) || 50000;
-        if (dendaElem) dendaElem.innerText = `Rp ${dendaNum.toLocaleString('id-ID')}/mata kuliah`;
+      if (namaElem) {
+        namaElem.innerText = `${active['Jenis Layanan'] || 'UTS Susulan'} (${active['Tahun Akademik'] || '2026/2027'})`;
       }
+
+      if (kelasElem) {
+        const rawKat = String(active['Kategori Kelas'] || active.kategoriKelas || '').trim();
+        if (!rawKat || rawKat.toLowerCase() === 'reguler' || rawKat.toLowerCase() === 'semua' || rawKat.toLowerCase().includes('karyawan')) {
+          kelasElem.innerText = 'Reguler & Karyawan';
+        } else {
+          kelasElem.innerText = rawKat;
+        }
+      }
+
+      const startNormal = resolveDateTimeString(active['Tanggal & Jam Mulai'] || active['Tanggal Mulai'], '2026-11-15 00:00:00');
+      const endNormal = resolveDateTimeString(active['Tanggal & Jam Selesai'] || active['Tanggal Selesai'], '2026-11-20 23:59:00');
+      if (normalElem) normalElem.innerText = formatIndonesianDateTimeRange(startNormal, endNormal);
+
+      const startLate = resolveDateTimeString(active['Mulai Terlambat'], '2026-11-21 00:00:00');
+      const endLate = resolveDateTimeString(active['Selesai Terlambat'], '2026-11-22 23:59:00');
+      if (lateElem) lateElem.innerText = formatIndonesianDateTimeRange(startLate, endLate);
+
+      const rawDenda = active['Biaya Keterlambatan'] !== undefined ? active['Biaya Keterlambatan'] : (active.biaya || active.denda || active['Denda Keterlambatan'] || 50000);
+      const dendaNum = Number(rawDenda) || 50000;
+      if (dendaElem) dendaElem.innerText = `Rp ${dendaNum.toLocaleString('id-ID')}/mata kuliah`;
     }
 
     function renderRuanganTable() {

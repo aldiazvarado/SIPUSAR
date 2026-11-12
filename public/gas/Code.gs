@@ -306,7 +306,9 @@ function getSheetDataRaw(ss, sheetName) {
       var keyLower = key.toLowerCase();
       var val = row[j];
       if (val instanceof Date) {
-        if (keyLower.indexOf('jam') !== -1) {
+        if (keyLower.indexOf('tanggal') !== -1 && keyLower.indexOf('jam') !== -1) {
+          val = formatDateToString(val);
+        } else if (keyLower.indexOf('jam') !== -1 && keyLower.indexOf('mulai') === -1 && keyLower.indexOf('selesai') === -1) {
           val = formatTimeOnly(val);
         } else if (keyLower === 'tanggal ujian' || keyLower === 'tanggal') {
           val = formatDateOnly(val);
@@ -314,7 +316,7 @@ function getSheetDataRaw(ss, sheetName) {
           val = formatDateToString(val);
         }
       } else if (typeof val === 'string') {
-        if (keyLower.indexOf('jam') !== -1) {
+        if (keyLower.indexOf('tanggal') === -1 && keyLower.indexOf('mulai') === -1 && keyLower.indexOf('selesai') === -1 && keyLower.indexOf('jam') !== -1) {
           val = formatTimeOnly(val);
         }
       }

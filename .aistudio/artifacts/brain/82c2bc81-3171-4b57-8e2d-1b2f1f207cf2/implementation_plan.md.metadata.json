@@ -1,6 +1,0 @@
-{
-  "summary":  "Rencana pembaruan tampilan banner Ketentuan Jadwal Periode agar menampilkan label kelas Reguler & Karyawan, format tanggal dan waktu lengkap dalam bahasa Indonesia (Hari, Tanggal Bulan Tahun Pukul Jam:Menit WIB s.d. ...), serta pemformatan denda keterlambatan 'Denda Retribusi: Rp 50.000/mata kuliah'.",
-  "updatedAt":  "2026-11-11T10:20:15.390470165Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}
