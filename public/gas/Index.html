@@ -5994,8 +5994,38 @@
         selectPendaftar.innerHTML = '<option value="">-- Semua Mahasiswa Terdaftar Sudah Terjadwalkan (0 Menunggu) --</option>';
       }
 
+      // Jika edit jadwal yang sudah ada:
+      if (realId) {
+        const item = (appData.jadwal || []).find(j => String(j.ID).trim() === realId);
+        if (item) {
+          document.getElementById('jadwalRuangan').value = item.Ruangan || '';
+          document.getElementById('jadwalKodeProdi').value = item['Kode Prodi'] || 'MNJ';
+          document.getElementById('jadwalProgramStudi').value = item['Program Studi'] || '';
+          document.getElementById('jadwalSemester').value = item.Semester || '';
+          document.getElementById('jadwalKelas').value = item.Kelas || '';
+          document.getElementById('jadwalSemesterKelas').value = `${item.Semester || ''} · ${item.Kelas || ''}`;
+          document.getElementById('jadwalJenisUjian').value = item['Jenis Ujian'] || 'UTS Susulan';
+          document.getElementById('jadwalKeterangan').value = item.Keterangan || '';
+
+          const singleCourse = [{
+            nama: item['Mata Kuliah'] || '',
+            mataKuliah: item['Mata Kuliah'] || '',
+            dosen: item['Dosen Pengampu'] || '',
+            dosenPengampu: item['Dosen Pengampu'] || '',
+            sks: 3
+          }];
+          renderSlotJadwalMatkul(singleCourse, item);
+        }
+      } else {
+        renderSlotJadwalMatkul([]);
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
     // ==========================================
-    // [HELPER MULTI-MATA KULIAH JADWAL UJIAN]
+    // [HELPER MULTI-MATA KULIAH JADWAL UJIAN (GLOBAL SCOPE)]
     // ==========================================
     function extractMataKuliahList(data) {
       if (!data) return [];
@@ -6009,14 +6039,15 @@
         }));
       }
 
-      const rawMatkul = String(data['Mata Kuliah'] || '').trim();
-      const rawDosen = String(data['Dosen Pengampu'] || '').trim();
+      const rawMatkul = String(data['Mata Kuliah'] || data.mataKuliah || '').trim();
+      const rawDosen = String(data['Dosen Pengampu'] || data.dosenPengampu || data.dosen || '').trim();
       if (!rawMatkul) return [];
 
-      // Format bernomor: "1. Matematika Bisnis (3 SKS) 2. Pengantar Manajemen Bisnis (3 SKS) 3. Bahasa Inggris Bisnis (3 SKS)"
+      // Format bernomor: "1. Matematika Bisnis (3 SKS), 2. Pengantar Manajemen Bisnis (3 SKS), 3. Bahasa Inggris Bisnis (3 SKS)"
       if (/(?:^|\s*)(?:\d+[\.\)]|\-)\s+/.test(rawMatkul)) {
-        const matkulParts = rawMatkul.split(/(?:^|\s+)(?:\d+[\.\)]|\-)\s+/).map(s => s.trim()).filter(Boolean);
-        const dosenParts = rawDosen.split(/(?:^|\s+)(?:\d+[\.\)]|\-)\s+/).map(s => s.trim()).filter(Boolean);
+        const numRegex = /(?:^|\s+|(?<=[a-zA-Z\.\,]))(?:\s*\d+[\.\)]|\-)\s+/;
+        const matkulParts = rawMatkul.split(numRegex).map(s => s.trim()).filter(Boolean);
+        const dosenParts = rawDosen ? rawDosen.split(numRegex).map(s => s.trim()).filter(Boolean) : [];
 
         if (matkulParts.length > 0) {
           return matkulParts.map((mk, i) => {
@@ -6056,12 +6087,17 @@
         });
       }
 
+      // Default single course
+      let sks = 3;
+      const sksMatch = rawMatkul.match(/\((\d+)\s*SKS\)/i);
+      if (sksMatch) sks = parseInt(sksMatch[1], 10);
+      const cleanSingle = rawMatkul.replace(/\s*\(\d+\s*SKS\)/i, '').replace(/,\s*$/, '').trim();
       return [{
-        nama: rawMatkul,
-        mataKuliah: rawMatkul,
+        nama: cleanSingle || rawMatkul,
+        mataKuliah: cleanSingle || rawMatkul,
         dosen: rawDosen,
         dosenPengampu: rawDosen,
-        sks: 3
+        sks: sks
       }];
     }
 
@@ -6088,7 +6124,7 @@
         if (toolbar) toolbar.classList.add('hidden');
       }
 
-      const masterRuangan = (appData.master && appData.master.ruangan) || appData.ruangan || [];
+      const masterRuangan = (appData && appData.master && appData.master.ruangan) || (appData && appData.ruangan) || [];
       const defaultDate = existingScheduleItem ? (existingScheduleItem['Tanggal Ujian'] || '') : new Date().toISOString().split('T')[0];
       const defaultMulai = existingScheduleItem ? formatJamClean(existingScheduleItem['Jam Mulai']) : '08:00';
       const defaultSelesai = existingScheduleItem ? formatJamClean(existingScheduleItem['Jam Selesai']) : '10:00';
@@ -6104,8 +6140,8 @@
 
         const ruanganOptions = '<option value="">-- Pilih Ruangan --</option>' +
           masterRuangan.map(r => {
-            const kode = r['Kode Ruangan'] || r.Kode || 'R.101';
-            const nama = r['Nama Ruangan'] || r.Nama || kode;
+            const kode = typeof r === 'string' ? r : (r['Kode Ruangan'] || r.Kode || r.kode || 'R.101');
+            const nama = typeof r === 'string' ? r : (r['Nama Ruangan'] || r.Nama || r.nama || kode);
             const sel = (defaultRuang && defaultRuang === kode) ? 'selected' : '';
             return `<option value="${kode}" ${sel}>${kode} - ${nama}</option>`;
           }).join('');
@@ -6184,65 +6220,62 @@
       });
     }
 
-    // Jika edit jadwal yang sudah ada:
-    if (realId) {
-      const item = (appData.jadwal || []).find(j => String(j.ID).trim() === realId);
-      if (item) {
-        document.getElementById('jadwalRuangan').value = item.Ruangan || '';
-        document.getElementById('jadwalKodeProdi').value = item['Kode Prodi'] || 'MNJ';
-        document.getElementById('jadwalProgramStudi').value = item['Program Studi'] || '';
-        document.getElementById('jadwalSemester').value = item.Semester || '';
-        document.getElementById('jadwalKelas').value = item.Kelas || '';
-        document.getElementById('jadwalSemesterKelas').value = `${item.Semester || ''} · ${item.Kelas || ''}`;
-        document.getElementById('jadwalJenisUjian').value = item['Jenis Ujian'] || 'UTS Susulan';
-        document.getElementById('jadwalKeterangan').value = item.Keterangan || '';
-
-        const singleCourse = [{
-          nama: item['Mata Kuliah'] || '',
-          mataKuliah: item['Mata Kuliah'] || '',
-          dosen: item['Dosen Pengampu'] || '',
-          dosenPengampu: item['Dosen Pengampu'] || '',
-          sks: 3
-        }];
-        renderSlotJadwalMatkul(singleCourse, item);
+    function closeJadwalModal() {
+      const modal = document.getElementById('modalJadwalUjian');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
       }
-    } else {
-      renderSlotJadwalMatkul([]);
     }
 
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-  }
+    function onSelectMahasiswaPendaftar(pendaftarId) {
+      if (!pendaftarId) {
+        renderSlotJadwalMatkul([]);
+        return;
+      }
+      const select = document.getElementById('jadwalSelectPendaftar');
+      const opt = select ? select.options[select.selectedIndex] : null;
 
-  function closeJadwalModal() {
-    document.getElementById('modalJadwalUjian').classList.add('hidden');
-    document.getElementById('modalJadwalUjian').classList.remove('flex');
-  }
+      // 1. Prioritas cari langsung dari objek appData.pendaftaran
+      let data = (appData.pendaftaran || []).find(p => String(p.ID || p.id).trim() === String(pendaftarId).trim());
+      
+      // 2. Fallback baca dari atribut data-json jika ada
+      if (!data && opt && opt.getAttribute('data-json')) {
+        try {
+          data = JSON.parse(opt.getAttribute('data-json'));
+        } catch(e) {}
+      }
 
-  function onSelectMahasiswaPendaftar(pendaftarId) {
-    if (!pendaftarId) {
-      renderSlotJadwalMatkul([]);
-      return;
+      if (!data) {
+        console.warn('Data mahasiswa pendaftar tidak ditemukan untuk ID:', pendaftarId);
+        renderSlotJadwalMatkul([]);
+        return;
+      }
+
+      try {
+        // Kunci otomatis data akademik sesuai pendaftar
+        if (document.getElementById('jadwalKodeProdi')) document.getElementById('jadwalKodeProdi').value = data['Kode Prodi'] || 'MNJ';
+        if (document.getElementById('jadwalProgramStudi')) document.getElementById('jadwalProgramStudi').value = `[${data['Kode Prodi'] || 'MNJ'}] ${data['Program Studi'] || 'Manajemen'}`;
+        if (document.getElementById('jadwalSemester')) document.getElementById('jadwalSemester').value = data.Semester || 'Semester 3';
+        if (document.getElementById('jadwalKelas')) document.getElementById('jadwalKelas').value = data.Kelas || 'Reguler';
+        if (document.getElementById('jadwalSemesterKelas')) document.getElementById('jadwalSemesterKelas').value = `${data.Semester || 'Semester 3'} · ${data.Kelas || 'Reguler'}`;
+        if (document.getElementById('jadwalJenisUjian')) document.getElementById('jadwalJenisUjian').value = data['Jenis Layanan'] || 'UTS Susulan';
+
+        const courses = extractMataKuliahList(data);
+        renderSlotJadwalMatkul(courses);
+      } catch(e) {
+        console.error('Error onSelectMahasiswaPendaftar:', e);
+      }
     }
-    const select = document.getElementById('jadwalSelectPendaftar');
-    const opt = select.options[select.selectedIndex];
-    if (!opt) return;
-    try {
-      const data = JSON.parse(opt.getAttribute('data-json'));
-      // Kunci otomatis data akademik sesuai pendaftar
-      document.getElementById('jadwalKodeProdi').value = data['Kode Prodi'] || 'MNJ';
-      document.getElementById('jadwalProgramStudi').value = `[${data['Kode Prodi'] || 'MNJ'}] ${data['Program Studi'] || 'Manajemen'}`;
-      document.getElementById('jadwalSemester').value = data.Semester || 'Semester 3';
-      document.getElementById('jadwalKelas').value = data.Kelas || 'Reguler';
-      document.getElementById('jadwalSemesterKelas').value = `${data.Semester || 'Semester 3'} · ${data.Kelas || 'Reguler'}`;
-      document.getElementById('jadwalJenisUjian').value = data['Jenis Layanan'] || 'UTS Susulan';
 
-      const courses = extractMataKuliahList(data);
-      renderSlotJadwalMatkul(courses);
-    } catch(e) {
-      console.error('Error onSelectMahasiswaPendaftar:', e);
-    }
-  }
+    // Expose secara eksplisit ke window agar dapat dipanggil dari atribut onclick/onchange HTML
+    window.extractMataKuliahList = extractMataKuliahList;
+    window.renderSlotJadwalMatkul = renderSlotJadwalMatkul;
+    window.applyFirstSlotToAll = applyFirstSlotToAll;
+    window.openJadwalModal = openJadwalModal;
+    window.closeJadwalModal = closeJadwalModal;
+    window.onSelectMahasiswaPendaftar = onSelectMahasiswaPendaftar;
+    window.handleSaveJadwal = handleSaveJadwal;
 
   function handleSaveJadwal(e) {
     if (e && e.preventDefault) e.preventDefault();
