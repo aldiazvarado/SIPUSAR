@@ -2,8 +2,6 @@
 <html lang="id">
 <head>
   <script type="module" src="/@vite/client"></script>
-
-  <script type="module" src="/@vite/client"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Pendaftaran & Reporting Akademik - FEB UIKA Bogor</title>
@@ -184,35 +182,63 @@
         const payload = args && args[0];
         if (payload) {
           appData.jadwal = appData.jadwal || [];
-          if (!payload.id) {
-            const newId = 'JAD-' + (1000 + (appData.jadwal.length + 1));
-            const newJadwal = {
-              ID: newId,
-              pendaftaranId: payload.pendaftaranId,
-              npm: payload.npm,
-              nama: payload.nama,
-              prodi: payload.prodi,
-              kelas: payload.kelas,
-              kategoriKelas: payload.kategoriKelas,
-              matkul: payload.matkul,
-              dosen: payload.dosen,
-              jenisUjian: payload.jenisUjian,
-              tanggalUjian: payload.tanggalUjian,
-              jamMulai: payload.jamMulai,
-              jamSelesai: payload.jamSelesai,
-              ruangan: payload.ruangan,
-              catatan: payload.catatan || '',
-              statusJadwal: 'Terjadwal'
-            };
-            appData.jadwal.unshift(newJadwal);
+          const baseNum = 1000 + (appData.jadwal.length + 1);
+          const baseId = payload.id || ('JDW-' + baseNum);
+
+          if (Array.isArray(payload.items) && payload.items.length > 1 && !payload.id) {
+            payload.items.forEach((it, idx) => {
+              const subId = `${baseId}-${idx + 1}`;
+              const newJadwal = {
+                ID: subId,
+                id: subId,
+                pendaftarId: payload.pendaftarId || payload.pendaftaranId,
+                pendaftaranId: payload.pendaftarId || payload.pendaftaranId,
+                'Tanggal Ujian': it.tanggalUjian || payload.tanggalUjian,
+                'Jam Mulai': it.jamMulai || payload.jamMulai || '08:00',
+                'Jam Selesai': it.jamSelesai || payload.jamSelesai || '10:00',
+                Ruangan: it.ruangan || payload.ruangan,
+                'Kode Prodi': payload.kodeProdi || 'MNJ',
+                'Program Studi': payload.programStudi || '',
+                Semester: payload.semester || '',
+                Kelas: payload.kelas || '',
+                'Mata Kuliah': it.mataKuliah,
+                'Dosen Pengampu': it.dosenPengampu,
+                'Jenis Ujian': payload.jenisUjian || 'UTS Susulan',
+                Keterangan: it.keterangan || payload.keterangan || ''
+              };
+              appData.jadwal.unshift(newJadwal);
+            });
           } else {
-            const idx = appData.jadwal.findIndex(j => String(j.ID || j.id) === String(payload.id));
+            const firstItem = (payload.items && payload.items[0]) || {};
+            const newJadwal = {
+              ID: baseId,
+              id: baseId,
+              pendaftarId: payload.pendaftarId || payload.pendaftaranId,
+              pendaftaranId: payload.pendaftarId || payload.pendaftaranId,
+              'Tanggal Ujian': payload.tanggalUjian || firstItem.tanggalUjian,
+              'Jam Mulai': payload.jamMulai || firstItem.jamMulai || '08:00',
+              'Jam Selesai': payload.jamSelesai || firstItem.jamSelesai || '10:00',
+              Ruangan: payload.ruangan || firstItem.ruangan,
+              'Kode Prodi': payload.kodeProdi || 'MNJ',
+              'Program Studi': payload.programStudi || '',
+              Semester: payload.semester || '',
+              Kelas: payload.kelas || '',
+              'Mata Kuliah': payload.mataKuliah || firstItem.mataKuliah || '',
+              'Dosen Pengampu': payload.dosenPengampu || firstItem.dosenPengampu || '',
+              'Jenis Ujian': payload.jenisUjian || 'UTS Susulan',
+              Keterangan: payload.keterangan || firstItem.keterangan || ''
+            };
+            const idx = appData.jadwal.findIndex(j => String(j.ID || j.id) === String(baseId));
             if (idx >= 0) {
-              appData.jadwal[idx] = Object.assign({}, appData.jadwal[idx], payload);
+              appData.jadwal[idx] = Object.assign({}, appData.jadwal[idx], newJadwal);
+            } else {
+              appData.jadwal.unshift(newJadwal);
             }
           }
-          if (payload.pendaftaranId && Array.isArray(appData.pendaftaran)) {
-            const p = appData.pendaftaran.find(item => String(item.ID || item.id) === String(payload.pendaftaranId));
+
+          const targetPid = payload.pendaftarId || payload.pendaftaranId;
+          if (targetPid && Array.isArray(appData.pendaftaran)) {
+            const p = appData.pendaftaran.find(item => String(item.ID || item.id) === String(targetPid));
             if (p) {
               p['Status Jadwal'] = 'Terjadwal';
             }
@@ -1815,7 +1841,7 @@
             <i class="fas fa-lock text-slate-500"></i>
             <span>Data Terkunci Otomatis Sesuai Berkas Mahasiswa</span>
           </p>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label class="block font-semibold text-slate-500 mb-0.5">Program Studi</label>
               <input type="text" id="jadwalProgramStudi" readonly class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 font-bold cursor-not-allowed">
@@ -1827,110 +1853,46 @@
               <input type="hidden" id="jadwalSemester">
               <input type="hidden" id="jadwalKelas">
             </div>
-          </div>
-          <!-- KOMPONEN AUTOCOMPLETE JADWAL MATA KULIAH & DOSEN PENGAMPU -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <!-- JADWAL AUTOCOMPLETE MATA KULIAH -->
-            <div class="relative" id="autocompleteJadwalMatkulContainer">
-              <div class="flex items-center justify-between mb-0.5">
-                <label for="jadwalMataKuliah" class="block font-bold text-slate-700 text-xs">
-                  Mata Kuliah <span class="text-rose-500">*</span>
-                </label>
-                <button type="button" onclick="toggleEditJadwalMatkul()" id="btnToggleEditJadwalMatkul" class="text-[10px] text-blue-700 font-bold hover:underline">
-                  <i class="fas fa-edit mr-0.5"></i>Ubah / Cari
-                </button>
-              </div>
-              <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-                  <i class="fas fa-book text-[11px]"></i>
-                </div>
-                <input type="text" id="jadwalMataKuliah" required autocomplete="off"
-                  placeholder="Pilih mahasiswa atau ketik cari matkul..."
-                  class="w-full pl-7 pr-14 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-bold text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white transition-all shadow-sm">
-                <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
-                  <button type="button" id="btnClearJadwalMatkul" title="Bersihkan input"
-                    class="hidden w-4 h-4 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 flex items-center justify-center transition-colors">
-                    <i class="fas fa-times text-[9px]"></i>
-                  </button>
-                  <div class="text-slate-400 pointer-events-none px-1">
-                    <i class="fas fa-search text-[10px]"></i>
-                  </div>
-                </div>
-              </div>
-              <!-- Floating Suggestions Dropdown -->
-              <div id="dropdownListJadwalMatkul" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100">
-              </div>
+            <div>
+              <label class="block font-semibold text-slate-500 mb-0.5">Jenis Layanan</label>
+              <input type="text" id="jadwalJenisUjian" readonly class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 font-bold cursor-not-allowed">
             </div>
-
-            <!-- JADWAL AUTOCOMPLETE DOSEN PENGAMPU -->
-            <div class="relative" id="autocompleteJadwalDosenContainer">
-              <div class="flex items-center justify-between mb-0.5">
-                <label for="jadwalDosenPengampu" class="block font-bold text-slate-700 text-xs">
-                  Dosen Pengampu <span class="text-rose-500">*</span>
-                </label>
-                <button type="button" onclick="toggleEditJadwalDosen()" id="btnToggleEditJadwalDosen" class="text-[10px] text-blue-700 font-bold hover:underline">
-                  <i class="fas fa-edit mr-0.5"></i>Ubah / Cari
-                </button>
-              </div>
-              <div class="relative">
-                <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
-                  <i class="fas fa-user-tie text-[11px]"></i>
-                </div>
-                <input type="text" id="jadwalDosenPengampu" required autocomplete="off"
-                  placeholder="Pilih mahasiswa atau ketik cari dosen..."
-                  class="w-full pl-7 pr-14 py-1.5 bg-slate-100 border border-slate-200 rounded-xl font-bold text-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-900 focus:bg-white transition-all shadow-sm">
-                <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
-                  <button type="button" id="btnClearJadwalDosen" title="Bersihkan input"
-                    class="hidden w-4 h-4 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-200 flex items-center justify-center transition-colors">
-                    <i class="fas fa-times text-[9px]"></i>
-                  </button>
-                  <div class="text-slate-400 pointer-events-none px-1">
-                    <i class="fas fa-search text-[10px]"></i>
-                  </div>
-                </div>
-              </div>
-              <!-- Floating Suggestions Dropdown -->
-              <div id="dropdownListJadwalDosen" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100">
-              </div>
-            </div>
-          </div>
-          <div>
-            <label class="block font-semibold text-slate-500 mb-0.5">Jenis Ujian</label>
-            <input type="text" id="jadwalJenisUjian" readonly class="w-full bg-slate-100 border border-slate-200 rounded-xl px-3 py-1.5 font-bold cursor-not-allowed">
           </div>
         </div>
 
-        <!-- LANGKAH 3: Admin HANYA Mengisi Tanggal, Jam, Ruangan, Catatan -->
-        <div class="p-3.5 rounded-2xl border border-indigo-200 bg-indigo-50/40 space-y-3">
-          <p class="font-bold text-indigo-950 flex items-center gap-1.5">
-            <i class="fas fa-pen-to-square text-indigo-700"></i>
-            <span>2. Input Jadwal Pelaksanaan Ujian (Hanya Diisi Admin)</span>
-          </p>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Tanggal Ujian <span class="text-rose-500">*</span></label>
-              <input type="date" id="jadwalTanggal" required class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold">
-            </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Jam Mulai <span class="text-rose-500">*</span></label>
-              <input type="time" id="jadwalJamMulai" required class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-mono font-bold">
-            </div>
-            <div>
-              <label class="block font-bold text-slate-700 mb-1">Jam Selesai <span class="text-rose-500">*</span></label>
-              <input type="time" id="jadwalJamSelesai" required class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-mono font-bold">
+        <!-- Hidden input helpers untuk backward-compatibility script & autocomplete -->
+        <div id="containerLegacyJadwalMatkul" class="hidden">
+          <input type="hidden" id="jadwalMataKuliah">
+          <input type="hidden" id="jadwalDosenPengampu">
+          <input type="hidden" id="jadwalTanggal">
+          <input type="hidden" id="jadwalJamMulai">
+          <input type="hidden" id="jadwalJamSelesai">
+          <input type="hidden" id="jadwalRuangan">
+          <textarea id="jadwalKeterangan" class="hidden"></textarea>
+          <div id="autocompleteJadwalMatkulContainer" class="hidden"><div id="dropdownListJadwalMatkul" class="hidden"></div><button id="btnClearJadwalMatkul" class="hidden"></button></div>
+          <div id="autocompleteJadwalDosenContainer" class="hidden"><div id="dropdownListJadwalDosen" class="hidden"></div><button id="btnClearJadwalDosen" class="hidden"></button></div>
+        </div>
+
+        <!-- LANGKAH 3: INPUT JADWAL UJIAN PER MATA KULIAH (MENDUKUNG MULTI-MATA KULIAH) -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <p class="font-bold text-indigo-950 flex items-center gap-1.5 text-xs">
+              <i class="fas fa-calendar-alt text-indigo-700"></i>
+              <span>2. Jadwal Pelaksanaan Ujian Per Mata Kuliah</span>
+            </p>
+            <div id="toolbarSlotMultiMatkul" class="hidden">
+              <button type="button" onclick="applyFirstSlotToAll()" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-lg font-bold text-[11px] shadow-2xs transition flex items-center gap-1 cursor-pointer">
+                <i class="fas fa-copy text-indigo-600"></i> Samakan Tanggal & Ruangan
+              </button>
             </div>
           </div>
 
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Ruangan Ujian <span class="text-rose-500">*</span></label>
-            <select id="jadwalRuangan" required class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-bold">
-              <option value="">-- Pilih Ruangan (Master_Ruangan) --</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="block font-bold text-slate-700 mb-1">Tata Tertib / Catatan Ruangan</label>
-            <textarea id="jadwalKeterangan" rows="2" placeholder="Contoh: Membawa Kartu Ujian fisik/digital, kalkulator diperbolehkan..." class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white"></textarea>
+          <div id="containerSlotJadwalMatkul" class="space-y-3">
+            <!-- Kartu slot mata kuliah akan di-render secara dinamis di sini -->
+            <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-amber-900 text-xs text-center font-medium">
+              <i class="fas fa-info-circle text-amber-600 mr-1.5"></i>
+              Silakan pilih data mahasiswa yang mendaftar di atas untuk memuat mata kuliah yang akan dijadwalkan.
+            </div>
           </div>
         </div>
 
@@ -6032,160 +5994,447 @@
         selectPendaftar.innerHTML = '<option value="">-- Semua Mahasiswa Terdaftar Sudah Terjadwalkan (0 Menunggu) --</option>';
       }
 
-      document.getElementById('jadwalTanggal').value = new Date().toISOString().split('T')[0];
-      document.getElementById('jadwalJamMulai').value = '08:00';
-      document.getElementById('jadwalJamSelesai').value = '09:30';
-
-      // Jika edit jadwal yang sudah ada:
-      if (realId) {
-        const item = (appData.jadwal || []).find(j => String(j.ID).trim() === realId);
-        if (item) {
-          document.getElementById('jadwalTanggal').value = item['Tanggal Ujian'] || '';
-          document.getElementById('jadwalJamMulai').value = formatJamClean(item['Jam Mulai']) || '08:00';
-          document.getElementById('jadwalJamSelesai').value = formatJamClean(item['Jam Selesai']) || '09:30';
-          document.getElementById('jadwalRuangan').value = item.Ruangan || '';
-          document.getElementById('jadwalKodeProdi').value = item['Kode Prodi'] || 'MNJ';
-          document.getElementById('jadwalProgramStudi').value = item['Program Studi'] || '';
-          document.getElementById('jadwalSemester').value = item.Semester || '';
-          document.getElementById('jadwalKelas').value = item.Kelas || '';
-          document.getElementById('jadwalSemesterKelas').value = `${item.Semester || ''} · ${item.Kelas || ''}`;
-          
-          const jMatkul = item['Mata Kuliah'] || '';
-          const jDosen = item['Dosen Pengampu'] || '';
-          if (autoMatkulJadwal) autoMatkulJadwal.setValue(jMatkul);
-          else document.getElementById('jadwalMataKuliah').value = jMatkul;
-          if (autoDosenJadwal) autoDosenJadwal.setValue(jDosen);
-          else document.getElementById('jadwalDosenPengampu').value = jDosen;
-
-          document.getElementById('jadwalJenisUjian').value = item['Jenis Ujian'] || 'UTS Susulan';
-          document.getElementById('jadwalKeterangan').value = item.Keterangan || '';
-        }
-      } else {
-        if (autoMatkulJadwal) autoMatkulJadwal.clear();
-        else if (document.getElementById('jadwalMataKuliah')) document.getElementById('jadwalMataKuliah').value = '';
-        if (autoDosenJadwal) autoDosenJadwal.clear();
-        else if (document.getElementById('jadwalDosenPengampu')) document.getElementById('jadwalDosenPengampu').value = '';
+    // ==========================================
+    // [HELPER MULTI-MATA KULIAH JADWAL UJIAN]
+    // ==========================================
+    function extractMataKuliahList(data) {
+      if (!data) return [];
+      if (Array.isArray(data.mataKuliahList) && data.mataKuliahList.length > 0) {
+        return data.mataKuliahList.map(m => ({
+          nama: m.nama || m.mataKuliah || '',
+          mataKuliah: m.mataKuliah || m.nama || '',
+          dosen: m.dosen || m.dosenPengampu || '',
+          dosenPengampu: m.dosenPengampu || m.dosen || '',
+          sks: m.sks || 3
+        }));
       }
 
-      modal.classList.remove('hidden');
-      modal.classList.add('flex');
+      const rawMatkul = String(data['Mata Kuliah'] || '').trim();
+      const rawDosen = String(data['Dosen Pengampu'] || '').trim();
+      if (!rawMatkul) return [];
+
+      // Format bernomor: "1. Matematika Bisnis (3 SKS) 2. Pengantar Manajemen Bisnis (3 SKS) 3. Bahasa Inggris Bisnis (3 SKS)"
+      if (/(?:^|\s*)(?:\d+[\.\)]|\-)\s+/.test(rawMatkul)) {
+        const matkulParts = rawMatkul.split(/(?:^|\s+)(?:\d+[\.\)]|\-)\s+/).map(s => s.trim()).filter(Boolean);
+        const dosenParts = rawDosen.split(/(?:^|\s+)(?:\d+[\.\)]|\-)\s+/).map(s => s.trim()).filter(Boolean);
+
+        if (matkulParts.length > 0) {
+          return matkulParts.map((mk, i) => {
+            let sks = 3;
+            const sksMatch = mk.match(/\((\d+)\s*SKS\)/i);
+            if (sksMatch) sks = parseInt(sksMatch[1], 10);
+            const cleanName = mk.replace(/\s*\(\d+\s*SKS\)/i, '').replace(/,\s*$/, '').trim();
+            const ds = (dosenParts[i] || dosenParts[0] || '').replace(/,\s*$/, '').trim();
+            return {
+              nama: cleanName,
+              mataKuliah: cleanName,
+              dosen: ds,
+              dosenPengampu: ds,
+              sks: sks
+            };
+          });
+        }
+      }
+
+      // Format baris baru (newline)
+      if (rawMatkul.includes('\n')) {
+        const matkulParts = rawMatkul.split('\n').map(s => s.trim()).filter(Boolean);
+        const dosenParts = rawDosen.split('\n').map(s => s.trim()).filter(Boolean);
+        return matkulParts.map((mk, i) => {
+          let sks = 3;
+          const sksMatch = mk.match(/\((\d+)\s*SKS\)/i);
+          if (sksMatch) sks = parseInt(sksMatch[1], 10);
+          const cleanName = mk.replace(/\s*\(\d+\s*SKS\)/i, '').replace(/,\s*$/, '').trim();
+          const ds = (dosenParts[i] || dosenParts[0] || '').replace(/,\s*$/, '').trim();
+          return {
+            nama: cleanName,
+            mataKuliah: cleanName,
+            dosen: ds,
+            dosenPengampu: ds,
+            sks: sks
+          };
+        });
+      }
+
+      return [{
+        nama: rawMatkul,
+        mataKuliah: rawMatkul,
+        dosen: rawDosen,
+        dosenPengampu: rawDosen,
+        sks: 3
+      }];
     }
 
-    function closeJadwalModal() {
-      document.getElementById('modalJadwalUjian').classList.add('hidden');
-      document.getElementById('modalJadwalUjian').classList.remove('flex');
-    }
+    function renderSlotJadwalMatkul(courses, existingScheduleItem = null) {
+      const container = document.getElementById('containerSlotJadwalMatkul');
+      const toolbar = document.getElementById('toolbarSlotMultiMatkul');
+      if (!container) return;
 
-    function onSelectMahasiswaPendaftar(pendaftarId) {
-      if (!pendaftarId) return;
-      const select = document.getElementById('jadwalSelectPendaftar');
-      const opt = select.options[select.selectedIndex];
-      if (!opt) return;
-      try {
-        const data = JSON.parse(opt.getAttribute('data-json'));
-        // Kunci otomatis data akademik sesuai pendaftar
-        document.getElementById('jadwalKodeProdi').value = data['Kode Prodi'] || 'MNJ';
-        document.getElementById('jadwalProgramStudi').value = `[${data['Kode Prodi'] || 'MNJ'}] ${data['Program Studi'] || 'Manajemen'}`;
-        document.getElementById('jadwalSemester').value = data.Semester || 'Semester 3';
-        document.getElementById('jadwalKelas').value = data.Kelas || 'Reguler';
-        document.getElementById('jadwalSemesterKelas').value = `${data.Semester || 'Semester 3'} · ${data.Kelas || 'Reguler'}`;
-        
-        const mVal = data['Mata Kuliah'] || '';
-        const dVal = data['Dosen Pengampu'] || '';
-        if (autoMatkulJadwal) autoMatkulJadwal.setValue(mVal);
-        else document.getElementById('jadwalMataKuliah').value = mVal;
-        if (autoDosenJadwal) autoDosenJadwal.setValue(dVal);
-        else document.getElementById('jadwalDosenPengampu').value = dVal;
-
-        document.getElementById('jadwalJenisUjian').value = data['Jenis Layanan'] || 'UTS Susulan';
-      } catch(e) {}
-    }
-
-    function handleSaveJadwal(e) {
-      if (e && e.preventDefault) e.preventDefault();
-      const pId = document.getElementById('jadwalSelectPendaftar').value;
-      const editId = (document.getElementById('jadwalId')?.value || '').trim();
-
-      if (!pId && !editId) {
-        Swal.fire('Perhatian', 'Pilih data mahasiswa yang mendaftar terlebih dahulu!', 'warning');
+      container.innerHTML = '';
+      if (!courses || courses.length === 0) {
+        if (toolbar) toolbar.classList.add('hidden');
+        container.innerHTML = `
+          <div class="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-amber-900 text-xs text-center font-medium">
+            <i class="fas fa-info-circle text-amber-600 mr-1.5"></i>
+            Silakan pilih data mahasiswa yang mendaftar di atas untuk memuat mata kuliah yang akan dijadwalkan.
+          </div>
+        `;
         return;
       }
 
-      const btn = document.getElementById('btnSaveJadwal');
-      if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
-      }
-
-      const payload = {
-        id: editId,
-        tanggalUjian: document.getElementById('jadwalTanggal').value,
-        jamMulai: document.getElementById('jadwalJamMulai').value,
-        jamSelesai: document.getElementById('jadwalJamSelesai').value,
-        ruangan: document.getElementById('jadwalRuangan').value,
-        kodeProdi: document.getElementById('jadwalKodeProdi').value,
-        programStudi: document.getElementById('jadwalProgramStudi').value,
-        semester: document.getElementById('jadwalSemester').value,
-        kelas: document.getElementById('jadwalKelas').value,
-        mataKuliah: document.getElementById('jadwalMataKuliah').value,
-        dosenPengampu: document.getElementById('jadwalDosenPengampu').value,
-        jenisUjian: document.getElementById('jadwalJenisUjian').value,
-        keterangan: document.getElementById('jadwalKeterangan').value,
-        pendaftarId: pId,
-        actor: currentUser?.nama || 'Admin TU'
-      };
-
-      // Optimistic update status jadwal pada berkas pendaftaran lokal
-      if (pId) {
-        const pMatch = (appData.pendaftaran || []).find(p => String(p.ID) === String(pId));
-        if (pMatch) {
-          pMatch['Status Jadwal'] = 'Terjadwal';
-          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
-        }
-      }
-
-      const isEdit = (editId && editId.indexOf('JDW-') === 0);
-
-      const onResult = res => {
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = 'Simpan & Terbitkan Jadwal';
-        }
-        if (res && res.success) {
-          closeJadwalModal();
-          Swal.fire('Berhasil', res.message || 'Jadwal ujian berhasil disimpan dan diterbitkan!', 'success');
-          loadAppData();
-        } else {
-          Swal.fire('Gagal', (res && res.message) || 'Gagal menyimpan jadwal.', 'error');
-        }
-      };
-
-      const onError = err => {
-        if (btn) {
-          btn.disabled = false;
-          btn.innerHTML = 'Simpan & Terbitkan Jadwal';
-        }
-        Swal.fire('Error Sistem', err.message || String(err), 'error');
-      };
-
-      if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.addJadwal) {
-        if (isEdit) {
-          google.script.run
-            .withSuccessHandler(onResult)
-            .withFailureHandler(onError)
-            .updateJadwal(editId, payload);
-        } else {
-          google.script.run
-            .withSuccessHandler(onResult)
-            .withFailureHandler(onError)
-            .addJadwal(payload);
-        }
+      if (courses.length > 1) {
+        if (toolbar) toolbar.classList.remove('hidden');
       } else {
-        const fnName = isEdit ? 'updateJadwal' : 'addJadwal';
-        const fnArgs = isEdit ? [editId, payload] : [payload];
-        callGasApi(fnName, fnArgs, onResult, onError);
+        if (toolbar) toolbar.classList.add('hidden');
+      }
+
+      const masterRuangan = (appData.master && appData.master.ruangan) || appData.ruangan || [];
+      const defaultDate = existingScheduleItem ? (existingScheduleItem['Tanggal Ujian'] || '') : new Date().toISOString().split('T')[0];
+      const defaultMulai = existingScheduleItem ? formatJamClean(existingScheduleItem['Jam Mulai']) : '08:00';
+      const defaultSelesai = existingScheduleItem ? formatJamClean(existingScheduleItem['Jam Selesai']) : '10:00';
+      const defaultRuang = existingScheduleItem ? (existingScheduleItem.Ruangan || '') : '';
+      const defaultKet = existingScheduleItem ? (existingScheduleItem.Keterangan || '') : '';
+
+      courses.forEach((c, idx) => {
+        const card = document.createElement('div');
+        card.className = 'slot-jadwal-card bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5 transition hover:border-indigo-300';
+        card.setAttribute('data-matkul', c.mataKuliah || c.nama || '');
+        card.setAttribute('data-dosen', c.dosenPengampu || c.dosen || '');
+        card.setAttribute('data-sks', c.sks || 3);
+
+        const ruanganOptions = '<option value="">-- Pilih Ruangan --</option>' +
+          masterRuangan.map(r => {
+            const kode = r['Kode Ruangan'] || r.Kode || 'R.101';
+            const nama = r['Nama Ruangan'] || r.Nama || kode;
+            const sel = (defaultRuang && defaultRuang === kode) ? 'selected' : '';
+            return `<option value="${kode}" ${sel}>${kode} - ${nama}</option>`;
+          }).join('');
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between border-b border-slate-100 pb-2">
+            <div>
+              <div class="font-extrabold text-blue-950 text-xs flex items-center gap-1.5 flex-wrap">
+                <span class="w-5 h-5 rounded-full bg-blue-900 text-white font-mono text-[10px] flex items-center justify-center font-bold">${idx + 1}</span>
+                <span class="text-slate-900">${escapeHtml(c.mataKuliah || c.nama)}</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">${c.sks || 3} SKS</span>
+              </div>
+              <div class="text-[11px] text-slate-500 pl-6.5 mt-0.5">
+                <i class="fas fa-user-tie text-[10px] text-slate-400 mr-1"></i> Dosen Pengampu: <b class="text-slate-700">${escapeHtml(c.dosenPengampu || c.dosen || '-')}</b>
+              </div>
+            </div>
+            ${courses.length > 1 ? `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-mono font-bold">Slot #${idx + 1}</span>` : ''}
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 text-[11px] mb-1">Tanggal Ujian <span class="text-rose-500">*</span></label>
+              <input type="date" class="slot-tanggal w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-semibold text-xs focus:ring-2 focus:ring-blue-900" required value="${defaultDate}">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 text-[11px] mb-1">Jam Mulai <span class="text-rose-500">*</span></label>
+              <input type="time" class="slot-jam-mulai w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-mono font-bold text-xs focus:ring-2 focus:ring-blue-900" required value="${defaultMulai}">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 text-[11px] mb-1">Jam Selesai <span class="text-rose-500">*</span></label>
+              <input type="time" class="slot-jam-selesai w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-mono font-bold text-xs focus:ring-2 focus:ring-blue-900" required value="${defaultSelesai}">
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-bold text-slate-700 text-[11px] mb-1">Ruangan Ujian <span class="text-rose-500">*</span></label>
+              <select class="slot-ruangan w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-bold text-xs focus:ring-2 focus:ring-blue-900" required>
+                ${ruanganOptions}
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 text-[11px] mb-1">Tata Tertib / Catatan Ruangan</label>
+              <input type="text" class="slot-keterangan w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white text-xs focus:ring-2 focus:ring-blue-900" placeholder="Contoh: Membawa Kartu Ujian fisik/digital..." value="${escapeHtml(defaultKet)}">
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function applyFirstSlotToAll() {
+      const cards = document.querySelectorAll('.slot-jadwal-card');
+      if (cards.length <= 1) return;
+      const first = cards[0];
+      const tgl = first.querySelector('.slot-tanggal')?.value;
+      const jmMulai = first.querySelector('.slot-jam-mulai')?.value;
+      const jmSelesai = first.querySelector('.slot-jam-selesai')?.value;
+      const ruangan = first.querySelector('.slot-ruangan')?.value;
+      const ket = first.querySelector('.slot-keterangan')?.value;
+
+      for (let i = 1; i < cards.length; i++) {
+        const c = cards[i];
+        if (tgl && c.querySelector('.slot-tanggal')) c.querySelector('.slot-tanggal').value = tgl;
+        if (jmMulai && c.querySelector('.slot-jam-mulai')) c.querySelector('.slot-jam-mulai').value = jmMulai;
+        if (jmSelesai && c.querySelector('.slot-jam-selesai')) c.querySelector('.slot-jam-selesai').value = jmSelesai;
+        if (ruangan && c.querySelector('.slot-ruangan')) c.querySelector('.slot-ruangan').value = ruangan;
+        if (ket && c.querySelector('.slot-keterangan')) c.querySelector('.slot-keterangan').value = ket;
+      }
+
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'Tanggal & Ruangan berhasil disamakan ke semua mata kuliah!',
+        showConfirmButton: false,
+        timer: 2000
+      });
+    }
+
+    // Jika edit jadwal yang sudah ada:
+    if (realId) {
+      const item = (appData.jadwal || []).find(j => String(j.ID).trim() === realId);
+      if (item) {
+        document.getElementById('jadwalRuangan').value = item.Ruangan || '';
+        document.getElementById('jadwalKodeProdi').value = item['Kode Prodi'] || 'MNJ';
+        document.getElementById('jadwalProgramStudi').value = item['Program Studi'] || '';
+        document.getElementById('jadwalSemester').value = item.Semester || '';
+        document.getElementById('jadwalKelas').value = item.Kelas || '';
+        document.getElementById('jadwalSemesterKelas').value = `${item.Semester || ''} · ${item.Kelas || ''}`;
+        document.getElementById('jadwalJenisUjian').value = item['Jenis Ujian'] || 'UTS Susulan';
+        document.getElementById('jadwalKeterangan').value = item.Keterangan || '';
+
+        const singleCourse = [{
+          nama: item['Mata Kuliah'] || '',
+          mataKuliah: item['Mata Kuliah'] || '',
+          dosen: item['Dosen Pengampu'] || '',
+          dosenPengampu: item['Dosen Pengampu'] || '',
+          sks: 3
+        }];
+        renderSlotJadwalMatkul(singleCourse, item);
+      }
+    } else {
+      renderSlotJadwalMatkul([]);
+    }
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+
+  function closeJadwalModal() {
+    document.getElementById('modalJadwalUjian').classList.add('hidden');
+    document.getElementById('modalJadwalUjian').classList.remove('flex');
+  }
+
+  function onSelectMahasiswaPendaftar(pendaftarId) {
+    if (!pendaftarId) {
+      renderSlotJadwalMatkul([]);
+      return;
+    }
+    const select = document.getElementById('jadwalSelectPendaftar');
+    const opt = select.options[select.selectedIndex];
+    if (!opt) return;
+    try {
+      const data = JSON.parse(opt.getAttribute('data-json'));
+      // Kunci otomatis data akademik sesuai pendaftar
+      document.getElementById('jadwalKodeProdi').value = data['Kode Prodi'] || 'MNJ';
+      document.getElementById('jadwalProgramStudi').value = `[${data['Kode Prodi'] || 'MNJ'}] ${data['Program Studi'] || 'Manajemen'}`;
+      document.getElementById('jadwalSemester').value = data.Semester || 'Semester 3';
+      document.getElementById('jadwalKelas').value = data.Kelas || 'Reguler';
+      document.getElementById('jadwalSemesterKelas').value = `${data.Semester || 'Semester 3'} · ${data.Kelas || 'Reguler'}`;
+      document.getElementById('jadwalJenisUjian').value = data['Jenis Layanan'] || 'UTS Susulan';
+
+      const courses = extractMataKuliahList(data);
+      renderSlotJadwalMatkul(courses);
+    } catch(e) {
+      console.error('Error onSelectMahasiswaPendaftar:', e);
+    }
+  }
+
+  function handleSaveJadwal(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const pId = document.getElementById('jadwalSelectPendaftar')?.value || '';
+    const editId = (document.getElementById('jadwalId')?.value || '').trim();
+
+    if (!pId && !editId) {
+      Swal.fire('Perhatian', 'Pilih data mahasiswa yang mendaftar terlebih dahulu!', 'warning');
+      return;
+    }
+
+    const slotCards = document.querySelectorAll('.slot-jadwal-card');
+    if (slotCards.length === 0) {
+      Swal.fire('Perhatian', 'Pilih mahasiswa yang mendaftar terlebih dahulu untuk memuat slot mata kuliah.', 'warning');
+      return;
+    }
+
+    // Validasi semua slot
+    let isValid = true;
+    let missingField = '';
+    const items = [];
+
+    slotCards.forEach((card, idx) => {
+      const matkul = card.getAttribute('data-matkul') || '';
+      const dosen = card.getAttribute('data-dosen') || '';
+      const tgl = card.querySelector('.slot-tanggal')?.value || '';
+      const jmMulai = card.querySelector('.slot-jam-mulai')?.value || '';
+      const jmSelesai = card.querySelector('.slot-jam-selesai')?.value || '';
+      const ruangan = card.querySelector('.slot-ruangan')?.value || '';
+      const ket = card.querySelector('.slot-keterangan')?.value || '';
+
+      if (!tgl || !jmMulai || !jmSelesai || !ruangan) {
+        isValid = false;
+        missingField = `Mata kuliah "${matkul || 'Slot #' + (idx + 1)}" belum lengkap (Tanggal, Jam, dan Ruangan wajib diisi).`;
+      }
+
+      items.push({
+        mataKuliah: matkul,
+        dosenPengampu: dosen,
+        tanggalUjian: tgl,
+        jamMulai: jmMulai,
+        jamSelesai: jmSelesai,
+        ruangan: ruangan,
+        keterangan: ket
+      });
+    });
+
+    if (!isValid) {
+      Swal.fire('Data Belum Lengkap', missingField, 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('btnSaveJadwal');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Menyimpan...';
+    }
+
+    const kdProdi = document.getElementById('jadwalKodeProdi').value;
+    const nmProdi = document.getElementById('jadwalProgramStudi').value;
+    const sem = document.getElementById('jadwalSemester').value;
+    const kls = document.getElementById('jadwalKelas').value;
+    const jnsUjian = document.getElementById('jadwalJenisUjian').value;
+
+    const payload = {
+      id: editId,
+      pendaftarId: pId,
+      kodeProdi: kdProdi,
+      programStudi: nmProdi,
+      semester: sem,
+      kelas: kls,
+      jenisUjian: jnsUjian,
+      actor: currentUser?.nama || 'Admin TU',
+      items: items,
+      // Fallback backward-compatible properties
+      mataKuliah: items[0].mataKuliah,
+      dosenPengampu: items[0].dosenPengampu,
+      tanggalUjian: items[0].tanggalUjian,
+      jamMulai: items[0].jamMulai,
+      jamSelesai: items[0].jamSelesai,
+      ruangan: items[0].ruangan,
+      keterangan: items[0].keterangan
+    };
+
+    // Optimistic update lokal
+    appData.jadwal = appData.jadwal || [];
+    const baseNum = 1000 + (appData.jadwal.length + 1);
+    const baseId = editId || ('JDW-' + baseNum);
+
+    if (items.length > 1 && !editId) {
+      items.forEach((it, i) => {
+        const subId = `${baseId}-${i + 1}`;
+        appData.jadwal.unshift({
+          ID: subId,
+          id: subId,
+          pendaftarId: pId,
+          pendaftaranId: pId,
+          'Tanggal Ujian': it.tanggalUjian,
+          'Jam Mulai': it.jamMulai,
+          'Jam Selesai': it.jamSelesai,
+          Ruangan: it.ruangan,
+          'Kode Prodi': kdProdi,
+          'Program Studi': nmProdi,
+          Semester: sem,
+          Kelas: kls,
+          'Mata Kuliah': it.mataKuliah,
+          'Dosen Pengampu': it.dosenPengampu,
+          'Jenis Ujian': jnsUjian,
+          Keterangan: it.keterangan ? `${it.keterangan} [ID: ${pId}]` : `[ID: ${pId}]`
+        });
+      });
+    } else {
+      const itemObj = {
+        ID: baseId,
+        id: baseId,
+        pendaftarId: pId,
+        pendaftaranId: pId,
+        'Tanggal Ujian': items[0].tanggalUjian,
+        'Jam Mulai': items[0].jamMulai,
+        'Jam Selesai': items[0].jamSelesai,
+        Ruangan: items[0].ruangan,
+        'Kode Prodi': kdProdi,
+        'Program Studi': nmProdi,
+        Semester: sem,
+        Kelas: kls,
+        'Mata Kuliah': items[0].mataKuliah,
+        'Dosen Pengampu': items[0].dosenPengampu,
+        'Jenis Ujian': jnsUjian,
+        Keterangan: items[0].keterangan ? `${items[0].keterangan} [ID: ${pId}]` : `[ID: ${pId}]`
+      };
+      const existIdx = appData.jadwal.findIndex(j => String(j.ID || j.id) === baseId);
+      if (existIdx !== -1) {
+        appData.jadwal[existIdx] = Object.assign({}, appData.jadwal[existIdx], itemObj);
+      } else {
+        appData.jadwal.unshift(itemObj);
       }
     }
+
+    if (pId) {
+      const pMatch = (appData.pendaftaran || []).find(p => String(p.ID || p.id) === String(pId));
+      if (pMatch) {
+        pMatch['Status Jadwal'] = 'Terjadwal';
+      }
+    }
+    saveAppDataCache(appData);
+    renderJadwalUjianTable();
+    renderPendaftaranTable();
+
+    const isEdit = (editId && editId.indexOf('JDW-') === 0);
+
+    const onResult = res => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'Simpan & Terbitkan Jadwal';
+      }
+      if (res && res.success) {
+        closeJadwalModal();
+        Swal.fire('Berhasil', res.message || 'Jadwal ujian berhasil disimpan dan diterbitkan!', 'success');
+        loadAppData();
+      } else {
+        Swal.fire('Gagal', (res && res.message) || 'Gagal menyimpan jadwal.', 'error');
+      }
+    };
+
+    const onError = err => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'Simpan & Terbitkan Jadwal';
+      }
+      Swal.fire('Tersimpan Lokal', 'Jadwal telah tersimpan di sistem lokal.', 'info');
+      closeJadwalModal();
+      loadAppData();
+    };
+
+    if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.addJadwal) {
+      if (isEdit) {
+        google.script.run
+          .withSuccessHandler(onResult)
+          .withFailureHandler(onError)
+          .updateJadwal(editId, payload);
+      } else {
+        google.script.run
+          .withSuccessHandler(onResult)
+          .withFailureHandler(onError)
+          .addJadwal(payload);
+      }
+    } else {
+      const fnName = isEdit ? 'updateJadwal' : 'addJadwal';
+      const fnArgs = isEdit ? [editId, payload] : [payload];
+      callGasApi(fnName, fnArgs, onResult, onError);
+    }
+  }
 
     // ==========================================
     // [REVISI POIN 5]: TAMPILAN JADWAL UJIAN RAPI
@@ -6410,22 +6659,41 @@
       target.forEach(p => {
         const statusApp = p['Status Persetujuan'] || 'Pending';
         const isApproved = statusApp.toLowerCase() === 'disetujui';
+        const pId = String(p.ID || p.id || '').trim();
+        const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
 
-        // Logika penguncian otomatis (auto-lock/relasi) berbasis Program Studi, Semester, Kelas, dan Mata Kuliah
-        const matchJadwal = jadwalList.find(j => {
-          const sameProdi = String(j['Kode Prodi'] || '').toUpperCase() === String(p['Kode Prodi'] || '').toUpperCase() ||
-                            String(j['Program Studi'] || '').toLowerCase() === String(p['Program Studi'] || '').toLowerCase();
-          const sameMatkul = String(j['Mata Kuliah'] || '').trim().toLowerCase() === String(p['Mata Kuliah'] || '').trim().toLowerCase();
-          const sameSem = String(j.Semester || '').trim().toLowerCase() === String(p.Semester || '').trim().toLowerCase();
-          const sameKls = String(j.Kelas || '').trim().toLowerCase() === String(p.Kelas || '').trim().toLowerCase();
-          const sameNpm = String(j.Keterangan || '').indexOf(p.NPM || p.NIM) !== -1;
-          return (sameProdi && sameMatkul && sameSem && sameKls) || (sameProdi && sameMatkul) || sameNpm;
+        const courses = extractMataKuliahList(p);
+
+        // Cari jadwal untuk masing-masing mata kuliah
+        const scheduledCourses = courses.map((c, cIdx) => {
+          const match = jadwalList.find(j => {
+            const jPId = String(j.pendaftarId || j.pendaftaranId || '').trim();
+            const jKet = String(j.Keterangan || '').toLowerCase();
+            const idMatched = (jPId && jPId === pId) || (pId && jKet.includes(pId.toLowerCase())) || (pNpm && jKet.includes(pNpm));
+            
+            const jMatkul = String(j['Mata Kuliah'] || '').trim().toLowerCase();
+            const cMatkul = String(c.mataKuliah || c.nama || '').trim().toLowerCase();
+            const matkulMatched = jMatkul && cMatkul && (jMatkul.includes(cMatkul) || cMatkul.includes(jMatkul));
+
+            if (idMatched && matkulMatched) return true;
+            if (idMatched && courses.length === 1) return true;
+            if (matkulMatched) {
+              const sameProdi = String(j['Kode Prodi'] || '').toUpperCase() === String(p['Kode Prodi'] || '').toUpperCase();
+              const sameSem = String(j.Semester || '').trim().toLowerCase() === String(p.Semester || '').trim().toLowerCase();
+              if (sameProdi && sameSem) return true;
+            }
+            return false;
+          });
+          return {
+            course: c,
+            schedule: match
+          };
         });
 
-        const hasSchedule = matchJadwal && matchJadwal['Tanggal Ujian'] && matchJadwal.Ruangan;
+        const hasAnySchedule = scheduledCourses.some(sc => sc.schedule && sc.schedule['Tanggal Ujian'] && sc.schedule.Ruangan);
 
         // KONDISI KHUSUS: Jika Belum Disetujui atau Jadwal Belum Diinput oleh Admin TU -> Tampilkan Status Pending!
-        if (!isApproved || !hasSchedule) {
+        if (!isApproved || !hasAnySchedule) {
           const pendingNotice = !isApproved
             ? `Berkas pendaftaran Anda masih berstatus "${statusApp}" (Menunggu Verifikasi Persetujuan Admin TU).`
             : `Pendaftaran telah disetujui, namun Admin Master/TU belum selesai memasukkan jadwal ujian (Tanggal, Jam, dan Ruangan) untuk mata kuliah ini.`;
@@ -6453,12 +6721,7 @@
         }
 
         // KONDISI JADWAL SUDAH SELESAI DIMASUKKAN OLEH ADMIN TU -> TAMPILKAN KARTU DIGITAL RESMI DENGAN QR CODE!
-        const cleanMulai = formatJamClean(matchJadwal['Jam Mulai']);
-        const cleanSelesai = formatJamClean(matchJadwal['Jam Selesai']);
-        const durasi = hitungDurasiMenit(cleanMulai, cleanSelesai);
-        const jamDisplay = cleanMulai + ' - ' + cleanSelesai + ' WIB (' + durasi + ')';
-        const tglDisplay = formatTanggalIndo(matchJadwal['Tanggal Ujian']);
-        const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=' + encodeURIComponent('FEB-UIKA-RESMI|ID:' + p.ID + '|NPM:' + (p.NPM || p.NIM) + '|NAMA:' + p['Nama Mahasiswa'] + '|MATKUL:' + p['Mata Kuliah'] + '|RUANG:' + matchJadwal.Ruangan + '|STATUS:TERVERIFIKASI_SAH');
+        const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=' + encodeURIComponent('FEB-UIKA-RESMI|ID:' + p.ID + '|NPM:' + (p.NPM || p.NIM) + '|NAMA:' + p['Nama Mahasiswa'] + '|STATUS:TERVERIFIKASI_SAH');
 
         const card = document.createElement('div');
         card.className = 'bg-white rounded-3xl border-2 border-slate-300 shadow-xl p-6 space-y-4 printable-active';
@@ -6487,20 +6750,50 @@
             <p><b>NPM:</b> ${p.NPM || p.NIM}</p>
             <p><b>Prodi:</b> ${p['Program Studi']} (${p['Kode Prodi']})</p>
             <p><b>Semester & Kelas:</b> ${p.Semester || 'Semester 3'} · ${p.Kelas || 'Reguler'}</p>
-            <p><b>Mata Kuliah:</b> <span class="font-bold text-blue-950">${escapeHtml(p['Mata Kuliah'] || '').replace(/\n/g, '<br>')}</span></p>
-            <p><b>Dosen Pengampu:</b> <span>${escapeHtml(p['Dosen Pengampu'] || '').replace(/\n/g, '<br>')}</span></p>
           </div>
 
-          <div class="grid grid-cols-2 gap-3 bg-emerald-50/80 p-3 rounded-2xl border border-emerald-200 text-xs">
-            <div>
-              <p class="text-[10px] font-bold text-emerald-800 uppercase"><i class="fas fa-calendar-day mr-1"></i> Jadwal Pelaksanaan Resmi</p>
-              <p class="font-black text-slate-900 text-sm">${tglDisplay}</p>
-              <p class="font-mono font-bold text-emerald-950">${jamDisplay}</p>
+          <!-- TABEL RINCIAN JADWAL UJIAN PER MATA KULIAH -->
+          <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
+            <div class="bg-indigo-900 text-white px-3 py-2 font-bold text-xs flex items-center justify-between">
+              <span><i class="fas fa-calendar-alt mr-1.5 text-indigo-300"></i> Rincian Jadwal & Ruangan Ujian</span>
+              <span class="text-[10px] bg-indigo-800 px-2 py-0.5 rounded font-mono">${scheduledCourses.length} Mata Kuliah</span>
             </div>
-            <div>
-              <p class="text-[10px] font-bold text-emerald-800 uppercase"><i class="fas fa-door-open mr-1"></i> Ruangan Ujian</p>
-              <p class="text-base font-black text-emerald-900">${matchJadwal.Ruangan}</p>
-              <p class="text-[10px] text-slate-500">Gedung FEB UIKA Bogor</p>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase">
+                  <tr>
+                    <th class="p-2.5 text-center w-8">#</th>
+                    <th class="p-2.5">Mata Kuliah & Dosen</th>
+                    <th class="p-2.5">Jadwal Pelaksanaan</th>
+                    <th class="p-2.5 text-center">Ruangan</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-xs">
+                  ${scheduledCourses.map((sc, scIdx) => {
+                    const c = sc.course;
+                    const j = sc.schedule;
+                    const tgl = j ? formatTanggalIndo(j['Tanggal Ujian']) : '<span class="text-amber-600 font-bold italic">Menunggu Jadwal</span>';
+                    const jamMulai = j ? formatJamClean(j['Jam Mulai']) : '';
+                    const jamSelesai = j ? formatJamClean(j['Jam Selesai']) : '';
+                    const jam = (jamMulai && jamSelesai) ? `${jamMulai} - ${jamSelesai} WIB` : '';
+                    const ruang = j ? `<span class="px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 font-black border border-emerald-300 text-xs">${j.Ruangan}</span>` : '<span class="text-slate-400">-</span>';
+                    return `
+                      <tr class="hover:bg-slate-50 transition">
+                        <td class="p-2.5 text-center font-mono font-bold text-blue-900">${scIdx + 1}</td>
+                        <td class="p-2.5">
+                          <div class="font-extrabold text-blue-950">${escapeHtml(c.mataKuliah || c.nama)} <span class="text-[10px] text-indigo-700 font-bold">(${c.sks || 3} SKS)</span></div>
+                          <div class="text-[11px] text-slate-500 mt-0.5"><i class="fas fa-user-tie text-[10px] text-slate-400 mr-1"></i> Dosen: ${escapeHtml(c.dosenPengampu || c.dosen || '-')}</div>
+                        </td>
+                        <td class="p-2.5 whitespace-nowrap">
+                          <div class="font-bold text-slate-900">${tgl}</div>
+                          ${jam ? `<div class="font-mono font-bold text-indigo-950 text-[11px]">${jam}</div>` : ''}
+                        </td>
+                        <td class="p-2.5 text-center whitespace-nowrap">${ruang}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
             </div>
           </div>
 

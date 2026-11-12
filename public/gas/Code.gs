@@ -2866,32 +2866,81 @@ function addJadwal(payload) {
       sheet = getOrCreateSheet(ss, 'Jadwal_Ujian');
     }
     var lastRow = sheet.getLastRow();
-    var newId = 'JDW-' + (1000 + (lastRow > 1 ? lastRow : 1));
+    var baseNum = 1000 + (lastRow > 1 ? lastRow : 1);
+    var baseId = 'JDW-' + baseNum;
     if (payload.id && String(payload.id).indexOf('JDW-') === 0) {
-      newId = String(payload.id).trim();
+      baseId = String(payload.id).trim();
     }
 
-    var tgl = payload['Tanggal Ujian'] || payload.tanggalUjian || '';
-    var jmMulai = payload['Jam Mulai'] || payload.jamMulai || '08:00';
-    var jmSelesai = payload['Jam Selesai'] || payload.jamSelesai || '09:30';
-    var ruang = payload.Ruangan || payload.ruangan || '';
     var kdProdi = payload['Kode Prodi'] || payload.kodeProdi || 'MNJ';
     var nmProdi = payload['Program Studi'] || payload.programStudi || 'Manajemen';
     var sem = payload.Semester || payload.semester || 'Semester 3';
     var kls = payload.Kelas || payload.kelas || 'Reguler 3A';
-    var matkul = payload['Mata Kuliah'] || payload.mataKuliah || '';
-    var dosen = payload['Dosen Pengampu'] || payload.dosenPengampu || '';
     var jnsUjian = payload['Jenis Ujian'] || payload.jenisUjian || 'UTS Susulan';
-    var ket = payload.Keterangan || payload.keterangan || (payload.npm ? ('Peserta: ' + payload.npm) : '');
     var pendaftarId = payload.pendaftarId || '';
-    if (pendaftarId && ket.indexOf(pendaftarId) === -1) {
-      ket = (ket ? (ket + ' ') : '') + '[ID: ' + pendaftarId + ']';
+    var baseKet = payload.Keterangan || payload.keterangan || (payload.npm ? ('Peserta: ' + payload.npm) : '');
+
+    var items = [];
+    if (Array.isArray(payload.items) && payload.items.length > 0) {
+      items = payload.items;
+    } else {
+      items = [{
+        id: baseId,
+        tanggalUjian: payload['Tanggal Ujian'] || payload.tanggalUjian || '',
+        jamMulai: payload['Jam Mulai'] || payload.jamMulai || '08:00',
+        jamSelesai: payload['Jam Selesai'] || payload.jamSelesai || '09:30',
+        ruangan: payload.Ruangan || payload.ruangan || '',
+        mataKuliah: payload['Mata Kuliah'] || payload.mataKuliah || '',
+        dosenPengampu: payload['Dosen Pengampu'] || payload.dosenPengampu || '',
+        keterangan: baseKet
+      }];
     }
 
-    var row = [
-      newId, tgl, jmMulai, jmSelesai, ruang, kdProdi, nmProdi, sem, kls, matkul, dosen, jnsUjian, ket
-    ];
-    sheet.appendRow(row);
+    var createdItems = [];
+    var isMulti = items.length > 1;
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var itemId = baseId;
+      if (isMulti) {
+        itemId = baseId + '-' + (i + 1);
+      } else if (item.id && String(item.id).indexOf('JDW-') === 0) {
+        itemId = String(item.id).trim();
+      }
+
+      var tgl = item['Tanggal Ujian'] || item.tanggalUjian || payload['Tanggal Ujian'] || payload.tanggalUjian || '';
+      var jmMulai = item['Jam Mulai'] || item.jamMulai || payload['Jam Mulai'] || payload.jamMulai || '08:00';
+      var jmSelesai = item['Jam Selesai'] || item.jamSelesai || payload['Jam Selesai'] || payload.jamSelesai || '09:30';
+      var ruang = item.Ruangan || item.ruangan || payload.Ruangan || payload.ruangan || '';
+      var matkul = item['Mata Kuliah'] || item.mataKuliah || '';
+      var dosen = item['Dosen Pengampu'] || item.dosenPengampu || '';
+      var ket = item.Keterangan || item.keterangan || baseKet;
+      if (pendaftarId && ket.indexOf(pendaftarId) === -1) {
+        ket = (ket ? (ket + ' ') : '') + '[ID: ' + pendaftarId + ']';
+      }
+
+      var row = [
+        itemId, tgl, jmMulai, jmSelesai, ruang, kdProdi, nmProdi, sem, kls, matkul, dosen, jnsUjian, ket
+      ];
+      sheet.appendRow(row);
+
+      createdItems.push({
+        ID: itemId,
+        'Tanggal Ujian': tgl,
+        'Jam Mulai': jmMulai,
+        'Jam Selesai': jmSelesai,
+        Ruangan: ruang,
+        'Kode Prodi': kdProdi,
+        'Program Studi': nmProdi,
+        Semester: sem,
+        Kelas: kls,
+        'Mata Kuliah': matkul,
+        'Dosen Pengampu': dosen,
+        'Jenis Ujian': jnsUjian,
+        Keterangan: ket
+      });
+    }
+
     SpreadsheetApp.flush();
 
     // Otomatis ubah Status Jadwal pada sheet Pendaftaran menjadi "Terjadwal"
@@ -2917,26 +2966,15 @@ function addJadwal(payload) {
       }
     }
 
-    bumpSyncVersion(payload.actor || 'Admin TU', 'Tambah Jadwal Ujian ' + matkul);
-    addActivityLog(payload.actor || 'Admin TU', 'Tambah Jadwal Ujian', newId + ' (' + matkul + ')', 'Penjadwalan ruangan ' + ruang + ' tanggal ' + tgl, 'Admin');
+    var logSummary = isMulti ? (createdItems.length + ' Mata Kuliah (' + baseId + ')') : (createdItems[0].ID + ' (' + createdItems[0]['Mata Kuliah'] + ')');
+    bumpSyncVersion(payload.actor || 'Admin TU', 'Tambah Jadwal Ujian ' + logSummary);
+    addActivityLog(payload.actor || 'Admin TU', 'Tambah Jadwal Ujian', logSummary, 'Penjadwalan ' + (isMulti ? (createdItems.length + ' mata kuliah') : ('ruangan ' + createdItems[0].Ruangan)), 'Admin');
+
     return {
       success: true,
-      message: 'Jadwal ujian berhasil disimpan dengan Kode: ' + newId,
-      item: {
-        ID: newId,
-        'Tanggal Ujian': tgl,
-        'Jam Mulai': jmMulai,
-        'Jam Selesai': jmSelesai,
-        Ruangan: ruang,
-        'Kode Prodi': kdProdi,
-        'Program Studi': nmProdi,
-        Semester: sem,
-        Kelas: kls,
-        'Mata Kuliah': matkul,
-        'Dosen Pengampu': dosen,
-        'Jenis Ujian': jnsUjian,
-        Keterangan: ket
-      }
+      message: isMulti ? ('Berhasil menerbitkan ' + createdItems.length + ' jadwal ujian (' + baseId + '-1 s.d. -' + createdItems.length + ')') : ('Jadwal ujian berhasil disimpan dengan Kode: ' + createdItems[0].ID),
+      items: createdItems,
+      item: createdItems[0]
     };
   } catch (err) {
     return { success: false, message: 'Gagal menambah jadwal: ' + err.message };
