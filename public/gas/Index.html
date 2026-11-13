@@ -10148,7 +10148,7 @@
 
     function resolveJadwalPeserta(jadwalItem) {
       if (!jadwalItem || typeof jadwalItem !== 'object') {
-        return { namaMahasiswa: '-', npm: '-' };
+        return { participants: [], namaMahasiswa: '-', npm: '-' };
       }
 
       const pendaftaranList = Array.isArray(appData && appData.pendaftaran) ? appData.pendaftaran : [];
@@ -10265,10 +10265,11 @@
       }
 
       if (participants.length === 0) {
-        return { namaMahasiswa: '-', npm: '-' };
+        return { participants: [], namaMahasiswa: '-', npm: '-' };
       }
 
       return {
+        participants,
         namaMahasiswa: participants.map(pt => pt.nama).join(', '),
         npm: participants.map(pt => pt.npm).join(', ')
       };
@@ -10289,12 +10290,18 @@
         if (!item || typeof item !== 'object') return;
         Object.keys(item).forEach(k => {
           if (k.startsWith('__') || skipKeys.has(k) || seenKey.has(k)) return;
+          if (isJadwalSheet && /^(?:Nama Mahasiswa|NPM)\s*\d*$/i.test(k.trim())) return;
           seenKey.add(k);
           baseKeys.push(k);
         });
       });
 
-      return rows.map(item => {
+      const resolvedPesertaList = isJadwalSheet ? rows.map(item => resolveJadwalPeserta(item)) : [];
+      const maxParticipants = isJadwalSheet
+        ? Math.max(1, ...resolvedPesertaList.map(res => (res.participants || []).length))
+        : 0;
+
+      return rows.map((item, rowIdx) => {
         const rowObj = {};
         baseKeys.forEach(key => {
           let val = item && item[key] !== undefined && item[key] !== null ? item[key] : '';
@@ -10319,11 +10326,23 @@
           rowObj[key] = val;
         });
 
-        // Khusus Jadwal_Ujian: tambahkan kolom Nama Mahasiswa & NPM di ujung paling kanan
+        // Khusus Jadwal_Ujian: tambahkan kolom peserta berderet ke samping (Nama Mahasiswa 1, NPM 1, dst.) di paling kanan
         if (isJadwalSheet) {
-          const peserta = resolveJadwalPeserta(item);
-          rowObj['Nama Mahasiswa'] = peserta.namaMahasiswa;
-          rowObj['NPM'] = String(peserta.npm || '-');
+          const participants = (resolvedPesertaList[rowIdx] && resolvedPesertaList[rowIdx].participants) || [];
+          for (let i = 0; i < maxParticipants; i++) {
+            const pSlot = participants[i];
+            const colNum = i + 1;
+            if (pSlot) {
+              rowObj[`Nama Mahasiswa ${colNum}`] = String(pSlot.nama || '-');
+              rowObj[`NPM ${colNum}`] = String(pSlot.npm || '-');
+            } else if (i === 0 && participants.length === 0) {
+              rowObj[`Nama Mahasiswa ${colNum}`] = '-';
+              rowObj[`NPM ${colNum}`] = '-';
+            } else {
+              rowObj[`Nama Mahasiswa ${colNum}`] = '';
+              rowObj[`NPM ${colNum}`] = '';
+            }
+          }
         }
 
         return rowObj;
