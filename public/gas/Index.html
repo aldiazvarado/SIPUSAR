@@ -10146,6 +10146,190 @@
       });
     }
 
+    function resolveJadwalPeserta(jadwalItem) {
+      if (!jadwalItem || typeof jadwalItem !== 'object') {
+        return { namaMahasiswa: '-', npm: '-' };
+      }
+
+      const pendaftaranList = Array.isArray(appData && appData.pendaftaran) ? appData.pendaftaran : [];
+      const participants = [];
+      const seenKeys = new Set();
+
+      const addParticipant = (rawNama, rawNpm) => {
+        const nama = String(rawNama || '').trim();
+        const npm = String(rawNpm || '').trim();
+        if ((!nama || nama === '-') && (!npm || npm === '-')) return;
+        const cleanNama = (nama && nama !== '-') ? nama : '';
+        const cleanNpm = (npm && npm !== '-') ? npm : '';
+        const dedupKey = `${cleanNpm.toLowerCase()}||${cleanNama.toLowerCase()}`;
+        if (seenKeys.has(dedupKey)) return;
+        seenKeys.add(dedupKey);
+        participants.push({
+          nama: cleanNama || '-',
+          npm: cleanNpm || '-'
+        });
+      };
+
+      const ketStr = String(jadwalItem.Keterangan || jadwalItem.keterangan || '').trim();
+
+      // 1. Cek referensi ID Pendaftaran eksplisit ([ID: REG-...] atau pendaftarId)
+      const directPId = String(jadwalItem.pendaftarId || jadwalItem.pendaftaranId || '').trim();
+      const regTagMatches = [...ketStr.matchAll(/\[id:\s*(reg-\d+)\]/gi)].map(m => m[1].trim());
+      const candidateRegIds = [];
+      if (directPId) candidateRegIds.push(directPId);
+      regTagMatches.forEach(rid => {
+        if (!candidateRegIds.some(x => x.toUpperCase() === rid.toUpperCase())) candidateRegIds.push(rid);
+      });
+
+      candidateRegIds.forEach(regId => {
+        const pMatch = pendaftaranList.find(p => String(p.ID || p.id || '').trim().toUpperCase() === regId.toUpperCase());
+        if (pMatch) {
+          addParticipant(pMatch['Nama Mahasiswa'] || pMatch.nama || '', pMatch.NPM || pMatch.NIM || pMatch.npm || '');
+        }
+      });
+
+      // 2. Ekstrak pola "Peserta: Nama (NPM: 123)" atau "(NIM: 123)" dari Keterangan
+      const pesertaRegex = /Peserta\s*:\s*([^\(\n\[]+?)\s*\(\s*(?:NPM|NIM)\s*:\s*([^)\n\]]+)\s*\)/gi;
+      let pRegexMatch;
+      while ((pRegexMatch = pesertaRegex.exec(ketStr)) !== null) {
+        addParticipant(pRegexMatch[1], pRegexMatch[2]);
+      }
+
+      // 3. Cek properti langsung di objek jadwal (jika tersedia)
+      const directNama = String(jadwalItem['Nama Mahasiswa'] || jadwalItem.namaMahasiswa || '').trim();
+      const directNpm = String(jadwalItem.NPM || jadwalItem.NIM || jadwalItem.npm || '').trim();
+      if (directNama || directNpm) {
+        let resolvedNama = directNama;
+        let resolvedNpm = directNpm;
+        if ((!resolvedNama || resolvedNama === '-') && resolvedNpm) {
+          const pByNpm = pendaftaranList.find(p => String(p.NPM || p.NIM || '').trim().toLowerCase() === resolvedNpm.toLowerCase());
+          if (pByNpm) resolvedNama = pByNpm['Nama Mahasiswa'] || pByNpm.nama || '';
+        }
+        if ((!resolvedNpm || resolvedNpm === '-') && resolvedNama) {
+          const pByNama = pendaftaranList.find(p => String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase() === resolvedNama.toLowerCase());
+          if (pByNama) resolvedNpm = pByNama.NPM || pByNama.NIM || '';
+        }
+        addParticipant(resolvedNama, resolvedNpm);
+      }
+
+      // 4. Fallback otomatis untuk jadwal lama yang belum mencatat peserta di Keterangan:
+      //    Cocokkan ke data Pendaftaran berdasarkan Prodi + Semester + Kelas + Mata Kuliah
+      if (participants.length === 0 && pendaftaranList.length > 0) {
+        const jProdi = String(jadwalItem['Kode Prodi'] || jadwalItem.kodeProdi || '').trim().toUpperCase();
+        const jSem = String(jadwalItem.Semester || jadwalItem.semester || '').trim().toLowerCase();
+        const normKelas = (val) => {
+          if (typeof normalizeClassNameClient === 'function') return normalizeClassNameClient(val).toLowerCase();
+          return String(val || '').replace(/\s+/g, ' ').trim().toLowerCase();
+        };
+        const jKelas = normKelas(jadwalItem.Kelas || jadwalItem.kelas || '');
+        const jMatkul = String(jadwalItem['Mata Kuliah'] || jadwalItem.mataKuliah || '').trim();
+        const jJenis = String(jadwalItem['Jenis Ujian'] || jadwalItem['Jenis Layanan'] || jadwalItem.jenisUjian || '').trim().toLowerCase();
+
+        const checkCourseMatch = (p) => {
+          if (!jMatkul) return false;
+          if (typeof isCourseNameMatched === 'function') {
+            if (typeof extractMataKuliahList === 'function') {
+              const cList = extractMataKuliahList(p);
+              if (cList.some(c => isCourseNameMatched(jMatkul, c.mataKuliah || c.nama || ''))) return true;
+            }
+            return isCourseNameMatched(jMatkul, p['Mata Kuliah'] || '');
+          }
+          const pMat = String(p['Mata Kuliah'] || '').trim().toLowerCase();
+          const jMatLower = jMatkul.toLowerCase();
+          return Boolean(pMat && (pMat.includes(jMatLower) || jMatLower.includes(pMat)));
+        };
+
+        const baseMatches = pendaftaranList.filter(p => {
+          const pProdi = String(p['Kode Prodi'] || p.kodeProdi || '').trim().toUpperCase();
+          const pSem = String(p.Semester || p.semester || '').trim().toLowerCase();
+          const pKelas = normKelas(p.Kelas || p.kelas || '');
+
+          const sameProdi = !jProdi || !pProdi || jProdi === pProdi;
+          const sameSem = !jSem || !pSem || jSem === pSem;
+          const sameKelas = !jKelas || !pKelas || jKelas === pKelas;
+          return sameProdi && sameSem && sameKelas && checkCourseMatch(p);
+        });
+
+        let finalMatches = baseMatches;
+        if (jJenis && baseMatches.length > 0) {
+          const strictJenisMatches = baseMatches.filter(p => {
+            const pJenis = String(p['Jenis Layanan'] || p.layanan || '').trim().toLowerCase();
+            return !pJenis || pJenis === jJenis;
+          });
+          if (strictJenisMatches.length > 0) finalMatches = strictJenisMatches;
+        }
+
+        finalMatches.forEach(p => {
+          addParticipant(p['Nama Mahasiswa'] || p.nama || '', p.NPM || p.NIM || p.npm || '');
+        });
+      }
+
+      if (participants.length === 0) {
+        return { namaMahasiswa: '-', npm: '-' };
+      }
+
+      return {
+        namaMahasiswa: participants.map(pt => pt.nama).join(', '),
+        npm: participants.map(pt => pt.npm).join(', ')
+      };
+    }
+
+    function prepareSheetRowsForViewerOrExport(sheetName, rows, isForExport = false) {
+      if (!Array.isArray(rows) || rows.length === 0) return [];
+      const isJadwalSheet = sheetName === 'Jadwal_Ujian';
+      const skipKeys = new Set(['mataKuliahList', '_id']);
+      if (isJadwalSheet) {
+        ['pendaftarId', 'pendaftaranId', 'npm', 'namaMahasiswa', 'Nama Mahasiswa', 'NPM'].forEach(k => skipKeys.add(k));
+      }
+
+      // Kumpulkan urutan kolom standar secara konsisten
+      const baseKeys = [];
+      const seenKey = new Set();
+      rows.forEach(item => {
+        if (!item || typeof item !== 'object') return;
+        Object.keys(item).forEach(k => {
+          if (k.startsWith('__') || skipKeys.has(k) || seenKey.has(k)) return;
+          seenKey.add(k);
+          baseKeys.push(k);
+        });
+      });
+
+      return rows.map(item => {
+        const rowObj = {};
+        baseKeys.forEach(key => {
+          let val = item && item[key] !== undefined && item[key] !== null ? item[key] : '';
+          if (isForExport) {
+            if (key === 'Bukti Foto' || key.toLowerCase().includes('bukti')) {
+              const strVal = String(val).trim();
+              if (strVal.startsWith('http://') || strVal.startsWith('https://')) {
+                val = strVal;
+              } else if (strVal.startsWith('data:') || strVal.length > 200) {
+                val = '[Tersimpan di Sistem (Base64)]';
+              } else if (!strVal) {
+                val = '-';
+              }
+            } else if (typeof val === 'object') {
+              try {
+                val = JSON.stringify(val);
+              } catch(e) {
+                val = '';
+              }
+            }
+          }
+          rowObj[key] = val;
+        });
+
+        // Khusus Jadwal_Ujian: tambahkan kolom Nama Mahasiswa & NPM di ujung paling kanan
+        if (isJadwalSheet) {
+          const peserta = resolveJadwalPeserta(item);
+          rowObj['Nama Mahasiswa'] = peserta.namaMahasiswa;
+          rowObj['NPM'] = String(peserta.npm || '-');
+        }
+
+        return rowObj;
+      });
+    }
+
     function renderSpreadsheetWorkbook() {
       const select = document.getElementById('activeSheetSelector');
       const sheetName = select ? select.value : 'Pendaftaran';
@@ -10182,15 +10366,14 @@
         return;
       }
 
-      const sample = rows[0];
-      // Filter kolom agar helper bersarang tidak merusak tabel
-      const keys = Object.keys(sample).filter(k => k !== 'mataKuliahList' && k !== '_id' && !k.startsWith('__'));
+      const displayRows = prepareSheetRowsForViewerOrExport(sheetName, rows, false);
+      const keys = Object.keys(displayRows[0]);
 
       thead.innerHTML = '<tr><th class="p-2 border border-blue-800 bg-blue-950 text-center w-12 text-[10px]">#</th>' + 
-        keys.map(k => `<th class="p-2 border border-blue-800 text-left whitespace-nowrap text-xs">${k}</th>`).join('') + '</tr>';
+        keys.map(k => `<th class="p-2 border border-blue-800 text-left whitespace-nowrap text-xs">${escapeHtml(k)}</th>`).join('') + '</tr>';
 
       let totalNominal = 0;
-      const bodyHtml = rows.map((r, idx) => {
+      const bodyHtml = displayRows.map((r, idx) => {
         let cells = `<td class="p-2 border border-slate-200 text-center text-slate-400 font-mono text-[10px]">${idx + 1}</td>`;
         keys.forEach(k => {
           let rawVal = r[k] !== undefined && r[k] !== null ? r[k] : '';
@@ -10209,7 +10392,7 @@
                 <i class="fas fa-image text-amber-600"></i> Lihat Foto (Base64)
               </button>`;
             } else if (strVal) {
-              cellHtml = `<span class="text-slate-600">${strVal}</span>`;
+              cellHtml = `<span class="text-slate-600">${escapeHtml(strVal)}</span>`;
             } else {
               cellHtml = `<span class="text-slate-400 italic text-[11px]">-</span>`;
             }
@@ -10222,12 +10405,12 @@
             }
           } else if (typeof rawVal === 'object') {
             try {
-              cellHtml = JSON.stringify(rawVal);
+              cellHtml = escapeHtml(JSON.stringify(rawVal));
             } catch(e) {
               cellHtml = '';
             }
           } else {
-            cellHtml = String(rawVal);
+            cellHtml = escapeHtml(String(rawVal));
           }
 
           cells += `<td class="p-2 border border-slate-200 whitespace-nowrap text-slate-800">${cellHtml}</td>`;
@@ -10315,35 +10498,8 @@
       const dateStr = new Date().toISOString().slice(0, 10);
       const fileNameXlsx = `${sheetName}_FEB_UIKA_${dateStr}.xlsx`;
 
-      // Sanitasi Data: Bersihkan teks Base64 panjang & flatten objek agar tidak merusak sel Excel
-      const cleanRows = rows.map(item => {
-        const rowObj = {};
-        Object.keys(item).forEach(key => {
-          if (key === 'mataKuliahList' || key === '_id' || key.startsWith('__')) return;
-
-          let val = item[key];
-          if (val === undefined || val === null) val = '';
-
-          if (key === 'Bukti Foto' || key.toLowerCase().includes('bukti')) {
-            const strVal = String(val).trim();
-            if (strVal.startsWith('http://') || strVal.startsWith('https://')) {
-              val = strVal; // URL Google Drive Asli
-            } else if (strVal.startsWith('data:') || strVal.length > 200) {
-              val = '[Tersimpan di Sistem (Base64)]'; // Bersihkan string panjang agar sel Excel tidak rusak
-            } else if (!strVal) {
-              val = '-';
-            }
-          } else if (typeof val === 'object') {
-            try {
-              val = JSON.stringify(val);
-            } catch(e) {
-              val = '';
-            }
-          }
-          rowObj[key] = val;
-        });
-        return rowObj;
-      });
+      // Sanitasi Data & pengayaan kolom peserta (Nama Mahasiswa, NPM di paling kanan untuk Jadwal_Ujian)
+      const cleanRows = prepareSheetRowsForViewerOrExport(sheetName, rows, true);
 
       let exportedSuccess = false;
 
