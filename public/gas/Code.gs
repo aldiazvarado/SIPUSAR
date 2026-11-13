@@ -3010,6 +3010,12 @@ function resolveJadwalPesertaGas(jadwalItem, pendaftaranList) {
   while ((pRegexMatch = pesertaRegex.exec(ketStr)) !== null) {
     var tagNama = String(pRegexMatch[1] || '').trim();
     var tagNpm = String(pRegexMatch[2] || '').trim();
+    // Jika peserta dengan nama sama sudah terselesaikan lewat tag [ID: REG-...], lewati agar NPM lama tidak menduplikasi peserta
+    var alreadyResolvedByName = participants.some(function(pt) {
+      return pt.nama && tagNama && pt.nama.toLowerCase() === tagNama.toLowerCase();
+    });
+    if (alreadyResolvedByName) continue;
+
     var matchingByIdentity = pList.filter(function(p) {
       var pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
       var pNama = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
@@ -3024,7 +3030,7 @@ function resolveJadwalPesertaGas(jadwalItem, pendaftaranList) {
       if (validIdentityMatches.length > 0) {
         addParticipant(tagNama, tagNpm);
       }
-    } else {
+    } else if (validRegIds.length === 0) {
       addParticipant(tagNama, tagNpm);
     }
   }
@@ -3048,7 +3054,7 @@ function resolveJadwalPesertaGas(jadwalItem, pendaftaranList) {
     });
   }
 
-  // Bersihkan tag REG-ID yang terbukti salah/nyasar dari Keterangan apabila ada tag tidak valid
+  // Bersihkan tag REG-ID yang terbukti salah/nyasar dan perbarui NPM di "Peserta: ..." jika berubah di Pendaftaran
   var cleanedKet = ketStr;
   if (invalidRegIds.length > 0) {
     invalidRegIds.forEach(function(badId) {
@@ -3056,6 +3062,13 @@ function resolveJadwalPesertaGas(jadwalItem, pendaftaranList) {
       cleanedKet = cleanedKet.replace(badPattern, '');
     });
     cleanedKet = cleanedKet.replace(/\s{2,}/g, ' ').trim();
+  }
+  if (validRegIds.length === 1 && participants.length === 1) {
+    var ptSync = participants[0];
+    var syncedLabel = 'Peserta: ' + ptSync.nama + (ptSync.npm && ptSync.npm !== '-' ? (' (NPM: ' + ptSync.npm + ')') : '');
+    if (/Peserta\s*:\s*[^\(\n\[]+?\s*\(\s*(?:NPM|NIM)\s*:\s*[^)\n\]]+\s*\)/i.test(cleanedKet)) {
+      cleanedKet = cleanedKet.replace(/Peserta\s*:\s*[^\(\n\[]+?\s*\(\s*(?:NPM|NIM)\s*:\s*[^)\n\]]+\s*\)/i, syncedLabel);
+    }
   }
 
   return {
@@ -3081,7 +3094,7 @@ function syncJadwalParticipantsInternal_(ss) {
 
   var lastRow = sheet.getLastRow();
   var lastCol = sheet.getLastColumn();
-  var defaultBaseHeaders = SCHEMA['Jadwal_Ujian'].slice();
+  var defaultBaseHeaders = ["ID", "Tanggal Ujian", "Jam Mulai", "Jam Selesai", "Ruangan", "Kode Prodi", "Program Studi", "Semester", "Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Ujian", "Keterangan"];
   var rawValues = (lastRow >= 1 && lastCol >= 1) ? sheet.getRange(1, 1, lastRow, lastCol).getValues() : [defaultBaseHeaders];
   var existingHeaders = rawValues[0] || defaultBaseHeaders;
 

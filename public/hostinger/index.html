@@ -10314,9 +10314,11 @@
         if (!candidateRegIds.some(x => x.toUpperCase() === rid.toUpperCase())) candidateRegIds.push(rid);
       });
 
+      let validRegCount = 0;
       candidateRegIds.forEach(regId => {
         const pMatch = pendaftaranList.find(p => String(p.ID || p.id || '').trim().toUpperCase() === regId.toUpperCase());
         if (pMatch && isPendaftarValidForJadwal(pMatch, jadwalItem)) {
+          validRegCount++;
           addParticipant(pMatch['Nama Mahasiswa'] || pMatch.nama || '', pMatch.NPM || pMatch.NIM || pMatch.npm || '');
         }
       });
@@ -10327,6 +10329,9 @@
       while ((pRegexMatch = pesertaRegex.exec(ketStr)) !== null) {
         const tagNama = String(pRegexMatch[1] || '').trim();
         const tagNpm = String(pRegexMatch[2] || '').trim();
+        const alreadyResolvedByName = participants.some(pt => pt.nama && tagNama && pt.nama.toLowerCase() === tagNama.toLowerCase());
+        if (alreadyResolvedByName) continue;
+
         const identityCandidates = pendaftaranList.filter(p => {
           const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
           const pNama = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
@@ -10338,7 +10343,7 @@
           if (identityCandidates.some(p => isPendaftarValidForJadwal(p, jadwalItem))) {
             addParticipant(tagNama, tagNpm);
           }
-        } else {
+        } else if (validRegCount === 0) {
           addParticipant(tagNama, tagNpm);
         }
       }
