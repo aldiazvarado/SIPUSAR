@@ -6863,18 +6863,85 @@
       container.appendChild(nextBtn);
     }
 
+    function getMahasiswaOwnJadwalList(jadwalList, userObj) {
+      if (!Array.isArray(jadwalList) || jadwalList.length === 0 || !userObj) return [];
+      const myNpm = String(userObj.npm || userObj.username || '').trim().toLowerCase();
+      const myNama = String(userObj.nama || '').trim().toLowerCase();
+      const pendaftaranList = Array.isArray(appData && appData.pendaftaran) ? appData.pendaftaran : [];
+
+      const isMyRegistration = (p) => {
+        if (!p || typeof p !== 'object') return false;
+        const pNpm = String(p.NPM || p.NIM || p.npm || '').trim().toLowerCase();
+        const pNama = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
+        if (myNpm && pNpm) return pNpm === myNpm;
+        if (!pNpm && myNama && pNama) return pNama === myNama;
+        return false;
+      };
+
+      const myRegs = pendaftaranList.filter(isMyRegistration);
+      const myNonRejectedRegs = myRegs.filter(p => String(p['Status Persetujuan'] || '').trim().toLowerCase() !== 'ditolak');
+      if (myNonRejectedRegs.length === 0) return [];
+
+      const myNonRejectedIds = new Set(myNonRejectedRegs.map(p => String(p.ID || p.id || '').trim().toUpperCase()).filter(Boolean));
+      const myRejectedIds = new Set(
+        myRegs
+          .filter(p => String(p['Status Persetujuan'] || '').trim().toLowerCase() === 'ditolak')
+          .map(p => String(p.ID || p.id || '').trim().toUpperCase())
+          .filter(Boolean)
+      );
+
+      return jadwalList.filter(j => {
+        if (!j || typeof j !== 'object') return false;
+
+        // 1. Cek kecocokan langsung dari pendaftaran non-Ditolak milik akun mahasiswa
+        const matchedViaReg = myNonRejectedRegs.some(p => {
+          const courses = typeof extractMataKuliahList === 'function' ? extractMataKuliahList(p) : [];
+          if (courses.length > 0) {
+            return courses.some(c => typeof findScheduleForRegistrationCourse === 'function' && findScheduleForRegistrationCourse(p, c, [j]) !== null);
+          }
+          return typeof findScheduleForRegistrationCourse === 'function' && findScheduleForRegistrationCourse(p, { mataKuliah: p['Mata Kuliah'] || '' }, [j]) !== null;
+        });
+        if (matchedViaReg) return true;
+
+        // 2. Cek peserta teresolusi (untuk jadwal gabungan/multi-peserta) & pastikan bukan semata tag registrasi Ditolak
+        const ketStr = String(j.Keterangan || j.keterangan || '');
+        const tagIds = [...ketStr.matchAll(/\[id:\s*(reg-\d+)\]/gi)].map(m => m[1].trim().toUpperCase());
+        const directPId = String(j.pendaftarId || j.pendaftaranId || '').trim().toUpperCase();
+        if (directPId && !tagIds.includes(directPId)) tagIds.push(directPId);
+
+        const hasRejectedOnlyTag = tagIds.length > 0 && tagIds.some(id => myRejectedIds.has(id)) && !tagIds.some(id => myNonRejectedIds.has(id));
+        if (hasRejectedOnlyTag) return false;
+
+        if (typeof resolveJadwalPeserta === 'function') {
+          const resolved = resolveJadwalPeserta(j);
+          const participants = (resolved && Array.isArray(resolved.participants)) ? resolved.participants : [];
+          return participants.some(pt => {
+            const ptNpm = String(pt.npm || '').trim().toLowerCase();
+            if (myNpm && ptNpm && ptNpm !== '-') return ptNpm === myNpm;
+            const ptNama = String(pt.nama || '').trim().toLowerCase();
+            return (!ptNpm || ptNpm === '-') && myNama && ptNama === myNama;
+          });
+        }
+        return false;
+      });
+    }
+
     function renderJadwalUjianTable() {
       const tbody = document.getElementById('tableJadwalBody');
+      if (!tbody) return;
       const search = (document.getElementById('searchJadwal')?.value || '').toLowerCase();
       const filterProdi = document.getElementById('jadwalFilterProdi')?.value || '';
 
-      let list = appData.jadwal || [];
+      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      const allJadwal = appData.jadwal || [];
+      const scopedList = isMhs ? getMahasiswaOwnJadwalList(allJadwal, currentUser) : allJadwal;
 
-      // Update Quick Stats
-      if (document.getElementById('statTotalJadwal')) document.getElementById('statTotalJadwal').innerText = list.length;
-      if (document.getElementById('statProdiJadwal')) document.getElementById('statProdiJadwal').innerText = new Set(list.map(j => j['Kode Prodi']).filter(Boolean)).size + ' Prodi';
-      if (document.getElementById('statRuanganJadwal')) document.getElementById('statRuanganJadwal').innerText = new Set(list.map(j => j.Ruangan).filter(Boolean)).size + ' Ruangan';
+      // Update Quick Stats berdasarkan cakupan role (khusus akun Mahasiswa atau full untuk role lain)
+      if (document.getElementById('statTotalJadwal')) document.getElementById('statTotalJadwal').innerText = scopedList.length;
+      if (document.getElementById('statProdiJadwal')) document.getElementById('statProdiJadwal').innerText = new Set(scopedList.map(j => j['Kode Prodi']).filter(Boolean)).size + ' Prodi';
+      if (document.getElementById('statRuanganJadwal')) document.getElementById('statRuanganJadwal').innerText = new Set(scopedList.map(j => j.Ruangan).filter(Boolean)).size + ' Ruangan';
 
+      let list = scopedList;
       if (filterProdi) list = list.filter(j => (j['Kode Prodi'] || '').toUpperCase() === filterProdi.toUpperCase());
       if (search) list = list.filter(j => (j['Mata Kuliah'] || '').toLowerCase().includes(search) || (j.Ruangan || '').toLowerCase().includes(search));
 
@@ -6892,13 +6959,16 @@
       if (infoEl) {
         infoEl.innerText = totalFiltered > 0
           ? `Menampilkan ${startIndex + 1} - ${endIndex} dari ${totalFiltered} jadwal`
-          : 'Tidak ada jadwal yang cocok';
+          : (isMhs && scopedList.length === 0 ? 'Belum ada jadwal ujian untuk akun Anda' : 'Tidak ada jadwal yang cocok');
       }
       renderJadwalPagination(totalPages);
 
       tbody.innerHTML = '';
       if (pageItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400">Belum ada jadwal ujian yang cocok</td></tr>';
+        const emptyMsg = (isMhs && scopedList.length === 0)
+          ? 'Belum ada jadwal ujian untuk akun Anda.'
+          : 'Belum ada jadwal ujian yang cocok';
+        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400">${emptyMsg}</td></tr>`;
         return;
       }
 
