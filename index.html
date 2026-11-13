@@ -245,7 +245,7 @@
           }
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
-        if (onSuccess) onSuccess({ success: true, message: 'Jadwal ujian berhasil disimpan di sistem lokal.' });
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: 'Jadwal ujian berhasil disimpan di sistem lokal.' });
         return;
       }
 
@@ -255,13 +255,17 @@
         if (id && Array.isArray(appData.jadwal)) {
           const removed = appData.jadwal.find(j => String(j.ID || j.id) === String(id));
           appData.jadwal = appData.jadwal.filter(j => String(j.ID || j.id) !== String(id));
-          if (removed && removed.pendaftaranId && Array.isArray(appData.pendaftaran)) {
-            const p = appData.pendaftaran.find(item => String(item.ID || item.id) === String(removed.pendaftaranId));
-            if (p) p['Status Jadwal'] = 'Belum Terjadwal';
+          if (removed && Array.isArray(appData.pendaftaran)) {
+            const ketMatch = String(removed.Keterangan || '').match(/\[ID:\s*(REG-\d+)\]/i);
+            const targetRegId = removed.pendaftaranId || removed.pendaftarId || (ketMatch ? ketMatch[1] : '');
+            if (targetRegId) {
+              const p = appData.pendaftaran.find(item => String(item.ID || item.id) === String(targetRegId));
+              if (p) p['Status Jadwal'] = 'Tepat Waktu';
+            }
           }
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
-        if (onSuccess) onSuccess({ success: true, message: 'Jadwal ujian berhasil dihapus.' });
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: 'Jadwal ujian berhasil dihapus.' });
         return;
       }
 
@@ -5901,51 +5905,15 @@
       // Cari jadwal yang sedang diedit jika realId ada
       const currentEditingJadwal = realId ? jadwalList.find(j => String(j.ID).trim() === realId) : null;
 
-      // Fungsi deteksi apakah berkas pendaftaran p sudah memiliki jadwal ujian aktif
+      // Fungsi deteksi apakah SELURUH mata kuliah dalam berkas pendaftaran p sudah memiliki jadwal ujian aktif
       function isPendaftaranAlreadyScheduled(p) {
-        const pId = String(p.ID || p.id || '').trim();
-        const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
-        const pProdi = String(p['Kode Prodi'] || p.prodi || '').trim().toUpperCase();
-        const pMatkul = String(p['Mata Kuliah'] || '').trim().toLowerCase();
-        const pKelas = String(p.Kelas || '').trim().toLowerCase();
-
-        return jadwalList.some(j => {
-          // Kecualikan jadwal yang saat ini sedang diedit agar mahasiswa pendaftar terkait tetap muncul
-          if (realId && String(j.ID).trim() === realId) {
-            return false;
-          }
-
-          // 1. Relasi eksplisit ID pendaftaran
-          if (j.pendaftarId && String(j.pendaftarId).trim() === pId) return true;
-          const jKet = String(j.Keterangan || '').toLowerCase();
-          if (pId && jKet.includes(pId.toLowerCase())) return true;
-
-          // 2. Kecocokan NPM & Mata Kuliah
-          const jMatkul = String(j['Mata Kuliah'] || '').trim().toLowerCase();
-          const jProdi = String(j['Kode Prodi'] || '').trim().toUpperCase();
-          const jKelas = String(j.Kelas || '').trim().toLowerCase();
-
-          const npmMatched = pNpm && (jKet.includes(pNpm) || String(j.npm || '').toLowerCase() === pNpm);
-          const matkulMatched = pMatkul && jMatkul && (pMatkul.includes(jMatkul) || jMatkul.includes(pMatkul));
-          const prodiMatched = !pProdi || !jProdi || pProdi === jProdi;
-
-          if (npmMatched && matkulMatched) return true;
-
-          // 3. Status jadwal pendaftaran sudah "Terjadwal"
-          if (String(p['Status Jadwal'] || '').toLowerCase() === 'terjadwal') {
-            if (matkulMatched && (prodiMatched || npmMatched)) return true;
-          }
-
-          // 4. Kecocokan Prodi + Kelas + Matkul
-          if (prodiMatched && matkulMatched && pKelas && jKelas && pKelas === jKelas) {
-            return true;
-          }
-
-          return false;
-        });
+        const allCourses = extractMataKuliahList(p);
+        if (allCourses.length === 0) return false;
+        const unscheduled = getUnscheduledCoursesForPendaftaran(p, jadwalList, realId);
+        return unscheduled.length === 0;
       }
 
-      // Saring hanya pendaftar yang belum terjadwal
+      // Saring hanya pendaftar yang masih memiliki mata kuliah belum terjadwal
       let availablePendaftar = pendaftaranList.filter(p => !isPendaftaranAlreadyScheduled(p));
 
       // Jika sedang mengedit jadwal yang sudah ada, pastikan pendaftar jadwal ini tetap disertakan
@@ -5974,14 +5942,19 @@
           badgeCount.className = 'text-[10px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full';
         }
         if (hintText) {
-          hintText.innerHTML = '<i class="fas fa-filter text-emerald-600"></i><span>Mahasiswa yang sudah memiliki jadwal otomatis disembunyikan agar tidak terjadi duplikasi.</span>';
+          hintText.innerHTML = '<i class="fas fa-filter text-emerald-600"></i><span>Mahasiswa yang seluruh mata kuliahnya sudah terjadwal otomatis disembunyikan agar tidak terjadi duplikasi.</span>';
         }
         selectPendaftar.innerHTML = '<option value="">-- Pilih Mahasiswa Terdaftar (Disetujui / Pending) --</option>' +
           availablePendaftar.map(p => {
+            const allCourses = extractMataKuliahList(p);
+            const unscheduled = getUnscheduledCoursesForPendaftaran(p, jadwalList, realId);
+            const partialInfo = (allCourses.length > 1 && unscheduled.length < allCourses.length)
+              ? ` (Sisa ${unscheduled.length}/${allCourses.length} Matkul)`
+              : '';
             const cleanMatkul = String(p['Mata Kuliah'] || '').replace(/\n/g, ', ');
             const isCurrentEdit = matchedPendaftarForEdit && String(p.ID) === String(matchedPendaftarForEdit.ID);
             const editLabel = isCurrentEdit ? ' [Jadwal Aktif Ini]' : '';
-            return `<option value="${p.ID}" data-json='${JSON.stringify(p).replace(/'/g, "&#39;")}' ${isCurrentEdit ? 'selected' : ''}>${p['Nama Mahasiswa']} (NPM: ${p.NPM || p.NIM}) - ${cleanMatkul} [${p['Jenis Layanan']}]${editLabel}</option>`;
+            return `<option value="${p.ID}" data-json='${JSON.stringify(p).replace(/'/g, "&#39;")}' ${isCurrentEdit ? 'selected' : ''}>${p['Nama Mahasiswa']} (NPM: ${p.NPM || p.NIM}) - ${cleanMatkul} [${p['Jenis Layanan']}]${partialInfo}${editLabel}</option>`;
           }).join('');
       } else {
         if (badgeCount) {
@@ -6228,7 +6201,88 @@
       }
     }
 
-    function onSelectMahasiswaPendaftar(pendaftarId) {
+    function normalizeMatkulNameForMatch(name) {
+      return String(name || '')
+        .replace(/^\d+[\.\)]\s*/, '')
+        .replace(/\s*\(\d+\s*SKS\)/gi, '')
+        .replace(/,\s*$/, '')
+        .trim()
+        .toLowerCase();
+    }
+
+    function isCourseNameMatched(jMatkulRaw, cMatkulRaw) {
+      const cleanJ = normalizeMatkulNameForMatch(jMatkulRaw);
+      const cleanC = normalizeMatkulNameForMatch(cMatkulRaw);
+      if (!cleanJ || !cleanC) return false;
+      if (cleanJ === cleanC) return true;
+      // Jika entri jadwal lama menyimpan gabungan banyak mata kuliah bernomor
+      const rawJLower = String(jMatkulRaw || '').toLowerCase();
+      if (/(?:^|\s)2[\.\)]\s+/.test(rawJLower) || rawJLower.includes('\n')) {
+        return rawJLower.includes(cleanC);
+      }
+      return false;
+    }
+
+    function findScheduleForRegistrationCourse(p, course, jadwalList, excludeJadwalId = '') {
+      if (!p || !Array.isArray(jadwalList) || jadwalList.length === 0) return null;
+      const pId = String(p.ID || p.id || '').trim();
+      const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+      const pProdi = String(p['Kode Prodi'] || p.prodi || '').trim().toUpperCase();
+      const pSem = String(p.Semester || '').trim().toLowerCase();
+      const pKelas = String(p.Kelas || '').trim().toLowerCase();
+      const cMatkul = course ? (course.mataKuliah || course.nama || '') : '';
+      const allCourses = extractMataKuliahList(p);
+
+      // PASS 1: Pencocokan prioritas berdasarkan kepemilikan eksplisit (pendaftarId, [ID: REG-...], atau NPM)
+      const explicitMatch = jadwalList.find(j => {
+        if (excludeJadwalId && String(j.ID || j.id || '').trim() === String(excludeJadwalId).trim()) return false;
+        const jPId = String(j.pendaftarId || j.pendaftaranId || '').trim();
+        const jKet = String(j.Keterangan || '').toLowerCase();
+        const regTagMatch = jKet.match(/\[id:\s*(reg-\d+)\]/i);
+        const taggedRegId = regTagMatch ? regTagMatch[1].toUpperCase() : '';
+
+        if (taggedRegId && pId && taggedRegId !== pId.toUpperCase()) return false;
+        if (jPId && pId && jPId.toUpperCase() !== pId.toUpperCase()) return false;
+
+        const idMatched = (jPId && pId && jPId.toUpperCase() === pId.toUpperCase()) ||
+                          (pId && jKet.includes(pId.toLowerCase())) ||
+                          (pNpm && (jKet.includes(pNpm) || String(j.npm || '').toLowerCase() === pNpm));
+
+        if (!idMatched) return false;
+        if (isCourseNameMatched(j['Mata Kuliah'], cMatkul)) return true;
+        if (allCourses.length === 1 && normalizeMatkulNameForMatch(j['Mata Kuliah']) === normalizeMatkulNameForMatch(cMatkul)) return true;
+        return false;
+      });
+      if (explicitMatch) return explicitMatch;
+
+      // PASS 2: Fallback jadwal legacy (tanpa tag REG-ID milik mahasiswa lain), HARUS cocok Prodi + Semester + Kelas + Matkul
+      return jadwalList.find(j => {
+        if (excludeJadwalId && String(j.ID || j.id || '').trim() === String(excludeJadwalId).trim()) return false;
+        const jPId = String(j.pendaftarId || j.pendaftaranId || '').trim();
+        const jKet = String(j.Keterangan || '').toLowerCase();
+        if (jPId && pId && jPId.toUpperCase() !== pId.toUpperCase()) return false;
+        const regTagMatch = jKet.match(/\[id:\s*(reg-\d+)\]/i);
+        if (regTagMatch && pId && regTagMatch[1].toUpperCase() !== pId.toUpperCase()) return false;
+
+        if (!isCourseNameMatched(j['Mata Kuliah'], cMatkul)) return false;
+
+        const jProdi = String(j['Kode Prodi'] || '').trim().toUpperCase();
+        const jSem = String(j.Semester || '').trim().toLowerCase();
+        const jKelas = String(j.Kelas || '').trim().toLowerCase();
+
+        const sameProdi = !pProdi || !jProdi || pProdi === jProdi;
+        const sameSem = !pSem || !jSem || pSem === jSem;
+        const sameKelas = !pKelas || !jKelas || pKelas === jKelas;
+        return sameProdi && sameSem && sameKelas;
+      }) || null;
+    }
+
+    function getUnscheduledCoursesForPendaftaran(p, jadwalList, excludeJadwalId = '') {
+      const allCourses = extractMataKuliahList(p);
+      return allCourses.filter(c => !findScheduleForRegistrationCourse(p, c, jadwalList || [], excludeJadwalId));
+    }
+
+    function onSelectMahasiswaPendaftar(pendaftarId, forceShowAll = false) {
       if (!pendaftarId) {
         renderSlotJadwalMatkul([]);
         return;
@@ -6261,8 +6315,25 @@
         if (document.getElementById('jadwalSemesterKelas')) document.getElementById('jadwalSemesterKelas').value = `${data.Semester || 'Semester 3'} · ${data.Kelas || 'Reguler'}`;
         if (document.getElementById('jadwalJenisUjian')) document.getElementById('jadwalJenisUjian').value = data['Jenis Layanan'] || 'UTS Susulan';
 
-        const courses = extractMataKuliahList(data);
-        renderSlotJadwalMatkul(courses);
+        const allCourses = extractMataKuliahList(data);
+        const unscheduledCourses = getUnscheduledCoursesForPendaftaran(data, appData.jadwal || []);
+        const coursesToRender = (!forceShowAll && unscheduledCourses.length > 0) ? unscheduledCourses : allCourses;
+
+        renderSlotJadwalMatkul(coursesToRender);
+
+        if (!forceShowAll && unscheduledCourses.length > 0 && unscheduledCourses.length < allCourses.length) {
+          const container = document.getElementById('containerSlotJadwalMatkul');
+          if (container) {
+            const doneCount = allCourses.length - unscheduledCourses.length;
+            const infoBanner = document.createElement('div');
+            infoBanner.className = 'bg-blue-50 border border-blue-200 rounded-xl p-2.5 text-[11px] text-blue-900 flex flex-wrap items-center justify-between gap-2';
+            infoBanner.innerHTML = `
+              <span><i class="fas fa-info-circle text-blue-700 mr-1"></i> <b>${doneCount} dari ${allCourses.length}</b> mata kuliah sudah memiliki jadwal. Menampilkan <b>${unscheduledCourses.length} mata kuliah</b> yang belum terjadwal.</span>
+              <button type="button" onclick="onSelectMahasiswaPendaftar('${String(pendaftarId).replace(/'/g, "\\'")}', true)" class="px-2 py-0.5 bg-white border border-blue-300 rounded-lg font-bold text-blue-900 hover:bg-blue-100 cursor-pointer">Tampilkan Semua (${allCourses.length})</button>
+            `;
+            container.prepend(infoBanner);
+          }
+        }
       } catch(e) {
         console.error('Error onSelectMahasiswaPendaftar:', e);
       }
@@ -6270,6 +6341,8 @@
 
     // Expose secara eksplisit ke window agar dapat dipanggil dari atribut onclick/onchange HTML
     window.extractMataKuliahList = extractMataKuliahList;
+    window.findScheduleForRegistrationCourse = findScheduleForRegistrationCourse;
+    window.getUnscheduledCoursesForPendaftaran = getUnscheduledCoursesForPendaftaran;
     window.renderSlotJadwalMatkul = renderSlotJadwalMatkul;
     window.applyFirstSlotToAll = applyFirstSlotToAll;
     window.openJadwalModal = openJadwalModal;
@@ -6277,7 +6350,20 @@
     window.onSelectMahasiswaPendaftar = onSelectMahasiswaPendaftar;
     window.handleSaveJadwal = handleSaveJadwal;
 
-  function handleSaveJadwal(e) {
+  function sendJadwalRpcPromise(fnName, fnArgs) {
+    return new Promise((resolve, reject) => {
+      if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy && google.script.run[fnName]) {
+        google.script.run
+          .withSuccessHandler(res => resolve(res))
+          .withFailureHandler(err => reject(err))
+          [fnName](...fnArgs);
+      } else {
+        callGasApi(fnName, fnArgs, res => resolve(res), err => reject(err));
+      }
+    });
+  }
+
+  async function handleSaveJadwal(e) {
     if (e && e.preventDefault) e.preventDefault();
     const pId = document.getElementById('jadwalSelectPendaftar')?.value || '';
     const editId = (document.getElementById('jadwalId')?.value || '').trim();
@@ -6293,6 +6379,13 @@
       return;
     }
 
+    const pData = pId ? (appData.pendaftaran || []).find(p => String(p.ID || p.id).trim() === String(pId).trim()) : null;
+    const pNpm = pData ? String(pData.NPM || pData.NIM || '').trim() : '';
+    const pNama = pData ? String(pData['Nama Mahasiswa'] || '').trim() : '';
+    const studentIdentityTag = (pNama || pNpm)
+      ? `Peserta: ${pNama || '-'}${pNpm ? ` (NPM: ${pNpm})` : ''}`
+      : '';
+
     // Validasi semua slot
     let isValid = true;
     let missingField = '';
@@ -6305,11 +6398,19 @@
       const jmMulai = card.querySelector('.slot-jam-mulai')?.value || '';
       const jmSelesai = card.querySelector('.slot-jam-selesai')?.value || '';
       const ruangan = card.querySelector('.slot-ruangan')?.value || '';
-      const ket = card.querySelector('.slot-keterangan')?.value || '';
+      const rawKet = (card.querySelector('.slot-keterangan')?.value || '').trim();
 
       if (!tgl || !jmMulai || !jmSelesai || !ruangan) {
         isValid = false;
         missingField = `Mata kuliah "${matkul || 'Slot #' + (idx + 1)}" belum lengkap (Tanggal, Jam, dan Ruangan wajib diisi).`;
+      }
+
+      let fullKet = rawKet;
+      if (studentIdentityTag && !fullKet.includes('Peserta:') && (!pNpm || !fullKet.includes(pNpm))) {
+        fullKet = fullKet ? `${fullKet} | ${studentIdentityTag}` : studentIdentityTag;
+      }
+      if (pId && !fullKet.includes(pId)) {
+        fullKet = fullKet ? `${fullKet} [ID: ${pId}]` : `[ID: ${pId}]`;
       }
 
       items.push({
@@ -6319,7 +6420,7 @@
         jamMulai: jmMulai,
         jamSelesai: jmSelesai,
         ruangan: ruangan,
-        keterangan: ket
+        keterangan: fullKet
       });
     });
 
@@ -6343,6 +6444,8 @@
     const payload = {
       id: editId,
       pendaftarId: pId,
+      npm: pNpm,
+      namaMahasiswa: pNama,
       kodeProdi: kdProdi,
       programStudi: nmProdi,
       semester: sem,
@@ -6373,6 +6476,7 @@
           id: subId,
           pendaftarId: pId,
           pendaftaranId: pId,
+          npm: pNpm,
           'Tanggal Ujian': it.tanggalUjian,
           'Jam Mulai': it.jamMulai,
           'Jam Selesai': it.jamSelesai,
@@ -6384,7 +6488,7 @@
           'Mata Kuliah': it.mataKuliah,
           'Dosen Pengampu': it.dosenPengampu,
           'Jenis Ujian': jnsUjian,
-          Keterangan: it.keterangan ? `${it.keterangan} [ID: ${pId}]` : `[ID: ${pId}]`
+          Keterangan: it.keterangan
         });
       });
     } else {
@@ -6393,6 +6497,7 @@
         id: baseId,
         pendaftarId: pId,
         pendaftaranId: pId,
+        npm: pNpm,
         'Tanggal Ujian': items[0].tanggalUjian,
         'Jam Mulai': items[0].jamMulai,
         'Jam Selesai': items[0].jamSelesai,
@@ -6404,7 +6509,7 @@
         'Mata Kuliah': items[0].mataKuliah,
         'Dosen Pengampu': items[0].dosenPengampu,
         'Jenis Ujian': jnsUjian,
-        Keterangan: items[0].keterangan ? `${items[0].keterangan} [ID: ${pId}]` : `[ID: ${pId}]`
+        Keterangan: items[0].keterangan
       };
       const existIdx = appData.jadwal.findIndex(j => String(j.ID || j.id) === baseId);
       if (existIdx !== -1) {
@@ -6423,49 +6528,70 @@
     saveAppDataCache(appData);
     renderJadwalUjianTable();
     renderPendaftaranTable();
+    if (typeof renderKartuUjianDigital === 'function') renderKartuUjianDigital();
+    if (typeof renderSpreadsheetWorkbook === 'function') renderSpreadsheetWorkbook();
 
-    const isEdit = (editId && editId.indexOf('JDW-') === 0);
+    const isEdit = Boolean(editId && editId.indexOf('JDW-') === 0);
 
-    const onResult = res => {
+    try {
+      const fnName = isEdit ? 'updateJadwal' : 'addJadwal';
+      const fnArgs = isEdit ? [editId, payload] : [payload];
+      const res = await sendJadwalRpcPromise(fnName, fnArgs);
+
+      // JIKA backend GAS masih versi lama (hanya menyimpan 1 baris pertama & tidak mengembalikan array res.items lengkap),
+      // kirim sisa mata kuliah (indeks 1 s.d. akhir) secara berurutan agar SEMUA mata kuliah masuk ke Google Spreadsheet!
+      if (!isEdit && res && res.success && !res.isLocalFallback && items.length > 1) {
+        const savedCount = Array.isArray(res.items) ? res.items.length : 1;
+        if (savedCount < items.length) {
+          for (let k = savedCount; k < items.length; k++) {
+            const singleIt = items[k];
+            const singlePayload = {
+              id: '',
+              pendaftarId: pId,
+              npm: pNpm,
+              namaMahasiswa: pNama,
+              kodeProdi: kdProdi,
+              programStudi: nmProdi,
+              semester: sem,
+              kelas: kls,
+              jenisUjian: jnsUjian,
+              actor: currentUser?.nama || 'Admin TU',
+              mataKuliah: singleIt.mataKuliah,
+              dosenPengampu: singleIt.dosenPengampu,
+              tanggalUjian: singleIt.tanggalUjian,
+              jamMulai: singleIt.jamMulai,
+              jamSelesai: singleIt.jamSelesai,
+              ruangan: singleIt.ruangan,
+              keterangan: singleIt.keterangan
+            };
+            await sendJadwalRpcPromise('addJadwal', [singlePayload]);
+          }
+        }
+      }
+
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = 'Simpan & Terbitkan Jadwal';
       }
+
       if (res && res.success) {
         closeJadwalModal();
-        Swal.fire('Berhasil', res.message || 'Jadwal ujian berhasil disimpan dan diterbitkan!', 'success');
-        loadAppData();
+        if (res.isLocalFallback) {
+          Swal.fire('Tersimpan Lokal', `${items.length} jadwal mata kuliah tersimpan di cache browser (GAS sedang offline).`, 'info');
+        } else {
+          Swal.fire('Berhasil', res.message || `Berhasil menerbitkan ${items.length} jadwal ujian ke Spreadsheet!`, 'success');
+          loadAppData();
+        }
       } else {
         Swal.fire('Gagal', (res && res.message) || 'Gagal menyimpan jadwal.', 'error');
       }
-    };
-
-    const onError = err => {
+    } catch (err) {
       if (btn) {
         btn.disabled = false;
         btn.innerHTML = 'Simpan & Terbitkan Jadwal';
       }
       Swal.fire('Tersimpan Lokal', 'Jadwal telah tersimpan di sistem lokal.', 'info');
       closeJadwalModal();
-      loadAppData();
-    };
-
-    if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.addJadwal) {
-      if (isEdit) {
-        google.script.run
-          .withSuccessHandler(onResult)
-          .withFailureHandler(onError)
-          .updateJadwal(editId, payload);
-      } else {
-        google.script.run
-          .withSuccessHandler(onResult)
-          .withFailureHandler(onError)
-          .addJadwal(payload);
-      }
-    } else {
-      const fnName = isEdit ? 'updateJadwal' : 'addJadwal';
-      const fnArgs = isEdit ? [editId, payload] : [payload];
-      callGasApi(fnName, fnArgs, onResult, onError);
     }
   }
 
@@ -6697,31 +6823,13 @@
 
         const courses = extractMataKuliahList(p);
 
-        // Cari jadwal untuk masing-masing mata kuliah
-        const scheduledCourses = courses.map((c, cIdx) => {
-          const match = jadwalList.find(j => {
-            const jPId = String(j.pendaftarId || j.pendaftaranId || '').trim();
-            const jKet = String(j.Keterangan || '').toLowerCase();
-            const idMatched = (jPId && jPId === pId) || (pId && jKet.includes(pId.toLowerCase())) || (pNpm && jKet.includes(pNpm));
-            
-            const jMatkul = String(j['Mata Kuliah'] || '').trim().toLowerCase();
-            const cMatkul = String(c.mataKuliah || c.nama || '').trim().toLowerCase();
-            const matkulMatched = jMatkul && cMatkul && (jMatkul.includes(cMatkul) || cMatkul.includes(jMatkul));
-
-            if (idMatched && matkulMatched) return true;
-            if (idMatched && courses.length === 1) return true;
-            if (matkulMatched) {
-              const sameProdi = String(j['Kode Prodi'] || '').toUpperCase() === String(p['Kode Prodi'] || '').toUpperCase();
-              const sameSem = String(j.Semester || '').trim().toLowerCase() === String(p.Semester || '').trim().toLowerCase();
-              if (sameProdi && sameSem) return true;
-            }
-            return false;
-          });
-          return {
-            course: c,
-            schedule: match
-          };
-        });
+        // Cari jadwal untuk masing-masing mata kuliah menggunakan pencocokan dua tahap yang presisi
+        const scheduledCourses = courses.map(c => ({
+          course: c,
+          schedule: typeof findScheduleForRegistrationCourse === 'function'
+            ? findScheduleForRegistrationCourse(p, c, jadwalList)
+            : null
+        }));
 
         const hasAnySchedule = scheduledCourses.some(sc => sc.schedule && sc.schedule['Tanggal Ujian'] && sc.schedule.Ruangan);
 

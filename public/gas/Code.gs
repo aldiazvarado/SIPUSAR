@@ -2866,7 +2866,21 @@ function addJadwal(payload) {
       sheet = getOrCreateSheet(ss, 'Jadwal_Ujian');
     }
     var lastRow = sheet.getLastRow();
-    var baseNum = 1000 + (lastRow > 1 ? lastRow : 1);
+    var maxIdNum = 1000;
+    if (lastRow > 1) {
+      var idValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var rIdx = 0; rIdx < idValues.length; rIdx++) {
+        var rawIdStr = String(idValues[rIdx][0] || '').trim();
+        var mId = rawIdStr.match(/^JDW-(\d+)/i);
+        if (mId) {
+          var parsedNum = parseInt(mId[1], 10);
+          if (!isNaN(parsedNum) && parsedNum > maxIdNum) {
+            maxIdNum = parsedNum;
+          }
+        }
+      }
+    }
+    var baseNum = Math.max(1000 + (lastRow > 1 ? lastRow : 1), maxIdNum + 1);
     var baseId = 'JDW-' + baseNum;
     if (payload.id && String(payload.id).indexOf('JDW-') === 0) {
       baseId = String(payload.id).trim();
@@ -2878,7 +2892,13 @@ function addJadwal(payload) {
     var kls = payload.Kelas || payload.kelas || 'Reguler 3A';
     var jnsUjian = payload['Jenis Ujian'] || payload.jenisUjian || 'UTS Susulan';
     var pendaftarId = payload.pendaftarId || '';
-    var baseKet = payload.Keterangan || payload.keterangan || (payload.npm ? ('Peserta: ' + payload.npm) : '');
+    var pNpm = payload.npm || payload.NPM || '';
+    var pNama = payload.namaMahasiswa || payload['Nama Mahasiswa'] || '';
+    var studentTag = '';
+    if (pNama || pNpm) {
+      studentTag = 'Peserta: ' + (pNama || '-') + (pNpm ? (' (NPM: ' + pNpm + ')') : '');
+    }
+    var baseKet = payload.Keterangan || payload.keterangan || studentTag;
 
     var items = [];
     if (Array.isArray(payload.items) && payload.items.length > 0) {
@@ -2914,7 +2934,10 @@ function addJadwal(payload) {
       var ruang = item.Ruangan || item.ruangan || payload.Ruangan || payload.ruangan || '';
       var matkul = item['Mata Kuliah'] || item.mataKuliah || '';
       var dosen = item['Dosen Pengampu'] || item.dosenPengampu || '';
-      var ket = item.Keterangan || item.keterangan || baseKet;
+      var ket = String(item.Keterangan || item.keterangan || baseKet || '').trim();
+      if (studentTag && ket.indexOf(pNpm || '___NONE___') === -1 && ket.indexOf('Peserta:') === -1) {
+        ket = ket ? (ket + ' | ' + studentTag) : studentTag;
+      }
       if (pendaftarId && ket.indexOf(pendaftarId) === -1) {
         ket = (ket ? (ket + ' ') : '') + '[ID: ' + pendaftarId + ']';
       }
