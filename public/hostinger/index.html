@@ -3388,6 +3388,10 @@
       } else {
         hideElem('btnEndpointApiGas');
       }
+
+      if (typeof syncDatabaseSheetSelectorAccess === 'function') {
+        syncDatabaseSheetSelectorAccess();
+      }
     }
 
     function initUserUI() {
@@ -10478,9 +10482,40 @@
       });
     }
 
-    function renderSpreadsheetWorkbook() {
+    function syncDatabaseSheetSelectorAccess() {
       const select = document.getElementById('activeSheetSelector');
-      const sheetName = select ? select.value : 'Pendaftaran';
+      if (!select) return;
+      const allowStaffSheet = (typeof isMasterAdmin === 'function') && isMasterAdmin();
+      let staffOpt = select.querySelector('option[value="User_Staff"]');
+
+      if (!allowStaffSheet) {
+        if (staffOpt) {
+          staffOpt.remove();
+        }
+        if (select.value === 'User_Staff' || !select.value) {
+          select.value = 'Pendaftaran';
+        }
+      } else if (!staffOpt) {
+        staffOpt = document.createElement('option');
+        staffOpt.value = 'User_Staff';
+        staffOpt.textContent = 'User Staff';
+        const mhsOpt = select.querySelector('option[value="User_Mahasiswa"]');
+        if (mhsOpt) {
+          select.insertBefore(staffOpt, mhsOpt);
+        } else {
+          select.appendChild(staffOpt);
+        }
+      }
+    }
+
+    function renderSpreadsheetWorkbook() {
+      syncDatabaseSheetSelectorAccess();
+      const select = document.getElementById('activeSheetSelector');
+      let sheetName = select ? select.value : 'Pendaftaran';
+      if (sheetName === 'User_Staff' && !(typeof isMasterAdmin === 'function' && isMasterAdmin())) {
+        sheetName = 'Pendaftaran';
+        if (select) select.value = 'Pendaftaran';
+      }
       const thead = document.getElementById('spreadsheetGridHead');
       const tbody = document.getElementById('spreadsheetGridBody');
       const sumElem = document.getElementById('sheetFormulaSum');
@@ -10625,8 +10660,13 @@
 
     // Fungsi Utama Ekspor Excel (.xlsx standar dengan fallback .xls)
     function exportActiveSheetExcel() {
+      syncDatabaseSheetSelectorAccess();
       const select = document.getElementById('activeSheetSelector');
       const sheetName = select ? select.value : 'Pendaftaran';
+      if (sheetName === 'User_Staff' && !(typeof isMasterAdmin === 'function' && isMasterAdmin())) {
+        Swal.fire('Akses Dibatasi', 'Sheet User Staff hanya dapat diakses dan diekspor oleh Master Admin.', 'warning');
+        return;
+      }
       let rows = [];
       const master = appData.master || {};
       if (sheetName === 'Pendaftaran') rows = appData.pendaftaran || [];
