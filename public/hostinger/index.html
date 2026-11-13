@@ -1270,6 +1270,9 @@
               <button type="button" id="btnMigrateDrive" onclick="triggerMigrateBase64ToDrive()" title="Unggah bukti foto base64 lama otomatis ke folder Google Drive" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap shadow-xs text-xs transition cursor-pointer">
                 <i class="fab fa-google-drive text-amber-200"></i> <span>Migrasi Base64 ke Drive</span>
               </button>
+              <button type="button" id="btnSyncJadwalSheet" onclick="triggerSyncJadwalSpreadsheet()" style="display:none;" title="Validasi peserta & tulis kolom Nama Mahasiswa 1, NPM 1, dst. ke Google Spreadsheet" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap shadow-xs text-xs transition cursor-pointer">
+                <i class="fas fa-sync-alt text-blue-200"></i> <span>Sinkron Spreadsheet</span>
+              </button>
               <button type="button" id="btnExportActiveSheet" onclick="exportActiveSheetExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 whitespace-nowrap shadow-xs text-xs transition cursor-pointer">
                 <i class="fas fa-file-excel"></i> <span>Export Excel (.xlsx / .xls)</span>
               </button>
@@ -5916,19 +5919,48 @@
       // Saring hanya pendaftar yang masih memiliki mata kuliah belum terjadwal
       let availablePendaftar = pendaftaranList.filter(p => !isPendaftaranAlreadyScheduled(p));
 
-      // Jika sedang mengedit jadwal yang sudah ada, pastikan pendaftar jadwal ini tetap disertakan
+      // Jika sedang mengedit jadwal yang sudah ada, pastikan pendaftar jadwal ini tetap disertakan (pencocokan bertingkat bebas tabrakan NPM)
       let matchedPendaftarForEdit = null;
       if (currentEditingJadwal) {
-        matchedPendaftarForEdit = pendaftaranList.find(p => {
-          const pId = String(p.ID || p.id || '').trim();
-          const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
-          const jKet = String(currentEditingJadwal.Keterangan || '').toLowerCase();
-          if (pId && jKet.includes(pId.toLowerCase())) return true;
-          if (pNpm && jKet.includes(pNpm)) return true;
-          const sameMatkul = String(p['Mata Kuliah'] || '').toLowerCase().includes(String(currentEditingJadwal['Mata Kuliah'] || '').toLowerCase());
+        const jKetEdit = String(currentEditingJadwal.Keterangan || '');
+        const jPIdEdit = String(currentEditingJadwal.pendaftarId || currentEditingJadwal.pendaftaranId || '').trim();
+        const editRegTags = [...jKetEdit.matchAll(/\[id:\s*(reg-\d+)\]/gi)].map(m => m[1].toUpperCase());
+        if (jPIdEdit && !editRegTags.includes(jPIdEdit.toUpperCase())) editRegTags.unshift(jPIdEdit.toUpperCase());
+
+        const isEditPendaftarValid = (p) => {
+          if (typeof isPendaftarValidForJadwal === 'function') return isPendaftarValidForJadwal(p, currentEditingJadwal);
           const sameProdi = String(p['Kode Prodi'] || '').toUpperCase() === String(currentEditingJadwal['Kode Prodi'] || '').toUpperCase();
-          return sameMatkul && sameProdi;
-        });
+          return sameProdi;
+        };
+
+        // Pass 1: Tag [ID: REG-...] tervalidasi Prodi/Kelas/Matkul
+        if (editRegTags.length > 0) {
+          matchedPendaftarForEdit = pendaftaranList.find(p => {
+            const pIdUpper = String(p.ID || p.id || '').trim().toUpperCase();
+            return editRegTags.includes(pIdUpper) && isEditPendaftarValid(p);
+          }) || null;
+        }
+        // Pass 2: Pola "Peserta: Nama (NPM)" tervalidasi Prodi/Kelas/Matkul
+        if (!matchedPendaftarForEdit) {
+          const pesertaM = jKetEdit.match(/Peserta\s*:\s*([^\(\n\[]+?)\s*\(\s*(?:NPM|NIM)\s*:\s*([^)\n\]]+)\s*\)/i);
+          if (pesertaM) {
+            const targetNama = pesertaM[1].trim().toLowerCase();
+            const targetNpm = pesertaM[2].trim().toLowerCase();
+            matchedPendaftarForEdit = pendaftaranList.find(p => {
+              const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+              const pNama = String(p['Nama Mahasiswa'] || '').trim().toLowerCase();
+              return pNpm === targetNpm && pNama === targetNama && isEditPendaftarValid(p);
+            }) || null;
+          }
+        }
+        // Pass 3: Fallback Prodi + Semester + Kelas + Mata Kuliah
+        if (!matchedPendaftarForEdit) {
+          matchedPendaftarForEdit = pendaftaranList.find(p => isEditPendaftarValid(p)) || null;
+        }
+        // Pass 4: Fallback tag REG-ID pertama bila data master berubah
+        if (!matchedPendaftarForEdit && editRegTags.length > 0) {
+          matchedPendaftarForEdit = pendaftaranList.find(p => editRegTags.includes(String(p.ID || p.id || '').trim().toUpperCase())) || null;
+        }
 
         if (matchedPendaftarForEdit && !availablePendaftar.some(p => String(p.ID) === String(matchedPendaftarForEdit.ID))) {
           availablePendaftar.unshift(matchedPendaftarForEdit);
@@ -6233,19 +6265,24 @@
       const cMatkul = course ? (course.mataKuliah || course.nama || '') : '';
       const allCourses = extractMataKuliahList(p);
 
-      // PASS 1: Pencocokan prioritas berdasarkan kepemilikan eksplisit (pendaftarId, [ID: REG-...], atau NPM)
+      // PASS 1: Pencocokan prioritas berdasarkan kepemilikan eksplisit (pendaftarId, [ID: REG-...], atau NPM) + validasi Prodi & Kelas
+      const normKelas = (v) => (typeof normalizeClassNameClient === 'function' ? normalizeClassNameClient(v).toLowerCase() : String(v || '').trim().toLowerCase());
       const explicitMatch = jadwalList.find(j => {
         if (excludeJadwalId && String(j.ID || j.id || '').trim() === String(excludeJadwalId).trim()) return false;
+        const jProdi = String(j['Kode Prodi'] || '').trim().toUpperCase();
+        const jKelas = normKelas(j.Kelas || '');
+        if (pProdi && jProdi && pProdi !== jProdi) return false;
+        if (pKelas && jKelas && normKelas(pKelas) !== jKelas) return false;
+
         const jPId = String(j.pendaftarId || j.pendaftaranId || '').trim();
         const jKet = String(j.Keterangan || '').toLowerCase();
-        const regTagMatch = jKet.match(/\[id:\s*(reg-\d+)\]/i);
-        const taggedRegId = regTagMatch ? regTagMatch[1].toUpperCase() : '';
+        const allRegTags = [...jKet.matchAll(/\[id:\s*(reg-\d+)\]/gi)].map(m => m[1].toUpperCase());
 
-        if (taggedRegId && pId && taggedRegId !== pId.toUpperCase()) return false;
+        if (allRegTags.length > 0 && pId && !allRegTags.includes(pId.toUpperCase())) return false;
         if (jPId && pId && jPId.toUpperCase() !== pId.toUpperCase()) return false;
 
         const idMatched = (jPId && pId && jPId.toUpperCase() === pId.toUpperCase()) ||
-                          (pId && jKet.includes(pId.toLowerCase())) ||
+                          (pId && allRegTags.includes(pId.toUpperCase())) ||
                           (pNpm && (jKet.includes(pNpm) || String(j.npm || '').toLowerCase() === pNpm));
 
         if (!idMatched) return false;
@@ -6406,10 +6443,25 @@
       }
 
       let fullKet = rawKet;
+      // Bersihkan tag [ID: REG-...] nyasar milik pendaftar lain yang tidak cocok dengan slot mata kuliah ini
+      if (pId) {
+        fullKet = fullKet.replace(/\s*\[ID:\s*(REG-\d+)\]/gi, (fullMatch, tagId) => {
+          if (tagId.toUpperCase() === pId.toUpperCase()) return fullMatch;
+          const otherP = (appData.pendaftaran || []).find(p => String(p.ID || p.id || '').trim().toUpperCase() === tagId.toUpperCase());
+          if (!otherP) return '';
+          const dummyJadwal = {
+            'Kode Prodi': document.getElementById('jadwalKodeProdi')?.value || '',
+            Semester: document.getElementById('jadwalSemester')?.value || '',
+            Kelas: document.getElementById('jadwalKelas')?.value || '',
+            'Mata Kuliah': matkul
+          };
+          return (typeof isPendaftarValidForJadwal === 'function' && isPendaftarValidForJadwal(otherP, dummyJadwal)) ? fullMatch : '';
+        }).replace(/\s{2,}/g, ' ').trim();
+      }
       if (studentIdentityTag && !fullKet.includes('Peserta:') && (!pNpm || !fullKet.includes(pNpm))) {
         fullKet = fullKet ? `${fullKet} | ${studentIdentityTag}` : studentIdentityTag;
       }
-      if (pId && !fullKet.includes(pId)) {
+      if (pId && !new RegExp(`\\[ID:\\s*${pId.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')}\\]`, 'i').test(fullKet)) {
         fullKet = fullKet ? `${fullKet} [ID: ${pId}]` : `[ID: ${pId}]`;
       }
 
@@ -10146,6 +10198,87 @@
       });
     }
 
+    function triggerSyncJadwalSpreadsheet() {
+      Swal.fire({
+        title: 'Menyinkronkan Jadwal ke Spreadsheet...',
+        html: '<p class="text-xs text-slate-600 mb-2">Memvalidasi peserta (Prodi, Kelas, Matkul) dan menulis kolom Nama Mahasiswa 1, NPM 1, dst. ke sheet Jadwal_Ujian...</p><i class="fas fa-circle-notch fa-spin text-blue-900 text-3xl"></i>',
+        allowOutsideClick: false,
+        showConfirmButton: false
+      });
+
+      const onSyncSuccess = function(res) {
+        if (res && res.success) {
+          Swal.fire({
+            title: 'Sinkronisasi Berhasil!',
+            text: res.message || 'Kolom peserta pada sheet Jadwal_Ujian di Google Spreadsheet sudah selaras dengan Kartu Digital & Database Website.',
+            icon: 'success',
+            confirmButtonText: 'Muat Ulang Data',
+            confirmButtonColor: '#1E3A8A'
+          }).then(() => {
+            if (typeof loadAppData === 'function') loadAppData(true);
+            else renderSpreadsheetWorkbook();
+          });
+        } else {
+          const msg = (res && res.message) || 'Terjadi kendala saat menyinkronkan ke Google Spreadsheet.';
+          if (msg.includes('Fungsi tidak ditemukan')) {
+            Swal.fire({
+              title: 'Skrip GAS Perlu Diperbarui',
+              html: '<p class="text-xs text-slate-700 leading-relaxed">Data <b>Database Website</b>, <b>Export Excel</b>, dan <b>Kartu Digital</b> di website sudah tersinkron otomatis, namun Web App Google Apps Script Anda masih memakai versi lama sebelum fungsi <code>syncJadwalParticipantsToSheet</code> ditambahkan.</p><p class="text-xs text-blue-900 font-bold mt-2">Salin ulang kode terbaru dari menu Source Code & Skrip lalu Deploy ulang Web App GAS agar Google Spreadsheet ikut terisi kolom peserta paling kanan.</p>',
+              icon: 'info'
+            });
+          } else {
+            Swal.fire('Gagal Sinkron', msg, 'error');
+          }
+        }
+      };
+
+      const onSyncError = function(err) {
+        Swal.fire('Error Sinkronisasi', err?.message || String(err), 'error');
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.syncJadwalParticipantsToSheet) {
+        google.script.run
+          .withSuccessHandler(onSyncSuccess)
+          .withFailureHandler(onSyncError)
+          .syncJadwalParticipantsToSheet();
+      } else {
+        callGasApi('syncJadwalParticipantsToSheet', [], onSyncSuccess, onSyncError);
+      }
+    }
+
+    function isPendaftarValidForJadwal(p, jadwalItem) {
+      if (!p || !jadwalItem) return false;
+      const jProdi = String(jadwalItem['Kode Prodi'] || jadwalItem.kodeProdi || '').trim().toUpperCase();
+      const pProdi = String(p['Kode Prodi'] || p.kodeProdi || '').trim().toUpperCase();
+      if (jProdi && pProdi && jProdi !== pProdi) return false;
+
+      const jSem = String(jadwalItem.Semester || jadwalItem.semester || '').trim().toLowerCase();
+      const pSem = String(p.Semester || p.semester || '').trim().toLowerCase();
+      if (jSem && pSem && jSem !== pSem) return false;
+
+      const normKelas = (val) => {
+        if (typeof normalizeClassNameClient === 'function') return normalizeClassNameClient(val).toLowerCase();
+        return String(val || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      };
+      const jKelas = normKelas(jadwalItem.Kelas || jadwalItem.kelas || '');
+      const pKelas = normKelas(p.Kelas || p.kelas || '');
+      if (jKelas && pKelas && jKelas !== pKelas) return false;
+
+      const jMatkul = String(jadwalItem['Mata Kuliah'] || jadwalItem.mataKuliah || '').trim();
+      if (!jMatkul) return true;
+
+      if (typeof isCourseNameMatched === 'function') {
+        if (typeof extractMataKuliahList === 'function') {
+          const cList = extractMataKuliahList(p);
+          if (cList.some(c => isCourseNameMatched(jMatkul, c.mataKuliah || c.nama || ''))) return true;
+        }
+        return isCourseNameMatched(jMatkul, p['Mata Kuliah'] || '');
+      }
+      const pMat = String(p['Mata Kuliah'] || '').trim().toLowerCase();
+      const jMatLower = jMatkul.toLowerCase();
+      return Boolean(pMat && (pMat.includes(jMatLower) || jMatLower.includes(pMat)));
+    }
+
     function resolveJadwalPeserta(jadwalItem) {
       if (!jadwalItem || typeof jadwalItem !== 'object') {
         return { participants: [], namaMahasiswa: '-', npm: '-' };
@@ -10172,7 +10305,7 @@
 
       const ketStr = String(jadwalItem.Keterangan || jadwalItem.keterangan || '').trim();
 
-      // 1. Cek referensi ID Pendaftaran eksplisit ([ID: REG-...] atau pendaftarId)
+      // 1. Cek referensi ID Pendaftaran eksplisit ([ID: REG-...] atau pendaftarId) & VALIDASI Prodi/Semester/Kelas/Matkul
       const directPId = String(jadwalItem.pendaftarId || jadwalItem.pendaftaranId || '').trim();
       const regTagMatches = [...ketStr.matchAll(/\[id:\s*(reg-\d+)\]/gi)].map(m => m[1].trim());
       const candidateRegIds = [];
@@ -10183,72 +10316,63 @@
 
       candidateRegIds.forEach(regId => {
         const pMatch = pendaftaranList.find(p => String(p.ID || p.id || '').trim().toUpperCase() === regId.toUpperCase());
-        if (pMatch) {
+        if (pMatch && isPendaftarValidForJadwal(pMatch, jadwalItem)) {
           addParticipant(pMatch['Nama Mahasiswa'] || pMatch.nama || '', pMatch.NPM || pMatch.NIM || pMatch.npm || '');
         }
       });
 
-      // 2. Ekstrak pola "Peserta: Nama (NPM: 123)" atau "(NIM: 123)" dari Keterangan
+      // 2. Ekstrak pola "Peserta: Nama (NPM: 123)" dari Keterangan & validasi jika ada di data Pendaftaran
       const pesertaRegex = /Peserta\s*:\s*([^\(\n\[]+?)\s*\(\s*(?:NPM|NIM)\s*:\s*([^)\n\]]+)\s*\)/gi;
       let pRegexMatch;
       while ((pRegexMatch = pesertaRegex.exec(ketStr)) !== null) {
-        addParticipant(pRegexMatch[1], pRegexMatch[2]);
+        const tagNama = String(pRegexMatch[1] || '').trim();
+        const tagNpm = String(pRegexMatch[2] || '').trim();
+        const identityCandidates = pendaftaranList.filter(p => {
+          const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+          const pNama = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
+          const npmOk = !tagNpm || tagNpm === '-' || pNpm === tagNpm.toLowerCase();
+          const namaOk = !tagNama || tagNama === '-' || pNama === tagNama.toLowerCase();
+          return npmOk && namaOk;
+        });
+        if (identityCandidates.length > 0) {
+          if (identityCandidates.some(p => isPendaftarValidForJadwal(p, jadwalItem))) {
+            addParticipant(tagNama, tagNpm);
+          }
+        } else {
+          addParticipant(tagNama, tagNpm);
+        }
       }
 
-      // 3. Cek properti langsung di objek jadwal (jika tersedia)
-      const directNama = String(jadwalItem['Nama Mahasiswa'] || jadwalItem.namaMahasiswa || '').trim();
-      const directNpm = String(jadwalItem.NPM || jadwalItem.NIM || jadwalItem.npm || '').trim();
-      if (directNama || directNpm) {
-        let resolvedNama = directNama;
-        let resolvedNpm = directNpm;
-        if ((!resolvedNama || resolvedNama === '-') && resolvedNpm) {
-          const pByNpm = pendaftaranList.find(p => String(p.NPM || p.NIM || '').trim().toLowerCase() === resolvedNpm.toLowerCase());
-          if (pByNpm) resolvedNama = pByNpm['Nama Mahasiswa'] || pByNpm.nama || '';
+      // 3. Cek properti langsung di objek jadwal (jika tersedia & belum terselesaikan)
+      if (participants.length === 0) {
+        const directNama = String(jadwalItem['Nama Mahasiswa'] || jadwalItem.namaMahasiswa || '').trim();
+        const directNpm = String(jadwalItem.NPM || jadwalItem.NIM || jadwalItem.npm || '').trim();
+        if (directNama || directNpm) {
+          let resolvedNama = directNama;
+          let resolvedNpm = directNpm;
+          const identityMatches = pendaftaranList.filter(p => {
+            const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+            const pNama = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
+            const npmOk = !resolvedNpm || resolvedNpm === '-' || pNpm === resolvedNpm.toLowerCase();
+            const namaOk = !resolvedNama || resolvedNama === '-' || pNama === resolvedNama.toLowerCase();
+            return npmOk && namaOk;
+          });
+          if (identityMatches.length > 0) {
+            const validDirect = identityMatches.find(p => isPendaftarValidForJadwal(p, jadwalItem));
+            if (validDirect) {
+              addParticipant(validDirect['Nama Mahasiswa'] || validDirect.nama || resolvedNama, validDirect.NPM || validDirect.NIM || resolvedNpm);
+            }
+          } else {
+            addParticipant(resolvedNama, resolvedNpm);
+          }
         }
-        if ((!resolvedNpm || resolvedNpm === '-') && resolvedNama) {
-          const pByNama = pendaftaranList.find(p => String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase() === resolvedNama.toLowerCase());
-          if (pByNama) resolvedNpm = pByNama.NPM || pByNama.NIM || '';
-        }
-        addParticipant(resolvedNama, resolvedNpm);
       }
 
       // 4. Fallback otomatis untuk jadwal lama yang belum mencatat peserta di Keterangan:
       //    Cocokkan ke data Pendaftaran berdasarkan Prodi + Semester + Kelas + Mata Kuliah
       if (participants.length === 0 && pendaftaranList.length > 0) {
-        const jProdi = String(jadwalItem['Kode Prodi'] || jadwalItem.kodeProdi || '').trim().toUpperCase();
-        const jSem = String(jadwalItem.Semester || jadwalItem.semester || '').trim().toLowerCase();
-        const normKelas = (val) => {
-          if (typeof normalizeClassNameClient === 'function') return normalizeClassNameClient(val).toLowerCase();
-          return String(val || '').replace(/\s+/g, ' ').trim().toLowerCase();
-        };
-        const jKelas = normKelas(jadwalItem.Kelas || jadwalItem.kelas || '');
-        const jMatkul = String(jadwalItem['Mata Kuliah'] || jadwalItem.mataKuliah || '').trim();
         const jJenis = String(jadwalItem['Jenis Ujian'] || jadwalItem['Jenis Layanan'] || jadwalItem.jenisUjian || '').trim().toLowerCase();
-
-        const checkCourseMatch = (p) => {
-          if (!jMatkul) return false;
-          if (typeof isCourseNameMatched === 'function') {
-            if (typeof extractMataKuliahList === 'function') {
-              const cList = extractMataKuliahList(p);
-              if (cList.some(c => isCourseNameMatched(jMatkul, c.mataKuliah || c.nama || ''))) return true;
-            }
-            return isCourseNameMatched(jMatkul, p['Mata Kuliah'] || '');
-          }
-          const pMat = String(p['Mata Kuliah'] || '').trim().toLowerCase();
-          const jMatLower = jMatkul.toLowerCase();
-          return Boolean(pMat && (pMat.includes(jMatLower) || jMatLower.includes(pMat)));
-        };
-
-        const baseMatches = pendaftaranList.filter(p => {
-          const pProdi = String(p['Kode Prodi'] || p.kodeProdi || '').trim().toUpperCase();
-          const pSem = String(p.Semester || p.semester || '').trim().toLowerCase();
-          const pKelas = normKelas(p.Kelas || p.kelas || '');
-
-          const sameProdi = !jProdi || !pProdi || jProdi === pProdi;
-          const sameSem = !jSem || !pSem || jSem === pSem;
-          const sameKelas = !jKelas || !pKelas || jKelas === pKelas;
-          return sameProdi && sameSem && sameKelas && checkCourseMatch(p);
-        });
+        const baseMatches = pendaftaranList.filter(p => isPendaftarValidForJadwal(p, jadwalItem));
 
         let finalMatches = baseMatches;
         if (jJenis && baseMatches.length > 0) {
@@ -10356,9 +10480,13 @@
       const tbody = document.getElementById('spreadsheetGridBody');
       const sumElem = document.getElementById('sheetFormulaSum');
       const btnMigrate = document.getElementById('btnMigrateDrive');
+      const btnSyncJadwal = document.getElementById('btnSyncJadwalSheet');
 
       if (btnMigrate) {
         btnMigrate.style.display = (sheetName === 'Pendaftaran') ? '' : 'none';
+      }
+      if (btnSyncJadwal) {
+        btnSyncJadwal.style.display = (sheetName === 'Jadwal_Ujian') ? '' : 'none';
       }
 
       if (!thead || !tbody) return;

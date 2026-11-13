@@ -93,7 +93,8 @@ function handleApiRequest(action, args) {
     invalidateCache: invalidateCache,
     seedMockupData: seedMockupData,
     uploadBuktiPendaftaranToDrive: uploadBuktiToDrive,
-    migrateBase64ToDrive: migrateBase64ToDrive
+    migrateBase64ToDrive: migrateBase64ToDrive,
+    syncJadwalParticipantsToSheet: syncJadwalParticipantsToSheet
   };
   var fn = allowedFunctions[action];
   if (!fn) {
@@ -2853,6 +2854,370 @@ function addUserMahasiswa(payload, actor) {
 }
 
 // =========================================================================
+// [SINKRONISASI TERPADU]: Validasi Peserta & Kolom Nama Mahasiswa / NPM di Spreadsheet
+// Menyelaraskan Kartu Digital, Database Website (Export Excel), dan Google Spreadsheet
+// =========================================================================
+function normalizeMatkulNameGas(str) {
+  return String(str || '')
+    .replace(/\(\s*\d+\s*SKS\s*\)/gi, '')
+    .replace(/^\s*\d+[\.\)]\s*/, '')
+    .replace(/^\s*-\s*/, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function extractMataKuliahListGas(data) {
+  if (!data) return [];
+  var rawMatkul = String(data['Mata Kuliah'] || data.mataKuliah || '').trim();
+  var rawDosen = String(data['Dosen Pengampu'] || data.dosenPengampu || data.dosen || '').trim();
+  if (!rawMatkul) return [];
+
+  var results = [];
+  if (/(?:^|\s*)(?:\d+[\.\)]|\-)\s+/.test(rawMatkul)) {
+    var spacedMatkul = rawMatkul.replace(/([^\s\n])(\d+[\.\)]\s+)/g, '$1 $2');
+    var spacedDosen = rawDosen.replace(/([^\s\n])(\d+[\.\)]\s+)/g, '$1 $2');
+    var numRegex = /(?:^|\s+)(?:\d+[\.\)]|\-)\s+/;
+    var matkulParts = spacedMatkul.split(numRegex).map(function(s) { return s.trim(); }).filter(Boolean);
+    var dosenParts = spacedDosen ? spacedDosen.split(numRegex).map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    if (matkulParts.length > 0) {
+      for (var i = 0; i < matkulParts.length; i++) {
+        var mk = matkulParts[i];
+        var sks = 3;
+        var sksMatch = mk.match(/\((\d+)\s*SKS\)/i);
+        if (sksMatch) sks = parseInt(sksMatch[1], 10);
+        var cleanName = mk.replace(/\s*\(\d+\s*SKS\)/i, '').replace(/,\s*$/, '').trim();
+        var ds = String(dosenParts[i] || dosenParts[0] || '').replace(/,\s*$/, '').trim();
+        results.push({ nama: cleanName, mataKuliah: cleanName, dosen: ds, dosenPengampu: ds, sks: sks });
+      }
+      return results;
+    }
+  }
+
+  if (rawMatkul.indexOf('\n') !== -1) {
+    var mLines = rawMatkul.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+    var dLines = rawDosen.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+    for (var j = 0; j < mLines.length; j++) {
+      var mkLine = mLines[j];
+      var sksL = 3;
+      var sksMatchL = mkLine.match(/\((\d+)\s*SKS\)/i);
+      if (sksMatchL) sksL = parseInt(sksMatchL[1], 10);
+      var cleanLine = mkLine.replace(/\s*\(\d+\s*SKS\)/i, '').replace(/,\s*$/, '').trim();
+      var dsLine = String(dLines[j] || dLines[0] || '').replace(/,\s*$/, '').trim();
+      results.push({ nama: cleanLine, mataKuliah: cleanLine, dosen: dsLine, dosenPengampu: dsLine, sks: sksL });
+    }
+    return results;
+  }
+
+  var sksSingle = 3;
+  var sksMatchSingle = rawMatkul.match(/\((\d+)\s*SKS\)/i);
+  if (sksMatchSingle) sksSingle = parseInt(sksMatchSingle[1], 10);
+  var cleanSingle = rawMatkul.replace(/\s*\(\d+\s*SKS\)/i, '').replace(/,\s*$/, '').trim();
+  return [{ nama: cleanSingle || rawMatkul, mataKuliah: cleanSingle || rawMatkul, dosen: rawDosen, dosenPengampu: rawDosen, sks: sksSingle }];
+}
+
+function isCourseNameMatchedGas(jMatkulRaw, cMatkulRaw) {
+  var cleanJ = normalizeMatkulNameGas(jMatkulRaw);
+  var cleanC = normalizeMatkulNameGas(cMatkulRaw);
+  if (!cleanJ || !cleanC) return false;
+  if (cleanJ === cleanC) return true;
+  var rawJLower = String(jMatkulRaw || '').toLowerCase();
+  if (/(?:^|\s)2[\.\)]\s+/.test(rawJLower) || rawJLower.indexOf('\n') !== -1) {
+    return rawJLower.indexOf(cleanC) !== -1;
+  }
+  return false;
+}
+
+function isPendaftarValidForJadwalGas(p, jadwalItem) {
+  if (!p || !jadwalItem) return false;
+  var jProdi = String(jadwalItem['Kode Prodi'] || jadwalItem.kodeProdi || '').trim().toUpperCase();
+  var pProdi = String(p['Kode Prodi'] || p.kodeProdi || '').trim().toUpperCase();
+  if (jProdi && pProdi && jProdi !== pProdi) return false;
+
+  var jSem = String(jadwalItem.Semester || jadwalItem.semester || '').trim().toLowerCase();
+  var pSem = String(p.Semester || p.semester || '').trim().toLowerCase();
+  if (jSem && pSem && jSem !== pSem) return false;
+
+  var jKelas = normalizeClassName(jadwalItem.Kelas || jadwalItem.kelas || '').toLowerCase();
+  var pKelas = normalizeClassName(p.Kelas || p.kelas || '').toLowerCase();
+  if (jKelas && pKelas && jKelas !== pKelas) return false;
+
+  var jMatkul = String(jadwalItem['Mata Kuliah'] || jadwalItem.mataKuliah || '').trim();
+  if (!jMatkul) return true;
+
+  var cList = extractMataKuliahListGas(p);
+  for (var i = 0; i < cList.length; i++) {
+    if (isCourseNameMatchedGas(jMatkul, cList[i].mataKuliah || cList[i].nama || '')) return true;
+  }
+  return isCourseNameMatchedGas(jMatkul, p['Mata Kuliah'] || '');
+}
+
+function resolveJadwalPesertaGas(jadwalItem, pendaftaranList) {
+  var participants = [];
+  var seenKeys = {};
+  var validRegIds = [];
+  var invalidRegIds = [];
+  var pList = Array.isArray(pendaftaranList) ? pendaftaranList : [];
+
+  function addParticipant(rawNama, rawNpm) {
+    var nama = String(rawNama || '').trim();
+    var npm = String(rawNpm || '').trim();
+    if ((!nama || nama === '-') && (!npm || npm === '-')) return;
+    var cleanNama = (nama && nama !== '-') ? nama : '';
+    var cleanNpm = (npm && npm !== '-') ? npm : '';
+    var dedupKey = cleanNpm.toLowerCase() + '||' + cleanNama.toLowerCase();
+    if (seenKeys[dedupKey]) return;
+    seenKeys[dedupKey] = true;
+    participants.push({ nama: cleanNama || '-', npm: cleanNpm || '-' });
+  }
+
+  var ketStr = String(jadwalItem.Keterangan || jadwalItem.keterangan || '').trim();
+
+  // 1. Cek tag [ID: REG-...] dengan validasi Prodi + Semester + Kelas + Matkul
+  var candidateRegIds = [];
+  var directPId = String(jadwalItem.pendaftarId || jadwalItem.pendaftaranId || '').trim();
+  if (directPId) candidateRegIds.push(directPId);
+  var tagRegex = /\[id:\s*(reg-\d+)\]/gi;
+  var tagMatch;
+  while ((tagMatch = tagRegex.exec(ketStr)) !== null) {
+    var rid = tagMatch[1].trim();
+    var exists = candidateRegIds.some(function(x) { return x.toUpperCase() === rid.toUpperCase(); });
+    if (!exists) candidateRegIds.push(rid);
+  }
+
+  candidateRegIds.forEach(function(regId) {
+    var pMatch = null;
+    for (var pi = 0; pi < pList.length; pi++) {
+      if (String(pList[pi].ID || pList[pi].id || '').trim().toUpperCase() === regId.toUpperCase()) {
+        pMatch = pList[pi];
+        break;
+      }
+    }
+    if (pMatch) {
+      if (isPendaftarValidForJadwalGas(pMatch, jadwalItem)) {
+        validRegIds.push(regId.toUpperCase());
+        addParticipant(pMatch['Nama Mahasiswa'] || pMatch.nama || '', pMatch.NPM || pMatch.NIM || pMatch.npm || '');
+      } else {
+        invalidRegIds.push(regId.toUpperCase());
+      }
+    }
+  });
+
+  // 2. Cek pola "Peserta: Nama (NPM: ...)" di Keterangan
+  var pesertaRegex = /Peserta\s*:\s*([^\(\n\[]+?)\s*\(\s*(?:NPM|NIM)\s*:\s*([^)\n\]]+)\s*\)/gi;
+  var pRegexMatch;
+  while ((pRegexMatch = pesertaRegex.exec(ketStr)) !== null) {
+    var tagNama = String(pRegexMatch[1] || '').trim();
+    var tagNpm = String(pRegexMatch[2] || '').trim();
+    var matchingByIdentity = pList.filter(function(p) {
+      var pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+      var pNama = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
+      var npmOk = !tagNpm || tagNpm === '-' || pNpm === tagNpm.toLowerCase();
+      var namaOk = !tagNama || tagNama === '-' || pNama === tagNama.toLowerCase();
+      return npmOk && namaOk;
+    });
+    if (matchingByIdentity.length > 0) {
+      var validIdentityMatches = matchingByIdentity.filter(function(p) {
+        return isPendaftarValidForJadwalGas(p, jadwalItem);
+      });
+      if (validIdentityMatches.length > 0) {
+        addParticipant(tagNama, tagNpm);
+      }
+    } else {
+      addParticipant(tagNama, tagNpm);
+    }
+  }
+
+  // 3. Fallback otomatis untuk jadwal lama yang belum mencatat peserta di Keterangan
+  if (participants.length === 0 && pList.length > 0) {
+    var baseMatches = pList.filter(function(p) {
+      return isPendaftarValidForJadwalGas(p, jadwalItem);
+    });
+    var jJenis = String(jadwalItem['Jenis Ujian'] || jadwalItem['Jenis Layanan'] || jadwalItem.jenisUjian || '').trim().toLowerCase();
+    var finalMatches = baseMatches;
+    if (jJenis && baseMatches.length > 0) {
+      var strictJenis = baseMatches.filter(function(p) {
+        var pJenis = String(p['Jenis Layanan'] || p.layanan || '').trim().toLowerCase();
+        return !pJenis || pJenis === jJenis;
+      });
+      if (strictJenis.length > 0) finalMatches = strictJenis;
+    }
+    finalMatches.forEach(function(p) {
+      addParticipant(p['Nama Mahasiswa'] || p.nama || '', p.NPM || p.NIM || p.npm || '');
+    });
+  }
+
+  // Bersihkan tag REG-ID yang terbukti salah/nyasar dari Keterangan apabila ada tag tidak valid
+  var cleanedKet = ketStr;
+  if (invalidRegIds.length > 0) {
+    invalidRegIds.forEach(function(badId) {
+      var badPattern = new RegExp('\\s*\\[id:\\s*' + badId.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\]', 'gi');
+      cleanedKet = cleanedKet.replace(badPattern, '');
+    });
+    cleanedKet = cleanedKet.replace(/\s{2,}/g, ' ').trim();
+  }
+
+  return {
+    participants: participants,
+    cleanedKet: cleanedKet,
+    ketChanged: cleanedKet !== ketStr
+  };
+}
+
+function syncJadwalParticipantsInternal_(ss) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Jadwal_Ujian');
+  if (!sheet) {
+    return { success: false, message: 'Sheet Jadwal_Ujian tidak ditemukan.' };
+  }
+
+  var pendaftaranList = [];
+  try { pendaftaranList = getSheetDataRaw(ss, 'Pendaftaran') || []; } catch (e) {}
+  pendaftaranList = pendaftaranList.map(function(p) {
+    if (p.Kelas) p.Kelas = normalizeClassName(p.Kelas);
+    return p;
+  });
+
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  var defaultBaseHeaders = SCHEMA['Jadwal_Ujian'].slice();
+  var rawValues = (lastRow >= 1 && lastCol >= 1) ? sheet.getRange(1, 1, lastRow, lastCol).getValues() : [defaultBaseHeaders];
+  var existingHeaders = rawValues[0] || defaultBaseHeaders;
+
+  // Tentukan kolom standar (buang kolom dinamis Nama Mahasiswa N / NPM N lama agar disusun ulang di paling kanan)
+  var baseColIndices = [];
+  var baseHeaders = [];
+  for (var c = 0; c < existingHeaders.length; c++) {
+    var hName = String(existingHeaders[c] || '').trim();
+    if (!hName) continue;
+    if (/^(?:Nama Mahasiswa|NPM)\s*\d*$/i.test(hName)) continue;
+    baseColIndices.push(c);
+    baseHeaders.push(hName);
+  }
+  if (baseHeaders.length === 0) {
+    baseHeaders = defaultBaseHeaders;
+    baseColIndices = defaultBaseHeaders.map(function(_, idx) { return idx; });
+  }
+
+  var ketColPos = baseHeaders.indexOf('Keterangan');
+  var kelasColPos = baseHeaders.indexOf('Kelas');
+  var dataRows = [];
+  var resolvedPerRow = [];
+  var maxParticipants = 1;
+  var cleanedTagRows = 0;
+
+  for (var r = 1; r < rawValues.length; r++) {
+    var rawRow = rawValues[r];
+    var isBlank = rawRow.every(function(cell) { return String(cell || '').trim() === ''; });
+    if (isBlank) continue;
+
+    var baseRow = [];
+    var rowObj = {};
+    for (var bi = 0; bi < baseColIndices.length; bi++) {
+      var val = rawRow[baseColIndices[bi]];
+      if (val instanceof Date) {
+        var hLower = baseHeaders[bi].toLowerCase();
+        val = (hLower.indexOf('jam') !== -1) ? formatTimeOnly(val) : formatDateOnly(val);
+      }
+      if (bi === kelasColPos && val) {
+        val = normalizeClassName(val);
+      }
+      baseRow.push(val !== undefined && val !== null ? val : '');
+      rowObj[baseHeaders[bi]] = val !== undefined && val !== null ? val : '';
+    }
+
+    var resolved = resolveJadwalPesertaGas(rowObj, pendaftaranList);
+    if (resolved.ketChanged && ketColPos !== -1) {
+      baseRow[ketColPos] = resolved.cleanedKet;
+      cleanedTagRows++;
+    }
+    if (resolved.participants.length > maxParticipants) {
+      maxParticipants = resolved.participants.length;
+    }
+
+    dataRows.push(baseRow);
+    resolvedPerRow.push(resolved.participants);
+  }
+
+  var finalHeaders = baseHeaders.slice();
+  for (var pIdx = 1; pIdx <= maxParticipants; pIdx++) {
+    finalHeaders.push('Nama Mahasiswa ' + pIdx);
+    finalHeaders.push('NPM ' + pIdx);
+  }
+
+  var outputMatrix = [finalHeaders];
+  for (var ri = 0; ri < dataRows.length; ri++) {
+    var outRow = dataRows[ri].slice();
+    var pts = resolvedPerRow[ri] || [];
+    for (var pi = 0; pi < maxParticipants; pi++) {
+      var pt = pts[pi];
+      if (pt) {
+        outRow.push(String(pt.nama || '-'));
+        outRow.push(String(pt.npm || '-'));
+      } else if (pi === 0 && pts.length === 0) {
+        outRow.push('-');
+        outRow.push('-');
+      } else {
+        outRow.push('');
+        outRow.push('');
+      }
+    }
+    outputMatrix.push(outRow);
+  }
+
+  var totalCols = finalHeaders.length;
+  var prevCols = Math.max(lastCol, totalCols);
+  if (lastRow > 0 && prevCols > totalCols) {
+    sheet.getRange(1, totalCols + 1, lastRow, prevCols - totalCols).clearContent();
+  }
+
+  // Pastikan kolom NPM diformat sebagai teks agar angka/nol di depan tidak berubah
+  var npmStartCol = baseHeaders.length + 2;
+  for (var cOff = 0; cOff < maxParticipants; cOff++) {
+    var npmColNum = npmStartCol + (cOff * 2);
+    if (outputMatrix.length > 1) {
+      sheet.getRange(2, npmColNum, outputMatrix.length - 1, 1).setNumberFormat('@');
+    }
+  }
+
+  sheet.getRange(1, 1, outputMatrix.length, totalCols).setValues(outputMatrix);
+
+  // Format header kolom peserta baru agar serasi dengan header utama
+  if (totalCols > baseHeaders.length) {
+    var newHeaderRange = sheet.getRange(1, baseHeaders.length + 1, 1, totalCols - baseHeaders.length);
+    newHeaderRange.setFontWeight('bold').setBackground('#1e3a8a').setFontColor('#ffffff');
+  }
+
+  SpreadsheetApp.flush();
+  return {
+    success: true,
+    rowCount: dataRows.length,
+    maxParticipants: maxParticipants,
+    cleanedTagRows: cleanedTagRows,
+    message: 'Sinkronisasi ' + dataRows.length + ' baris Jadwal_Ujian (' + maxParticipants + ' slot peserta paling kanan) ke Google Spreadsheet berhasil.'
+  };
+}
+
+function syncJadwalParticipantsToSheet() {
+  var lock = LockService.getScriptLock();
+  try {
+    try { lock.waitLock(15000); } catch (e) {}
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var res = syncJadwalParticipantsInternal_(ss);
+    if (res && res.success) {
+      bumpSyncVersion('Admin TU', 'Sinkron Peserta Jadwal_Ujian ke Spreadsheet');
+      addActivityLog('Admin TU', 'Sinkron Spreadsheet', 'Jadwal_Ujian', res.message, 'Admin');
+    }
+    return res;
+  } catch (err) {
+    return { success: false, message: 'Gagal menyinkronkan Jadwal_Ujian: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+// =========================================================================
 // [REVISI POIN 4 & 5]: Alur Jadwal Ujian Terhubung dengan Data Mahasiswa
 // Disinkronkan dengan NIM/NPM Mahasiswa Terpilih dan Format Jam/Tanggal Terstandar
 // =========================================================================
@@ -2965,6 +3330,7 @@ function addJadwal(payload) {
     }
 
     SpreadsheetApp.flush();
+    try { syncJadwalParticipantsInternal_(ss); } catch (syncErr) { Logger.log('Auto-sync Jadwal_Ujian pasca add: ' + syncErr.message); }
 
     // Otomatis ubah Status Jadwal pada sheet Pendaftaran menjadi "Terjadwal"
     if (pendaftarId) {
@@ -3063,6 +3429,7 @@ function updateJadwal(idOrPayload, maybePayload) {
       id, tgl, jmMulai, jmSelesai, ruang, kdProdi, nmProdi, sem, kls, matkul, dosen, jnsUjian, ket
     ]]);
     SpreadsheetApp.flush();
+    try { syncJadwalParticipantsInternal_(ss); } catch (syncErr) { Logger.log('Auto-sync Jadwal_Ujian pasca update: ' + syncErr.message); }
 
     bumpSyncVersion(payload.actor || 'Admin TU', 'Update Jadwal ' + id);
     addActivityLog(payload.actor || 'Admin TU', 'Update Jadwal Ujian', id + ' (' + matkul + ')', 'Pembaruan jadwal ujian ruangan ' + ruang + ' tanggal ' + tgl, 'Admin');
@@ -3109,6 +3476,7 @@ function deleteJadwal(id) {
 
         sheet.deleteRow(i + 1);
         SpreadsheetApp.flush();
+        try { syncJadwalParticipantsInternal_(ss); } catch (syncErr) { Logger.log('Auto-sync Jadwal_Ujian pasca delete: ' + syncErr.message); }
         bumpSyncVersion('Admin', 'Hapus Jadwal ' + id);
         addActivityLog('Admin TU', 'Hapus Jadwal Ujian', id, 'Penghapusan data jadwal ujian dari sistem', 'Admin');
         return { success: true, message: 'Jadwal ' + id + ' berhasil dihapus.' };
@@ -3268,6 +3636,7 @@ function onOpen(e) {
     ui.createMenu('🎓 SIP-AKADEMIK FEB UIKA')
       .addItem('🪪 Cetak Kartu Ujian Digital', 'renderKartuUjianDigital')
       .addItem('🔄 Sinkronisasi Data Real-Time', 'getInitialData')
+      .addItem('📊 Sinkron Peserta Jadwal_Ujian ke Sheet', 'syncJadwalParticipantsToSheet')
       .addToUi();
   } catch (err) {}
 }
@@ -3329,21 +3698,81 @@ function renderKartuUjianDigital(pendaftaranIdOrNpm) {
     var mhsNpm = targetPendaftaran.NPM || targetPendaftaran.NIM || '-';
     var statusApp = targetPendaftaran['Status Persetujuan'] || 'Pending';
 
-    // [REVISI POIN 6]: Cek apakah jadwal ujian sudah diinput oleh Admin TU untuk mata kuliah ini
+    // [REVISI POIN 6 & SINKRONISASI TERPADU]: Cocokkan jadwal ujian per mata kuliah secara presisi (Prodi + Sem + Kelas + Matkul + ID/NPM)
+    var courses = extractMataKuliahListGas(targetPendaftaran);
+    if (courses.length === 0) {
+      courses = [{
+        nama: targetPendaftaran['Mata Kuliah'] || '-',
+        mataKuliah: targetPendaftaran['Mata Kuliah'] || '-',
+        dosen: targetPendaftaran['Dosen Pengampu'] || '-',
+        dosenPengampu: targetPendaftaran['Dosen Pengampu'] || '-',
+        sks: 3
+      }];
+    }
+
+    function findScheduleForCourseGas(p, course) {
+      var pId = String(p.ID || p.id || '').trim();
+      var pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+      var pProdi = String(p['Kode Prodi'] || '').trim().toUpperCase();
+      var pSem = String(p.Semester || '').trim().toLowerCase();
+      var pKelas = normalizeClassName(p.Kelas || '').toLowerCase();
+      var cMatkul = course ? (course.mataKuliah || course.nama || '') : '';
+
+      // Pass 1: Kepemilikan eksplisit tervalidasi Prodi/Kelas/Matkul
+      for (var ji = 0; ji < jadwalList.length; ji++) {
+        var jdw = jadwalList[ji];
+        var jProdi = String(jdw['Kode Prodi'] || '').trim().toUpperCase();
+        var jKelas = normalizeClassName(jdw.Kelas || '').toLowerCase();
+        if (pProdi && jProdi && pProdi !== jProdi) continue;
+        if (pKelas && jKelas && pKelas !== jKelas) continue;
+
+        var jKet = String(jdw.Keterangan || '').toLowerCase();
+        var jPId = String(jdw.pendaftarId || jdw.pendaftaranId || '').trim();
+        var allTags = [];
+        var tgM;
+        var tgRe = /\[id:\s*(reg-\d+)\]/gi;
+        while ((tgM = tgRe.exec(jKet)) !== null) {
+          allTags.push(tgM[1].toUpperCase());
+        }
+        var hasExplicitReg = (jPId && pId && jPId.toUpperCase() === pId.toUpperCase()) ||
+                             (pId && allTags.indexOf(pId.toUpperCase()) !== -1);
+        var hasNpmTag = pNpm && (jKet.indexOf(pNpm) !== -1 || String(jdw.npm || '').toLowerCase() === pNpm);
+        if (allTags.length > 0 && pId && allTags.indexOf(pId.toUpperCase()) === -1) continue;
+        if (!hasExplicitReg && !hasNpmTag) continue;
+        if (isCourseNameMatchedGas(jdw['Mata Kuliah'], cMatkul)) return jdw;
+      }
+
+      // Pass 2: Legacy fallback (Prodi + Semester + Kelas + Matkul)
+      for (var jj = 0; jj < jadwalList.length; jj++) {
+        var jdw2 = jadwalList[jj];
+        var jKet2 = String(jdw2.Keterangan || '').toLowerCase();
+        var tgRe2 = /\[id:\s*(reg-\d+)\]/i;
+        var tg2 = jKet2.match(tgRe2);
+        if (tg2 && pId && tg2[1].toUpperCase() !== pId.toUpperCase()) continue;
+        if (!isCourseNameMatchedGas(jdw2['Mata Kuliah'], cMatkul)) continue;
+        var jP2 = String(jdw2['Kode Prodi'] || '').trim().toUpperCase();
+        var jS2 = String(jdw2.Semester || '').trim().toLowerCase();
+        var jK2 = normalizeClassName(jdw2.Kelas || '').toLowerCase();
+        if ((!pProdi || !jP2 || pProdi === jP2) && (!pSem || !jS2 || pSem === jS2) && (!pKelas || !jK2 || pKelas === jK2)) {
+          return jdw2;
+        }
+      }
+      return null;
+    }
+
+    var scheduledCourses = courses.map(function(c) {
+      return { course: c, schedule: findScheduleForCourseGas(targetPendaftaran, c) };
+    });
     var matchJadwal = null;
-    for (var k = 0; k < jadwalList.length; k++) {
-      var jdw = jadwalList[k];
-      var sameProdi = String(jdw['Kode Prodi'] || '').toUpperCase() === String(targetPendaftaran['Kode Prodi'] || '').toUpperCase();
-      var sameMatkul = String(jdw['Mata Kuliah'] || '').toLowerCase() === String(targetPendaftaran['Mata Kuliah'] || '').toLowerCase();
-      var sameNpm = String(jdw.Keterangan || '').indexOf(mhsNpm) !== -1;
-      if ((sameProdi && sameMatkul) || sameNpm) {
-        matchJadwal = jdw;
+    for (var scIdx = 0; scIdx < scheduledCourses.length; scIdx++) {
+      if (scheduledCourses[scIdx].schedule && scheduledCourses[scIdx].schedule['Tanggal Ujian'] && scheduledCourses[scIdx].schedule.Ruangan) {
+        matchJadwal = scheduledCourses[scIdx].schedule;
         break;
       }
     }
 
     // Jika status belum Disetujui atau jadwal ujian belum selesai dimasukkan oleh Admin TU: Tampilkan Pesan Status Pending!
-    var hasValidSchedule = (matchJadwal !== null && matchJadwal['Tanggal Ujian'] && matchJadwal.Ruangan);
+    var hasValidSchedule = (matchJadwal !== null);
     var isApproved = (statusApp.toLowerCase() === 'disetujui');
 
     if (!isApproved || !hasValidSchedule) {
@@ -3381,11 +3810,22 @@ function renderKartuUjianDigital(pendaftaranIdOrNpm) {
       };
     }
 
-    var tglDisplay = matchJadwal['Tanggal Ujian'];
-    var jamDisplay = (matchJadwal['Jam Mulai'] || '08:00') + ' - ' + (matchJadwal['Jam Selesai'] || '09:30') + ' WIB';
-    var ruangDisplay = matchJadwal.Ruangan;
     var noRegistrasi = targetPendaftaran.ID || 'PND-001';
     var tglCetak = formatDateOnly(new Date());
+    var tableRowsHtml = scheduledCourses.map(function(sc, idxRow) {
+      var c = sc.course;
+      var j = sc.schedule;
+      var tglTxt = j ? String(j['Tanggal Ujian'] || '-') : '<span class="text-amber-600 font-bold italic">Menunggu Jadwal</span>';
+      var jamTxt = (j && j['Jam Mulai'] && j['Jam Selesai']) ? (j['Jam Mulai'] + ' - ' + j['Jam Selesai'] + ' WIB') : '';
+      var ruangTxt = j ? ('<span class="px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 font-black border border-emerald-300 text-xs">' + j.Ruangan + '</span>') : '-';
+      return '<tr class="border-b border-slate-100">' +
+        '<td class="p-2.5 text-center font-mono font-bold text-blue-900">' + (idxRow + 1) + '</td>' +
+        '<td class="p-2.5"><div class="font-extrabold text-blue-950">' + (c.mataKuliah || c.nama) + ' (' + (c.sks || 3) + ' SKS)</div>' +
+        '<div class="text-[11px] text-slate-500">Dosen: ' + (c.dosenPengampu || c.dosen || '-') + '</div></td>' +
+        '<td class="p-2.5 whitespace-nowrap"><div class="font-bold text-slate-900">' + tglTxt + '</div>' +
+        (jamTxt ? '<div class="font-mono font-bold text-indigo-950 text-[11px]">' + jamTxt + '</div>' : '') + '</td>' +
+        '<td class="p-2.5 text-center whitespace-nowrap">' + ruangTxt + '</td></tr>';
+    }).join('');
 
     var htmlContent = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
@@ -3420,20 +3860,17 @@ function renderKartuUjianDigital(pendaftaranIdOrNpm) {
       '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">Nama Mahasiswa</span><span class="col-span-2 font-black text-slate-900">: ' + targetPendaftaran['Nama Mahasiswa'] + '</span></div>' +
       '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">NPM / NIM</span><span class="col-span-2 font-bold font-mono text-slate-900">: ' + mhsNpm + '</span></div>' +
       '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">Program Studi</span><span class="col-span-2 font-semibold text-slate-800">: ' + (targetPendaftaran['Program Studi'] || '-') + ' (' + (targetPendaftaran['Kode Prodi'] || '-') + ')</span></div>' +
-      '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">Mata Kuliah</span><span class="col-span-2 font-black text-blue-950">: ' + (targetPendaftaran['Mata Kuliah'] || '-') + '</span></div>' +
-      '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">Dosen Pengampu</span><span class="col-span-2 font-semibold text-slate-800">: ' + (targetPendaftaran['Dosen Pengampu'] || '-') + '</span></div>' +
+      '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">Semester & Kelas</span><span class="col-span-2 font-semibold text-slate-800">: ' + (targetPendaftaran.Semester || '-') + ' · ' + (targetPendaftaran.Kelas || '-') + '</span></div>' +
       '</div>' +
-      '<div class="grid grid-cols-2 gap-3 bg-emerald-50/80 p-4 rounded-2xl border border-emerald-200 text-xs">' +
-      '<div>' +
-      '<p class="text-[10px] font-bold text-emerald-800 uppercase"><i class="fas fa-calendar-day"></i> Jadwal Pelaksanaan Resmi</p>' +
-      '<p class="font-black text-slate-900 mt-1 text-sm sm:text-base">' + tglDisplay + '</p>' +
-      '<p class="text-xs font-mono font-bold text-emerald-950">' + jamDisplay + '</p>' +
+      '<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">' +
+      '<div class="bg-indigo-900 text-white px-3 py-2 font-bold text-xs flex items-center justify-between">' +
+      '<span>Rincian Jadwal & Ruangan Ujian</span>' +
+      '<span class="text-[10px] bg-indigo-800 px-2 py-0.5 rounded font-mono">' + scheduledCourses.length + ' Mata Kuliah</span>' +
       '</div>' +
-      '<div>' +
-      '<p class="text-[10px] font-bold text-emerald-800 uppercase"><i class="fas fa-door-open"></i> Ruangan Ujian</p>' +
-      '<p class="text-base sm:text-lg font-black text-emerald-900 mt-1">' + ruangDisplay + '</p>' +
-      '<p class="text-[10px] text-slate-500">Gedung FEB UIKA Bogor</p>' +
-      '</div></div>' +
+      '<div class="overflow-x-auto"><table class="w-full text-left text-xs">' +
+      '<thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase">' +
+      '<tr><th class="p-2.5 text-center w-8">#</th><th class="p-2.5">Mata Kuliah & Dosen</th><th class="p-2.5">Jadwal Pelaksanaan</th><th class="p-2.5 text-center">Ruangan</th></tr>' +
+      '</thead><tbody>' + tableRowsHtml + '</tbody></table></div></div>' +
       '<div class="pt-3 border-t border-slate-200 text-xs text-slate-500 space-y-2">' +
       '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">' +
       '<div class="space-y-1 max-w-xs">' +
