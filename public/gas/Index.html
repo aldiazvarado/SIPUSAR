@@ -868,9 +868,10 @@
               <i class="fas fa-clock text-amber-700 mr-1"></i> <b>Batas Keterlambatan:</b> <span id="bannerJadwalTerlambat" class="font-semibold text-amber-900">Sabtu, 21 November 2026 Pukul 00:00 WIB s.d. Minggu, 22 November 2026 Pukul 23:59 WIB</span> 
               (Denda Retribusi: <b id="bannerNominalDenda" class="text-rose-700 font-mono font-bold">Rp 50.000/mata kuliah</b>)
             </p>
+            <p id="bannerPeriodeWindowNote" class="hidden text-[11px] font-bold pt-0.5"></p>
           </div>
           <div class="shrink-0 flex items-center gap-2">
-            <span class="px-3 py-1 rounded-xl font-bold text-xs bg-emerald-100 text-emerald-800 border border-emerald-300">
+            <span id="bannerPeriodeStatusBadge" class="px-3 py-1 rounded-xl font-bold text-xs bg-emerald-100 text-emerald-800 border border-emerald-300">
               PERIODE AKTIF
             </span>
           </div>
@@ -1800,6 +1801,7 @@
             <p class="font-bold text-xs text-slate-900"><i class="fas fa-circle-info text-blue-900"></i> Ketentuan Jadwal & Biaya Denda</p>
             <span id="notifStatusCurrent" class="font-mono font-bold text-[11px] text-emerald-700">Tepat Waktu (Gratis)</span>
           </div>
+          <p id="notifPeriodeRangeDetail" class="text-[11px] text-slate-600 leading-relaxed"></p>
           <input type="hidden" id="pendaftaranStatusJadwal" value="Tepat Waktu">
           <input type="hidden" id="pendaftaranStatusPembayaran" value="Gratis (Tepat Waktu)">
           <input type="hidden" id="pendaftaranNominal" value="0">
@@ -4666,29 +4668,27 @@
         totalSks += (sks || 3);
       });
 
-      // Pengecekan Periode & Jadwal Denda
-      const periodes = (appData.master && appData.master.periode) || [];
-      const activePrd = periodes.find(p => String(p.Status || '').toLowerCase() === 'aktif') || periodes[0];
+      // Pengecekan Periode & Jadwal Denda (Sinkron Jenis Layanan + Kategori Kelas)
+      const selectedLayanan = document.getElementById('pendaftaranLayanan')?.value || '';
+      const selectedKategori = document.getElementById('pendaftaranKategoriKelas')?.value || '';
+      const matchedPrd = findMatchingActivePeriod(selectedLayanan, selectedKategori);
 
-      let isLate = false;
-      let lateFeePerItem = 50000;
-
-      if (activePrd) {
-        lateFeePerItem = Number(activePrd['Biaya Keterlambatan'] || 50000);
-        const now = new Date();
-        const normalEnd = activePrd['Tanggal & Jam Selesai'] ? new Date(activePrd['Tanggal & Jam Selesai']) : null;
-        const lateStart = activePrd['Mulai Terlambat'] ? new Date(activePrd['Mulai Terlambat']) : null;
-        const lateEnd = activePrd['Selesai Terlambat'] ? new Date(activePrd['Selesai Terlambat']) : null;
-
-        if (normalEnd && now > normalEnd) {
-          if (lateEnd && now <= lateEnd) {
-            isLate = true;
-          } else if (!lateEnd && lateStart && now >= lateStart) {
-            isLate = true;
-          }
-        }
+      if (matchedPrd) {
+        const taEl = document.getElementById('pendaftaranTahunAkademik');
+        const semEl = document.getElementById('pendaftaranSemester');
+        const badgeEl = document.getElementById('activePeriodBadgeId');
+        if (taEl && matchedPrd['Tahun Akademik']) taEl.value = matchedPrd['Tahun Akademik'];
+        if (semEl && matchedPrd.Semester) semEl.value = matchedPrd.Semester;
+        if (badgeEl && matchedPrd.ID) badgeEl.innerText = matchedPrd.ID;
       }
 
+      const now = new Date();
+      const windowEval = matchedPrd
+        ? evaluatePeriodWindow(matchedPrd, now)
+        : { state: 'NO_ACTIVE_PERIOD', canRegister: false, isLate: false, biayaDenda: 0, normalStart: null, normalEnd: null, lateStart: null, lateEnd: null };
+
+      const isLate = windowEval.state === 'LATE';
+      const lateFeePerItem = windowEval.biayaDenda || 0;
       const totalNominal = isLate ? (lateFeePerItem * Math.max(1, filledCount)) : 0;
 
       // Update Live Summary Strip
@@ -4709,23 +4709,61 @@
 
       // Update Box Ketentuan Jadwal & Biaya Denda
       const statusBadge = document.getElementById('notifStatusCurrent');
+      const detailBox = document.getElementById('notifPeriodeRangeDetail');
+      const isMhsUser = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+
+      let jadwalVal = isLate ? 'Terlambat' : 'Tepat Waktu';
+      let paymentVal = (isLate && totalNominal > 0) ? 'Belum Bayar (Denda Keterlambatan)' : 'Gratis (Tepat Waktu)';
+
       if (statusBadge) {
-        if (isLate) {
-          statusBadge.innerText = `Terlambat (Denda Rp ${Number(totalNominal).toLocaleString('id-ID')})`;
-          statusBadge.className = 'font-mono font-bold text-[11px] text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-300';
-        } else {
+        if (windowEval.state === 'LATE') {
+          if (totalNominal > 0) {
+            statusBadge.innerText = `Terlambat (Denda Rp ${Number(totalNominal).toLocaleString('id-ID')})`;
+          } else {
+            statusBadge.innerText = 'Masa Terlambat (Tanpa Denda)';
+          }
+          statusBadge.className = 'font-mono font-bold text-[11px] text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300';
+          if (totalNominal <= 0) paymentVal = 'Gratis (Masa Terlambat)';
+        } else if (windowEval.state === 'NORMAL') {
           statusBadge.innerText = 'Tepat Waktu (Gratis)';
           statusBadge.className = 'font-mono font-bold text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300';
+        } else if (windowEval.state === 'BEFORE_START') {
+          statusBadge.innerText = isMhsUser ? 'Belum Dibuka' : 'Di Luar Jadwal — Belum Buka (Admin)';
+          statusBadge.className = 'font-mono font-bold text-[11px] text-blue-800 bg-blue-100/90 px-2 py-0.5 rounded-md border border-blue-300';
+          jadwalVal = 'Di Luar Jadwal (Belum Buka)';
+          paymentVal = isMhsUser ? 'Belum Dibuka' : 'Gratis (Input Admin)';
+        } else if (windowEval.state === 'CLOSED' || windowEval.state === 'BETWEEN_NORMAL_AND_LATE') {
+          statusBadge.innerText = isMhsUser ? 'Masa Pendaftaran Ditutup' : 'Di Luar Jadwal — Tutup (Admin)';
+          statusBadge.className = 'font-mono font-bold text-[11px] text-rose-800 bg-rose-100/90 px-2 py-0.5 rounded-md border border-rose-300';
+          jadwalVal = windowEval.state === 'CLOSED' ? 'Di Luar Jadwal (Sudah Tutup)' : 'Di Luar Jadwal (Jeda Periode)';
+          paymentVal = isMhsUser ? 'Ditutup' : 'Gratis (Input Admin)';
+        } else {
+          statusBadge.innerText = isMhsUser ? 'Tidak Ada Periode Aktif' : 'Periode Non-Aktif (Input Admin)';
+          statusBadge.className = 'font-mono font-bold text-[11px] text-slate-700 bg-slate-200/80 px-2 py-0.5 rounded-md border border-slate-300';
+          jadwalVal = 'Periode Non-Aktif';
+          paymentVal = isMhsUser ? 'Periode Non-Aktif' : 'Gratis (Input Admin)';
+        }
+      }
+
+      if (detailBox) {
+        if (matchedPrd) {
+          const normalTxt = formatPeriodeWaktuLengkap(
+            matchedPrd['Tanggal & Jam Mulai'] || matchedPrd['Tanggal Mulai'],
+            matchedPrd['Tanggal & Jam Selesai'] || matchedPrd['Tanggal Selesai']
+          );
+          const hasLate = Boolean(matchedPrd['Mulai Terlambat'] || matchedPrd['Selesai Terlambat']);
+          const lateTxt = hasLate ? formatPeriodeWaktuLengkap(matchedPrd['Mulai Terlambat'], matchedPrd['Selesai Terlambat']) : 'Tidak ada masa terlambat';
+          detailBox.innerHTML = `<b>Jadwal Normal:</b> ${escapeHtml(normalTxt)}<br><b>Jadwal Terlambat:</b> ${escapeHtml(lateTxt)} · <b>Denda:</b> Rp ${Number(lateFeePerItem).toLocaleString('id-ID')}/mata kuliah`;
+        } else {
+          detailBox.innerHTML = `<span class="text-rose-700 font-semibold">Tidak ditemukan periode berstatus Aktif yang cocok untuk kombinasi layanan &amp; kategori kelas ini.</span>`;
         }
       }
 
       const hiddenStatusJadwal = document.getElementById('pendaftaranStatusJadwal');
-      if (hiddenStatusJadwal) hiddenStatusJadwal.value = isLate ? 'Terlambat' : 'Tepat Waktu';
+      if (hiddenStatusJadwal) hiddenStatusJadwal.value = jadwalVal;
 
       const hiddenStatusPembayaran = document.getElementById('pendaftaranStatusPembayaran');
-      if (hiddenStatusPembayaran) {
-        hiddenStatusPembayaran.value = (isLate && totalNominal > 0) ? 'Belum Bayar (Denda Keterlambatan)' : 'Gratis (Tepat Waktu)';
-      }
+      if (hiddenStatusPembayaran) hiddenStatusPembayaran.value = paymentVal;
 
       const hiddenNominal = document.getElementById('pendaftaranNominal');
       if (hiddenNominal) hiddenNominal.value = totalNominal;
@@ -5049,24 +5087,101 @@
       syncPeriodeToPendaftaran();
     }
 
-    function syncPeriodeToPendaftaran() {
-      const periodes = (appData.master && appData.master.periode) ? appData.master.periode : [];
-      const active = periodes.find(p => String(p.Status || '').toLowerCase() === 'aktif') || periodes[0];
-      if (active) {
-        document.getElementById('pendaftaranTahunAkademik').value = active['Tahun Akademik'] || '2026/2027';
-        document.getElementById('pendaftaranSemester').value = active.Semester || 'Ganjil';
-        const layananEl = document.getElementById('pendaftaranLayanan');
-        if (layananEl) {
-          const lAct = String(active['Jenis Layanan'] || '').toLowerCase();
-          if (lAct.includes('remedial')) {
-            layananEl.value = 'Remedial Teaching';
-          } else if (lAct.includes('uas')) {
-            layananEl.value = 'UAS Susulan';
+    function syncPeriodeToPendaftaran(preferredLayanan = null, allowHistorical = false) {
+      const layananEl = document.getElementById('pendaftaranLayanan');
+      const taEl = document.getElementById('pendaftaranTahunAkademik');
+      const semEl = document.getElementById('pendaftaranSemester');
+      const badgeEl = document.getElementById('activePeriodBadgeId');
+      const badgeLayananLock = document.getElementById('badgeLayananLock');
+
+      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      const katSel = document.getElementById('pendaftaranKategoriKelas');
+      const studentClassCat = isMhs
+        ? detectCategoryFromClassClient(normalizeClassNameClient(currentUser.kelas || 'Reguler A'))
+        : (katSel ? katSel.value : 'Reguler');
+      const targetKategori = studentClassCat || 'Reguler';
+
+      const activePeriods = getActivePeriodsForCategory(targetKategori);
+      const now = new Date();
+      let candidatePeriods = activePeriods;
+      if (isMhs && !allowHistorical) {
+        const openOnes = activePeriods.filter(p => evaluatePeriodWindow(p, now).canRegister);
+        if (openOnes.length > 0) candidatePeriods = openOnes;
+      }
+
+      const prevSelected = normalizeJenisLayananName(
+        preferredLayanan || (layananEl ? layananEl.value : '')
+      );
+
+      const serviceList = [];
+      candidatePeriods.forEach(p => {
+        const norm = normalizeJenisLayananName(p['Jenis Layanan']);
+        if (norm && !serviceList.some(s => s.toLowerCase() === norm.toLowerCase())) {
+          serviceList.push(norm);
+        }
+      });
+
+      if (layananEl) {
+        layananEl.innerHTML = '';
+        if (serviceList.length === 0) {
+          if (allowHistorical && prevSelected) {
+            const histOpt = document.createElement('option');
+            histOpt.value = prevSelected;
+            histOpt.textContent = `${prevSelected} (Periode Arsip / Non-Aktif)`;
+            layananEl.appendChild(histOpt);
+            layananEl.value = prevSelected;
           } else {
-            layananEl.value = 'UTS Susulan';
+            const emptyOpt = document.createElement('option');
+            emptyOpt.value = '';
+            emptyOpt.textContent = '-- Tidak Ada Layanan Aktif --';
+            layananEl.appendChild(emptyOpt);
+            layananEl.value = '';
+          }
+          if (badgeLayananLock) badgeLayananLock.innerText = '(Tidak Ada Periode Aktif)';
+        } else {
+          serviceList.forEach(srv => {
+            const opt = document.createElement('option');
+            opt.value = srv;
+            opt.textContent = srv;
+            layananEl.appendChild(opt);
+          });
+          const hasPrev = prevSelected && serviceList.some(s => s.toLowerCase() === prevSelected.toLowerCase());
+          if (hasPrev) {
+            const exactPrev = serviceList.find(s => s.toLowerCase() === prevSelected.toLowerCase());
+            layananEl.value = exactPrev;
+          } else if (allowHistorical && prevSelected) {
+            const histOpt = document.createElement('option');
+            histOpt.value = prevSelected;
+            histOpt.textContent = `${prevSelected} (Periode Arsip / Non-Aktif)`;
+            layananEl.appendChild(histOpt);
+            layananEl.value = prevSelected;
+          } else {
+            layananEl.value = serviceList[0];
+          }
+          if (badgeLayananLock) {
+            badgeLayananLock.innerText = serviceList.length === 1
+              ? '(Sesuai Periode Aktif)'
+              : `(${serviceList.length} Layanan Aktif)`;
           }
         }
-        document.getElementById('activePeriodBadgeId').innerText = active.ID || 'PRD-AKTIF';
+      }
+
+      const currentLayananVal = layananEl ? layananEl.value : '';
+      const matched = findMatchingActivePeriod(currentLayananVal, targetKategori) || candidatePeriods[0] || activePeriods[0] || null;
+      if (matched) {
+        if (taEl) taEl.value = matched['Tahun Akademik'] || '2026/2027';
+        if (semEl) semEl.value = matched.Semester || 'Ganjil';
+        if (badgeEl) badgeEl.innerText = matched.ID || 'PRD-AKTIF';
+      } else {
+        const listTa = (appData && appData.master && appData.master.tahunAkademik) || [];
+        const activeTa = listTa.find(t => String(t.Status || t.status || '').toLowerCase() === 'aktif') || listTa[0];
+        if (taEl && activeTa) taEl.value = activeTa['Tahun Akademik'] || '2026/2027';
+        if (semEl && activeTa) semEl.value = activeTa.Semester || 'Ganjil';
+        if (badgeEl) badgeEl.innerText = 'TIDAK ADA PERIODE';
+      }
+
+      if (typeof updateRegistrationSummary === 'function') {
+        updateRegistrationSummary();
       }
     }
 
@@ -5149,6 +5264,7 @@
         const autoKat = detectCategoryFromClassClient(cleanKelas);
         if (katSelect) katSelect.value = autoKat;
         populateKelasDropdown(prodiSelect ? prodiSelect.value : 'MNJ', autoKat, cleanKelas);
+        syncPeriodeToPendaftaran();
 
         let angkatan = found.Angkatan;
         if (!angkatan) {
@@ -5180,13 +5296,28 @@
     // [FORM PENDAFTARAN MAHASISWA & AUTOFILL KUNCI]
     // ==========================================
     function openPendaftaranModal(id = null) {
+      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      if (isMhs && !id) {
+        const studentClass = normalizeClassNameClient(currentUser.kelas || 'Reguler A');
+        const studentCategory = detectCategoryFromClassClient(studentClass);
+        const accessCheck = checkMahasiswaRegistrationAccess(studentCategory, new Date());
+        if (!accessCheck.allowed) {
+          Swal.fire({
+            icon: accessCheck.icon || 'warning',
+            title: accessCheck.title || 'Tidak Dapat Mendaftar',
+            html: accessCheck.html || accessCheck.message,
+            confirmButtonText: 'Saya Mengerti',
+            confirmButtonColor: '#1e3a8a'
+          });
+          return;
+        }
+      }
+
       const modal = document.getElementById('modalPendaftaran');
       const form = document.getElementById('formPendaftaran');
       form.reset();
       clearBuktiFoto();
       document.getElementById('pendaftaranId').value = id || '';
-
-      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
       const nimInput = document.getElementById('pendaftaranNim');
       const namaInput = document.getElementById('pendaftaranNama');
       const prodiSelect = document.getElementById('pendaftaranProdi');
@@ -5314,16 +5445,7 @@
           populateKelasDropdown(prodiSelect.value, itemCategory, itemCleanClass);
           if (kelasSelect) kelasSelect.value = itemCleanClass;
 
-          if (item['Jenis Layanan']) {
-            const layananSelect = document.getElementById('pendaftaranLayanan');
-            if (layananSelect) {
-              let lVal = item['Jenis Layanan'];
-              if (lVal.toLowerCase().includes('remedial')) lVal = 'Remedial Teaching';
-              else if (lVal.toLowerCase().includes('uas')) lVal = 'UAS Susulan';
-              else if (lVal.toLowerCase().includes('uts')) lVal = 'UTS Susulan';
-              layananSelect.value = lVal;
-            }
-          }
+          syncPeriodeToPendaftaran(item['Jenis Layanan'] || '', true);
           
           // Parsing data multi-matkul dari item
           let parsedRows = [];
@@ -5449,6 +5571,9 @@
         renderDynamicMatkulInputs(1, []);
       }
 
+      if (typeof updateRegistrationSummary === 'function') {
+        updateRegistrationSummary();
+      }
       modal.classList.remove('hidden');
       modal.classList.add('flex');
     }
@@ -5460,6 +5585,35 @@
 
     function handleSavePendaftaran(e) {
       e.preventDefault();
+      const isMhsGuard = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      const editRecordId = (document.getElementById('pendaftaranId')?.value || '').trim();
+      const layananValPre = document.getElementById('pendaftaranLayanan')?.value || '';
+      const rawKelasPre = document.getElementById('pendaftaranKelas')?.value || 'Reguler A';
+      const cleanKategoriPre = document.getElementById('pendaftaranKategoriKelas')?.value || detectCategoryFromClassClient(normalizeClassNameClient(rawKelasPre));
+
+      if (isMhsGuard && !editRecordId) {
+        const saveAccessCheck = checkMahasiswaRegistrationAccess(cleanKategoriPre, new Date(), layananValPre);
+        if (!saveAccessCheck.allowed) {
+          Swal.fire({
+            icon: saveAccessCheck.icon || 'warning',
+            title: saveAccessCheck.title || 'Tidak Dapat Mendaftar',
+            html: saveAccessCheck.html || saveAccessCheck.message,
+            confirmButtonText: 'Saya Mengerti',
+            confirmButtonColor: '#1e3a8a'
+          });
+          return;
+        }
+      }
+
+      if (!layananValPre) {
+        Swal.fire('Periode Layanan Tidak Tersedia', 'Jenis Layanan belum tersedia karena belum ada Jadwal Periode berstatus Aktif untuk Kategori Kelas ini.', 'warning');
+        return;
+      }
+
+      if (typeof updateRegistrationSummary === 'function') {
+        updateRegistrationSummary();
+      }
+
       const prodiSel = document.getElementById('pendaftaranProdi');
       const kodeProdi = prodiSel.value;
       const namaProdi = prodiSel.options[prodiSel.selectedIndex]?.getAttribute('data-nama') || kodeProdi;
@@ -8990,6 +9144,7 @@
     // [RIWAYAT PENDAFTARAN]: TABEL SINKRON & RBAC LENGKAP
     // ==========================================
     function renderPendaftaranTable() {
+      if (typeof syncActivePeriodBanner === 'function') syncActivePeriodBanner();
       const tbody = document.getElementById('tablePendaftaranBody');
       if (!tbody) return;
 
@@ -10886,40 +11041,357 @@
       return s || e || '-';
     }
 
+    function parsePeriodeDateTime(val, isEnd = false) {
+      if (!val) return null;
+      let d = null;
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        d = new Date(val.getTime());
+      } else {
+        const clean = String(val).trim();
+        if (!clean || clean === '-' || clean === 'undefined' || clean === 'null') return null;
+
+        if (/[Zz]|[+-]\d{2}:?\d{2}$/.test(clean)) {
+          const tzDate = new Date(clean);
+          if (!isNaN(tzDate.getTime())) d = tzDate;
+        }
+
+        if (!d) {
+          const idMonthMap = {
+            januari: 0, jan: 0,
+            februari: 1, feb: 1,
+            maret: 2, mar: 2,
+            april: 3, apr: 3,
+            mei: 4, may: 4,
+            juni: 5, jun: 5,
+            juli: 6, jul: 6,
+            agustus: 7, agu: 7, ags: 7, aug: 7,
+            september: 8, sep: 8,
+            oktober: 9, okt: 9, oct: 9,
+            november: 10, nov: 10,
+            desember: 11, des: 11, dec: 11
+          };
+          const idMatch = clean.match(/^(?:[a-zA-Z]+,?\s+)?(\d{1,2})\s+([a-zA-Z]+)\s+(\d{4})(?:[^\d]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/i);
+          if (idMatch && idMonthMap[idMatch[2].toLowerCase()] !== undefined) {
+            const day = parseInt(idMatch[1], 10);
+            const m = idMonthMap[idMatch[2].toLowerCase()];
+            const y = parseInt(idMatch[3], 10);
+            const h = parseInt(idMatch[4] || (isEnd ? '23' : '0'), 10);
+            const min = parseInt(idMatch[5] || (isEnd ? '59' : '0'), 10);
+            const sec = parseInt(idMatch[6] || '0', 10);
+            d = new Date(y, m, day, h, min, sec);
+          } else {
+            const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+            if (isoMatch) {
+              const y = parseInt(isoMatch[1], 10);
+              const m = parseInt(isoMatch[2], 10) - 1;
+              const day = parseInt(isoMatch[3], 10);
+              const h = parseInt(isoMatch[4] || (isEnd ? '23' : '0'), 10);
+              const min = parseInt(isoMatch[5] || (isEnd ? '59' : '0'), 10);
+              const sec = parseInt(isoMatch[6] || '0', 10);
+              d = new Date(y, m, day, h, min, sec);
+            } else {
+              const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+              if (dmyMatch) {
+                const day = parseInt(dmyMatch[1], 10);
+                const m = parseInt(dmyMatch[2], 10) - 1;
+                const y = parseInt(dmyMatch[3], 10);
+                const h = parseInt(dmyMatch[4] || (isEnd ? '23' : '0'), 10);
+                const min = parseInt(dmyMatch[5] || (isEnd ? '59' : '0'), 10);
+                const sec = parseInt(dmyMatch[6] || '0', 10);
+                d = new Date(y, m, day, h, min, sec);
+              } else {
+                const parsed = new Date(clean.replace(' ', 'T'));
+                if (!isNaN(parsed.getTime())) d = parsed;
+              }
+            }
+          }
+        }
+      }
+      if (!d || isNaN(d.getTime())) return null;
+      if (isEnd && d.getHours() === 23 && d.getMinutes() === 59 && d.getSeconds() === 0) {
+        d.setSeconds(59, 999);
+      }
+      return d;
+    }
+
+    function normalizeJenisLayananName(val) {
+      const raw = String(val || '').trim();
+      const lower = raw.toLowerCase();
+      if (!raw) return '';
+      if (lower.includes('remedial')) return 'Remedial Teaching';
+      if (lower.includes('uas')) return 'UAS Susulan';
+      if (lower.includes('uts')) return 'UTS Susulan';
+      return raw;
+    }
+
+    function doesPeriodMatchKategoriKelas(periodKategori, targetKategori) {
+      const pk = String(periodKategori || '').toLowerCase().trim();
+      const tk = String(targetKategori || '').toLowerCase().trim();
+      if (!tk || tk === 'semua' || tk === 'reguler & karyawan' || (tk.includes('reguler') && tk.includes('karyawan'))) {
+        return true;
+      }
+      if (!pk || pk === 'semua' || pk === 'reguler & karyawan' || (pk.includes('reguler') && pk.includes('karyawan'))) {
+        return true;
+      }
+      if (tk.includes('karyawan')) return pk.includes('karyawan');
+      if (tk.includes('reguler')) return pk.includes('reguler');
+      return pk === tk;
+    }
+
+    function getActivePeriodsForCategory(targetKategori = '') {
+      const periodes = (appData && appData.master && Array.isArray(appData.master.periode)) ? appData.master.periode : [];
+      const activeOnly = periodes.filter(p => String(p.Status || p.status || '').trim().toLowerCase() === 'aktif');
+      if (!targetKategori) return activeOnly;
+      return activeOnly.filter(p => doesPeriodMatchKategoriKelas(p['Kategori Kelas'] || p.kategoriKelas || '', targetKategori));
+    }
+
+    function findMatchingActivePeriod(layananVal = '', kategoriKelas = '') {
+      const candidates = getActivePeriodsForCategory(kategoriKelas);
+      if (candidates.length === 0) return null;
+      const targetNorm = normalizeJenisLayananName(layananVal).toLowerCase();
+      if (targetNorm) {
+        const exact = candidates.find(p => normalizeJenisLayananName(p['Jenis Layanan']).toLowerCase() === targetNorm);
+        if (exact) return exact;
+      }
+      return candidates[0];
+    }
+
+    function evaluatePeriodWindow(period, nowDate = new Date()) {
+      if (!period) {
+        return { state: 'NO_ACTIVE_PERIOD', canRegister: false, isLate: false, biayaDenda: 0, normalStart: null, normalEnd: null, lateStart: null, lateEnd: null, effectiveEnd: null };
+      }
+      const now = (nowDate instanceof Date && !isNaN(nowDate.getTime())) ? nowDate : new Date();
+      const normalStart = parsePeriodeDateTime(period['Tanggal & Jam Mulai'] || period['Tanggal Mulai'], false);
+      const normalEnd = parsePeriodeDateTime(period['Tanggal & Jam Selesai'] || period['Tanggal Selesai'], true);
+      const lateStartRaw = parsePeriodeDateTime(period['Mulai Terlambat'], false);
+      const lateEnd = parsePeriodeDateTime(period['Selesai Terlambat'], true);
+      const lateStart = lateStartRaw || (lateEnd && normalEnd ? new Date(normalEnd.getTime() + 1) : null);
+
+      const rawBiaya = period['Biaya Keterlambatan'] !== undefined
+        ? period['Biaya Keterlambatan']
+        : (period.Biaya !== undefined ? period.Biaya : (period.biaya !== undefined ? period.biaya : (period.denda !== undefined ? period.denda : 50000)));
+      const biayaDenda = (rawBiaya !== '' && rawBiaya !== null && !isNaN(Number(rawBiaya))) ? Math.max(0, Number(rawBiaya)) : 0;
+
+      const effectiveEnd = (lateEnd && (!normalEnd || lateEnd >= normalEnd)) ? lateEnd : normalEnd;
+
+      if (normalStart && now < normalStart) {
+        return { state: 'BEFORE_START', canRegister: false, isLate: false, biayaDenda, normalStart, normalEnd, lateStart, lateEnd, effectiveEnd };
+      }
+      if (normalEnd && now <= normalEnd) {
+        return { state: 'NORMAL', canRegister: true, isLate: false, biayaDenda, normalStart, normalEnd, lateStart, lateEnd, effectiveEnd };
+      }
+      if (lateEnd && now <= lateEnd && (!lateStart || now >= lateStart)) {
+        return { state: 'LATE', canRegister: true, isLate: true, biayaDenda, normalStart, normalEnd, lateStart, lateEnd, effectiveEnd };
+      }
+      if (!lateEnd && lateStart && now >= lateStart) {
+        return { state: 'LATE', canRegister: true, isLate: true, biayaDenda, normalStart, normalEnd, lateStart, lateEnd, effectiveEnd };
+      }
+      if (normalEnd && lateStart && now > normalEnd && now < lateStart) {
+        return { state: 'BETWEEN_NORMAL_AND_LATE', canRegister: false, isLate: false, biayaDenda, normalStart, normalEnd, lateStart, lateEnd, effectiveEnd };
+      }
+      if ((effectiveEnd && now > effectiveEnd) || (normalEnd && !lateEnd && now > normalEnd)) {
+        return { state: 'CLOSED', canRegister: false, isLate: false, biayaDenda, normalStart, normalEnd, lateStart, lateEnd, effectiveEnd };
+      }
+      return { state: 'NORMAL', canRegister: true, isLate: false, biayaDenda, normalStart, normalEnd, lateStart, lateEnd, effectiveEnd };
+    }
+
+    function buildPeriodWindowPopupHtml(periodList, nowDate = new Date()) {
+      if (!periodList || periodList.length === 0) {
+        return '<p class="text-xs text-slate-600 leading-relaxed">Saat ini belum ada <b>Jadwal &amp; Periode Masa Pendaftaran Resmi</b> berstatus <b>Aktif</b> untuk kategori kelas Anda. Silakan hubungi Admin TU FEB UIKA.</p>';
+      }
+      const itemsHtml = periodList.map(p => {
+        const evalRes = evaluatePeriodWindow(p, nowDate);
+        const normalTxt = formatPeriodeWaktuLengkap(p['Tanggal & Jam Mulai'] || p['Tanggal Mulai'], p['Tanggal & Jam Selesai'] || p['Tanggal Selesai']);
+        const lateTxt = p['Mulai Terlambat'] || p['Selesai Terlambat']
+          ? formatPeriodeWaktuLengkap(p['Mulai Terlambat'], p['Selesai Terlambat'])
+          : 'Tidak tersedia';
+        const dendaTxt = `Rp ${Number(evalRes.biayaDenda || 0).toLocaleString('id-ID')}/mata kuliah`;
+        const statusLabel = evalRes.state === 'BEFORE_START'
+          ? '<span class="text-blue-700 font-bold">Belum Dibuka</span>'
+          : (evalRes.state === 'BETWEEN_NORMAL_AND_LATE'
+            ? '<span class="text-amber-700 font-bold">Menunggu Masa Terlambat</span>'
+            : '<span class="text-rose-700 font-bold">Sudah Ditutup</span>');
+
+        return `
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-left space-y-1 text-xs">
+            <div class="flex items-center justify-between gap-2">
+              <b class="text-slate-900">${escapeHtml(p['Jenis Layanan'] || '-')} (${escapeHtml(p.Semester || '')} ${escapeHtml(p['Tahun Akademik'] || '')})</b>
+              ${statusLabel}
+            </div>
+            <p class="text-slate-600"><b>Jadwal Normal:</b> ${escapeHtml(normalTxt)}</p>
+            <p class="text-slate-600"><b>Jadwal Terlambat:</b> ${escapeHtml(lateTxt)} (Denda: <b>${escapeHtml(dendaTxt)}</b>)</p>
+          </div>
+        `;
+      }).join('');
+      return `<div class="space-y-2 mt-1">${itemsHtml}</div>`;
+    }
+
+    function checkMahasiswaRegistrationAccess(studentCategory = 'Reguler', nowDate = new Date(), specificLayanan = '') {
+      const activePeriods = getActivePeriodsForCategory(studentCategory);
+      if (activePeriods.length === 0) {
+        return {
+          allowed: false,
+          icon: 'warning',
+          title: 'Belum Ada Periode Aktif',
+          message: 'Belum ada jadwal periode pendaftaran berstatus Aktif untuk kategori kelas Anda.',
+          html: `<p class="text-xs text-slate-600 mb-2">Anda belum dapat mendaftar karena tidak terdapat periode pendaftaran berstatus <b>Aktif</b> untuk kategori kelas <b>${escapeHtml(studentCategory)}</b>.</p>`
+        };
+      }
+
+      let targetPeriods = activePeriods;
+      if (specificLayanan) {
+        const targetNorm = normalizeJenisLayananName(specificLayanan).toLowerCase();
+        const filtered = activePeriods.filter(p => normalizeJenisLayananName(p['Jenis Layanan']).toLowerCase() === targetNorm);
+        if (filtered.length === 0) {
+          return {
+            allowed: false,
+            icon: 'error',
+            title: 'Layanan Tidak Tersedia',
+            message: `Jenis layanan ${specificLayanan} sedang tidak aktif pada Jadwal & Periode Masa Pendaftaran Resmi.`,
+            html: `<p class="text-xs text-slate-600 mb-2">Layanan <b>${escapeHtml(specificLayanan)}</b> sedang tidak dibuka untuk kategori kelas <b>${escapeHtml(studentCategory)}</b>.</p>` + buildPeriodWindowPopupHtml(activePeriods, nowDate)
+          };
+        }
+        targetPeriods = filtered;
+      }
+
+      const openPeriods = targetPeriods.filter(p => evaluatePeriodWindow(p, nowDate).canRegister);
+      if (openPeriods.length > 0) {
+        return { allowed: true, openPeriods, activePeriods: targetPeriods };
+      }
+
+      const hasBeforeStart = targetPeriods.some(p => {
+        const st = evaluatePeriodWindow(p, nowDate).state;
+        return st === 'BEFORE_START' || st === 'BETWEEN_NORMAL_AND_LATE';
+      });
+
+      return {
+        allowed: false,
+        icon: hasBeforeStart ? 'info' : 'error',
+        title: hasBeforeStart ? 'Belum Bisa Mendaftar' : 'Tidak Bisa Mendaftar (Ditutup)',
+        message: hasBeforeStart
+          ? 'Masa pendaftaran resmi belum dibuka. Silakan mendaftar sesuai tanggal jadwal resmi.'
+          : 'Masa pendaftaran resmi (normal maupun terlambat) telah berakhir.',
+        html: (hasBeforeStart
+          ? '<p class="text-xs text-slate-700 mb-2">Pendaftaran saat ini <b>belum dibuka</b> karena masih berada di luar tanggal jadwal resmi berikut:</p>'
+          : '<p class="text-xs text-slate-700 mb-2">Anda <b>tidak dapat mendaftar</b> karena masa pendaftaran resmi (jadwal normal dan masa terlambat) telah berakhir:</p>')
+          + buildPeriodWindowPopupHtml(targetPeriods, nowDate)
+      };
+    }
+
     function syncActivePeriodBanner() {
       const list = (appData.master && appData.master.periode) || [];
-      const active = list.find(p => (p.Status || p.status || '').toLowerCase() === 'aktif') || list[0] || {};
-      
+      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      const studentCategory = isMhs
+        ? detectCategoryFromClassClient(normalizeClassNameClient(currentUser.kelas || 'Reguler A'))
+        : '';
+
+      const activeCandidates = getActivePeriodsForCategory(studentCategory);
+      const now = new Date();
+
+      const rankState = (st) => {
+        if (st === 'NORMAL') return 0;
+        if (st === 'LATE') return 1;
+        if (st === 'BEFORE_START') return 2;
+        if (st === 'BETWEEN_NORMAL_AND_LATE') return 3;
+        return 4;
+      };
+
+      const sortedActive = [...activeCandidates].sort((a, b) => {
+        return rankState(evaluatePeriodWindow(a, now).state) - rankState(evaluatePeriodWindow(b, now).state);
+      });
+      const active = sortedActive[0] || null;
+
       const namaElem = document.getElementById('bannerPeriodeNama');
       const kelasElem = document.getElementById('bannerPeriodeKelas');
       const normalElem = document.getElementById('bannerJadwalNormal');
       const lateElem = document.getElementById('bannerJadwalTerlambat');
       const dendaElem = document.getElementById('bannerNominalDenda');
+      const statusBadge = document.getElementById('bannerPeriodeStatusBadge');
+      const windowNote = document.getElementById('bannerPeriodeWindowNote');
+
+      if (!active) {
+        const listTa = (appData && appData.master && appData.master.tahunAkademik) || [];
+        const activeTa = listTa.find(t => String(t.Status || t.status || '').toLowerCase() === 'aktif') || listTa[0];
+        const taTxt = activeTa ? (activeTa['Tahun Akademik'] || '2026/2027') : '2026/2027';
+        if (namaElem) namaElem.innerText = `Belum Ada Layanan Aktif (${taTxt})`;
+        if (kelasElem) kelasElem.innerText = studentCategory || 'Semua Kategori';
+        if (normalElem) normalElem.innerText = '-';
+        if (lateElem) lateElem.innerText = '-';
+        if (dendaElem) dendaElem.innerText = 'Rp 0/mata kuliah';
+        if (statusBadge) {
+          statusBadge.innerText = 'TIDAK ADA PERIODE AKTIF';
+          statusBadge.className = 'px-3 py-1 rounded-xl font-bold text-xs bg-slate-200 text-slate-700 border border-slate-300';
+        }
+        if (windowNote) {
+          windowNote.classList.remove('hidden');
+          windowNote.className = 'text-[11px] font-bold pt-0.5 text-rose-700';
+          windowNote.innerText = 'Pendaftaran saat ini belum dibuka karena belum ada jadwal periode berstatus Aktif.';
+        }
+        return;
+      }
+
+      const uniqueServices = [];
+      sortedActive.forEach(p => {
+        const nm = normalizeJenisLayananName(p['Jenis Layanan']);
+        if (nm && !uniqueServices.includes(nm)) uniqueServices.push(nm);
+      });
 
       if (namaElem) {
-        namaElem.innerText = `${active['Jenis Layanan'] || 'UTS Susulan'} (${active['Tahun Akademik'] || '2026/2027'})`;
+        const serviceLabel = uniqueServices.length > 1 ? uniqueServices.join(' & ') : (active['Jenis Layanan'] || 'UTS Susulan');
+        namaElem.innerText = `${serviceLabel} (${active['Tahun Akademik'] || '2026/2027'})`;
       }
 
       if (kelasElem) {
         const rawKat = String(active['Kategori Kelas'] || active.kategoriKelas || '').trim();
-        if (!rawKat || rawKat.toLowerCase() === 'reguler' || rawKat.toLowerCase() === 'semua' || rawKat.toLowerCase().includes('karyawan')) {
+        if (!rawKat || rawKat.toLowerCase() === 'semua' || (rawKat.toLowerCase().includes('reguler') && rawKat.toLowerCase().includes('karyawan'))) {
           kelasElem.innerText = 'Reguler & Karyawan';
         } else {
           kelasElem.innerText = rawKat;
         }
       }
 
-      const startNormal = resolveDateTimeString(active['Tanggal & Jam Mulai'] || active['Tanggal Mulai'], '2026-11-15 00:00:00');
-      const endNormal = resolveDateTimeString(active['Tanggal & Jam Selesai'] || active['Tanggal Selesai'], '2026-11-20 23:59:00');
-      if (normalElem) normalElem.innerText = formatIndonesianDateTimeRange(startNormal, endNormal);
+      const startNormal = resolveDateTimeString(active['Tanggal & Jam Mulai'] || active['Tanggal Mulai'], '');
+      const endNormal = resolveDateTimeString(active['Tanggal & Jam Selesai'] || active['Tanggal Selesai'], '');
+      if (normalElem) normalElem.innerText = startNormal ? formatIndonesianDateTimeRange(startNormal, endNormal) : '-';
 
-      const startLate = resolveDateTimeString(active['Mulai Terlambat'], '2026-11-21 00:00:00');
-      const endLate = resolveDateTimeString(active['Selesai Terlambat'], '2026-11-22 23:59:00');
-      if (lateElem) lateElem.innerText = formatIndonesianDateTimeRange(startLate, endLate);
+      const hasLateWindow = Boolean(active['Mulai Terlambat'] || active['Selesai Terlambat']);
+      const startLate = resolveDateTimeString(active['Mulai Terlambat'], '');
+      const endLate = resolveDateTimeString(active['Selesai Terlambat'], '');
+      if (lateElem) lateElem.innerText = hasLateWindow ? formatIndonesianDateTimeRange(startLate, endLate) : 'Tidak ada masa terlambat';
 
-      const rawDenda = active['Biaya Keterlambatan'] !== undefined ? active['Biaya Keterlambatan'] : (active.biaya || active.denda || active['Denda Keterlambatan'] || 50000);
-      const dendaNum = Number(rawDenda) || 50000;
-      if (dendaElem) dendaElem.innerText = `Rp ${dendaNum.toLocaleString('id-ID')}/mata kuliah`;
+      const evalRes = evaluatePeriodWindow(active, now);
+      if (dendaElem) dendaElem.innerText = `Rp ${Number(evalRes.biayaDenda || 0).toLocaleString('id-ID')}/mata kuliah`;
+
+      if (statusBadge && windowNote) {
+        if (evalRes.state === 'NORMAL') {
+          statusBadge.innerText = 'DIBUKA · JADWAL NORMAL';
+          statusBadge.className = 'px-3 py-1 rounded-xl font-bold text-xs bg-emerald-100 text-emerald-800 border border-emerald-300';
+          windowNote.classList.remove('hidden');
+          windowNote.className = 'text-[11px] font-bold pt-0.5 text-emerald-800';
+          windowNote.innerText = 'Pendaftaran sedang dibuka pada Jadwal Normal (Bebas Denda).';
+        } else if (evalRes.state === 'LATE') {
+          statusBadge.innerText = 'TERLAMBAT · DENDA BERLAKU';
+          statusBadge.className = 'px-3 py-1 rounded-xl font-bold text-xs bg-amber-100 text-amber-900 border border-amber-300';
+          windowNote.classList.remove('hidden');
+          windowNote.className = 'text-[11px] font-bold pt-0.5 text-amber-900';
+          windowNote.innerText = `Pendaftaran masih dibuka pada Masa Terlambat dengan denda Rp ${Number(evalRes.biayaDenda || 0).toLocaleString('id-ID')}/mata kuliah.`;
+        } else if (evalRes.state === 'BEFORE_START' || evalRes.state === 'BETWEEN_NORMAL_AND_LATE') {
+          statusBadge.innerText = 'BELUM DIBUKA';
+          statusBadge.className = 'px-3 py-1 rounded-xl font-bold text-xs bg-blue-100 text-blue-900 border border-blue-300';
+          windowNote.classList.remove('hidden');
+          windowNote.className = 'text-[11px] font-bold pt-0.5 text-rose-700';
+          const openStartStr = evalRes.state === 'BETWEEN_NORMAL_AND_LATE'
+            ? formatIndonesianFullDateTime(active['Mulai Terlambat'])
+            : formatIndonesianFullDateTime(active['Tanggal & Jam Mulai'] || active['Tanggal Mulai']);
+          windowNote.innerText = `Belum bisa mendaftar: pendaftaran baru dibuka mulai ${openStartStr}.`;
+        } else {
+          statusBadge.innerText = 'PENDAFTARAN DITUTUP';
+          statusBadge.className = 'px-3 py-1 rounded-xl font-bold text-xs bg-rose-100 text-rose-800 border border-rose-300';
+          windowNote.classList.remove('hidden');
+          windowNote.className = 'text-[11px] font-bold pt-0.5 text-rose-700';
+          windowNote.innerText = 'Tidak bisa mendaftar: batas akhir jadwal normal dan keterlambatan telah berakhir.';
+        }
+      }
     }
 
     function renderRuanganTable() {
