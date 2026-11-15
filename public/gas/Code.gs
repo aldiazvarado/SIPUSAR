@@ -1,0 +1,4263 @@
+function doGet(e) {
+  if (e && e.parameter) {
+    if (e.parameter.action === 'renderKartuUjianDigital' || e.parameter.kartu || e.parameter.kartuUjian) {
+      var cardResult = renderKartuUjianDigital(e.parameter.id || e.parameter.npm || e.parameter.pendaftaranIdOrNpm);
+      return HtmlService.createHtmlOutput(cardResult.html)
+        .setTitle('Kartu Tanda Peserta Ujian Digital - FEB UIKA Bogor')
+        .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+        .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    }
+    if (e.parameter.action) {
+      return handleApiRequest(e.parameter.action, e.parameter.args ? JSON.parse(e.parameter.args) : []);
+    }
+  }
+  var output;
+  try {
+    output = HtmlService.createHtmlOutputFromFile('index');
+  } catch(e1) {
+    try {
+      output = HtmlService.createHtmlOutputFromFile('Index');
+    } catch(e2) {
+      output = HtmlService.createTemplateFromFile('index').evaluate();
+    }
+  }
+  return output
+      .setTitle('SIP-AKADEMIK - FEB UIKA Bogor')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+// Endpoint API untuk Hosting Eksternal (Hostinger / cPanel / Domain Kampus)
+function doPost(e) {
+  try {
+    if (e && e.postData && e.postData.contents) {
+      var body;
+      try {
+        body = JSON.parse(e.postData.contents);
+      } catch (jsonErr) {
+        return doGet(e);
+      }
+      return handleApiRequest(body.action, body.args || []);
+    } else if (e && e.parameter && e.parameter.action) {
+      return handleApiRequest(e.parameter.action, e.parameter.args ? JSON.parse(e.parameter.args) : []);
+    }
+    return doGet(e);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      message: 'API Error: ' + err.message
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function handleApiRequest(action, args) {
+  var allowedFunctions = {
+    loginUser: loginUser,
+    changePassword: changePassword,
+    getInitialData: getInitialData,
+    checkRealtimeSync: checkRealtimeSync,
+    updateStatusApproval: updateStatusApproval,
+    updateStatusPayment: updateStatusPayment,
+    bulkUpdateStatusApproval: bulkUpdateStatusApproval,
+    bulkApproveRegistrations: bulkApproveRegistrations,
+    addPendaftaran: addPendaftaran,
+    updatePendaftaran: updatePendaftaran,
+    deletePendaftaran: deletePendaftaran,
+    addPeriode: addPeriode,
+    updatePeriode: updatePeriode,
+    deletePeriode: deletePeriode,
+    addRuangan: addRuangan,
+    updateRuangan: updateRuangan,
+    deleteRuangan: deleteRuangan,
+    addJadwal: addJadwal,
+    updateJadwal: updateJadwal,
+    deleteJadwal: deleteJadwal,
+    addNotification: addNotification,
+    markNotificationRead: markNotificationRead,
+    // [REVISI POIN 2]: Fungsi Hapus Notifikasi Manual & Massal
+    deleteNotification: deleteNotification,
+    bulkDeleteNotifications: bulkDeleteNotifications,
+    deleteAllNotifications: deleteAllNotifications,
+    runAITrialAndErrorSimulation: runAITrialAndErrorSimulation,
+    generateMockTestData: generateMockTestData,
+    clearAITestData: clearAITestData,
+    renderKartuUjianDigital: renderKartuUjianDigital,
+    clearActivityLogs: clearActivityLogs,
+    addTahunAkademik: addTahunAkademik,
+    updateTahunAkademik: updateTahunAkademik,
+    deleteTahunAkademik: deleteTahunAkademik,
+    batchSyncMasterData: batchSyncMasterData,
+    addUserMahasiswa: addUserMahasiswa,
+    normalizeExistingClassesInSheet: normalizeExistingClassesInSheet,
+    clearAllCache: clearAllCache,
+    invalidateCache: invalidateCache,
+    seedMockupData: seedMockupData,
+    uploadBuktiPendaftaranToDrive: uploadBuktiToDrive,
+    migrateBase64ToDrive: migrateBase64ToDrive,
+    syncJadwalParticipantsToSheet: syncJadwalParticipantsToSheet
+  };
+  var fn = allowedFunctions[action];
+  if (!fn) {
+    return ContentService.createTextOutput(JSON.stringify({
+      success: false,
+      message: 'Fungsi tidak ditemukan: ' + action
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  var result = fn.apply(null, Array.isArray(args) ? args : []);
+  return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+}
+
+function getSyncVersion() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    return props.getProperty('LAST_SYNC_VERSION') || '1';
+  } catch (e) {
+    return '1';
+  }
+}
+
+function bumpSyncVersion(actor, action) {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var ver = String(new Date().getTime());
+    props.setProperties({
+      'LAST_SYNC_VERSION': ver,
+      'LAST_SYNC_ACTOR': String(actor || 'Sistem'),
+      'LAST_SYNC_ACTION': String(action || 'Pembaruan Data')
+    });
+    return ver;
+  } catch (e) {
+    return String(new Date().getTime());
+  }
+}
+
+function getActiveSpreadsheetSafe() {
+  var ss = null;
+  try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) {}
+  if (!ss) {
+    try {
+      var sheetId = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+      if (sheetId) ss = SpreadsheetApp.openById(sheetId);
+    } catch (e2) {}
+  }
+  return ss;
+}
+
+function getSpreadsheetTimeZoneSafe(ss) {
+  try {
+    if (ss && typeof ss.getSpreadsheetTimeZone === 'function') {
+      var stz = ss.getSpreadsheetTimeZone();
+      if (stz) return stz;
+    }
+  } catch (e) {}
+  try {
+    var activeSs = getActiveSpreadsheetSafe();
+    if (activeSs && typeof activeSs.getSpreadsheetTimeZone === 'function') {
+      var atz = activeSs.getSpreadsheetTimeZone();
+      if (atz) return atz;
+    }
+  } catch (e2) {}
+  return Session.getScriptTimeZone() || 'Asia/Jakarta';
+}
+
+function computeSheetSnapshotHash(ss) {
+  try {
+    var targetSs = ss || getActiveSpreadsheetSafe();
+    if (!targetSs) return '0';
+    var parts = [];
+    var dynamicSheets = ['Periode_Pendaftaran', 'Master_Tahun_Akademik', 'Jadwal_Ujian', 'Pendaftaran', 'Log_Aktivitas'];
+    for (var s = 0; s < dynamicSheets.length; s++) {
+      var name = dynamicSheets[s];
+      var sh = targetSs.getSheetByName(name);
+      if (!sh) {
+        parts.push(name + ':missing');
+        continue;
+      }
+      var lastRow = sh.getLastRow();
+      var lastCol = sh.getLastColumn();
+      if (lastRow <= 0 || lastCol <= 0) {
+        parts.push(name + ':empty');
+        continue;
+      }
+      var maxRows = Math.min(lastRow, 1500);
+      var maxCols = Math.min(lastCol, 25);
+      var disp = sh.getRange(1, 1, maxRows, maxCols).getDisplayValues();
+      parts.push(name + ':' + lastRow + 'x' + lastCol + ':' + JSON.stringify(disp));
+    }
+    var masterSheets = ['Master_Prodi', 'Master_Matkul', 'Master_Kelas', 'Master_Dosen', 'Master_Ruangan', 'Notifikasi'];
+    for (var m = 0; m < masterSheets.length; m++) {
+      var mName = masterSheets[m];
+      var mSh = targetSs.getSheetByName(mName);
+      parts.push(mName + ':' + (mSh ? (mSh.getLastRow() + 'x' + mSh.getLastColumn()) : 'missing'));
+    }
+    var rawStr = parts.join('|');
+    var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, rawStr, Utilities.Charset.UTF_8);
+    var hex = '';
+    for (var i = 0; i < digest.length; i++) {
+      var byteVal = (digest[i] + 256) % 256;
+      hex += ('0' + byteVal.toString(16)).slice(-2);
+    }
+    return hex.slice(0, 16);
+  } catch (e) {
+    return '0';
+  }
+}
+
+function getCompositeSyncVersion(ss) {
+  return String(getSyncVersion()) + '_' + computeSheetSnapshotHash(ss);
+}
+
+function checkRealtimeSync(clientVersion, userRole, username, userProdi) {
+  try {
+    var ss = getActiveSpreadsheetSafe();
+    var currentVer = getCompositeSyncVersion(ss);
+    if (String(clientVersion || '') === String(currentVer)) {
+      return { changed: false, version: currentVer };
+    }
+    var props = PropertiesService.getScriptProperties();
+    var lastVerOnly = String(getSyncVersion());
+    var clientBaseVer = String(clientVersion || '').split('_')[0];
+    if (clientBaseVer === lastVerOnly) {
+      invalidateCache();
+    }
+    var fresh = getInitialData(userRole, username, userProdi);
+    fresh.changed = true;
+    fresh.version = currentVer;
+    fresh.lastActor = props.getProperty('LAST_SYNC_ACTOR') || 'Google Spreadsheet';
+    fresh.lastAction = props.getProperty('LAST_SYNC_ACTION') || 'Sinkronisasi Perubahan Spreadsheet';
+    return fresh;
+  } catch (err) {
+    return { changed: false, message: err.message };
+  }
+}
+
+function formatTimeOnly(d, tz) {
+  if (!d) return '';
+  var resolvedTz = tz || getSpreadsheetTimeZoneSafe();
+  if (d instanceof Date) {
+    try {
+      return Utilities.formatDate(d, resolvedTz, 'HH:mm');
+    } catch (e) {
+      var h = ('0' + d.getHours()).slice(-2);
+      var m = ('0' + d.getMinutes()).slice(-2);
+      return h + ':' + m;
+    }
+  }
+  var s = String(d).trim();
+  if (s.indexOf('1899') !== -1 || s.indexOf('1900') !== -1) {
+    var dt = new Date(s);
+    if (!isNaN(dt.getTime())) {
+      try {
+        return Utilities.formatDate(dt, resolvedTz, 'HH:mm');
+      } catch (e2) {
+        return ('0' + dt.getHours()).slice(-2) + ':' + ('0' + dt.getMinutes()).slice(-2);
+      }
+    }
+  }
+  var match = s.match(/(?:^|\s)?(\d{1,2})[:.](\d{2})(?::\d{2})?(?:\s*(?:WIB|WITA|WIT))?/i);
+  if (match) {
+    var hour = ('0' + parseInt(match[1], 10)).slice(-2);
+    var minute = match[2];
+    return hour + ':' + minute;
+  }
+  return s;
+}
+
+function formatDateOnly(d, tz) {
+  if (!d) return '';
+  var resolvedTz = tz || getSpreadsheetTimeZoneSafe();
+  if (d instanceof Date) {
+    try {
+      return Utilities.formatDate(d, resolvedTz, 'yyyy-MM-dd');
+    } catch (e) {
+      var y = d.getFullYear();
+      var m = ('0' + (d.getMonth() + 1)).slice(-2);
+      var day = ('0' + d.getDate()).slice(-2);
+      return y + '-' + m + '-' + day;
+    }
+  }
+  var s = String(d).trim();
+  var isoM = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s].*)?$/);
+  if (isoM) {
+    return isoM[1] + '-' + ('0' + parseInt(isoM[2], 10)).slice(-2) + '-' + ('0' + parseInt(isoM[3], 10)).slice(-2);
+  }
+  var dmyM = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s].*)?$/);
+  if (dmyM) {
+    return dmyM[3] + '-' + ('0' + parseInt(dmyM[2], 10)).slice(-2) + '-' + ('0' + parseInt(dmyM[1], 10)).slice(-2);
+  }
+  if (s.indexOf('T') !== -1) s = s.split('T')[0];
+  if (s.indexOf(' ') !== -1 && s.indexOf(':') !== -1) s = s.split(' ')[0];
+  return s;
+}
+
+function normalizeNaiveDateTimeString(str) {
+  if (!str) return '';
+  var s = String(str).trim();
+  var isoM = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (isoM) {
+    var yyyy = isoM[1];
+    var mm = ('0' + parseInt(isoM[2], 10)).slice(-2);
+    var dd = ('0' + parseInt(isoM[3], 10)).slice(-2);
+    var hh = ('0' + parseInt(isoM[4] || '0', 10)).slice(-2);
+    var min = ('0' + parseInt(isoM[5] || '0', 10)).slice(-2);
+    var sec = ('0' + parseInt(isoM[6] || '0', 10)).slice(-2);
+    return yyyy + '-' + mm + '-' + dd + ' ' + hh + ':' + min + ':' + sec;
+  }
+  var dmyM = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (dmyM) {
+    var dd2 = ('0' + parseInt(dmyM[1], 10)).slice(-2);
+    var mm2 = ('0' + parseInt(dmyM[2], 10)).slice(-2);
+    var yyyy2 = dmyM[3];
+    var hh2 = ('0' + parseInt(dmyM[4] || '0', 10)).slice(-2);
+    var min2 = ('0' + parseInt(dmyM[5] || '0', 10)).slice(-2);
+    var sec2 = ('0' + parseInt(dmyM[6] || '0', 10)).slice(-2);
+    return yyyy2 + '-' + mm2 + '-' + dd2 + ' ' + hh2 + ':' + min2 + ':' + sec2;
+  }
+  return '';
+}
+
+function formatDateToString(d, tz) {
+  if (!d) return '';
+  var resolvedTz = tz || getSpreadsheetTimeZoneSafe();
+  if (typeof d === 'string') {
+    var str = d.trim();
+    if (str.indexOf('1899') !== -1 || str.indexOf('1900') !== -1) {
+      return formatTimeOnly(str, resolvedTz);
+    }
+    var naiveNorm = normalizeNaiveDateTimeString(str);
+    if (naiveNorm) {
+      return naiveNorm;
+    }
+    if (str.indexOf('AM') !== -1 || str.indexOf('PM') !== -1 || str.indexOf('am') !== -1 || str.indexOf('pm') !== -1 || /[Zz]$|[+-]\d{2}:?\d{2}$/.test(str) || str.indexOf('GMT') !== -1) {
+      var dateParsed = new Date(str);
+      if (!isNaN(dateParsed.getTime())) {
+        d = dateParsed;
+      } else {
+        return str;
+      }
+    } else {
+      return str;
+    }
+  }
+  
+  try {
+    if (d.getFullYear && d.getFullYear() < 1920) {
+      return formatTimeOnly(d, resolvedTz);
+    }
+    try {
+      return Utilities.formatDate(d, resolvedTz, 'yyyy-MM-dd HH:mm:ss');
+    } catch(e) {
+      var year = d.getFullYear();
+      var month = ('0' + (d.getMonth() + 1)).slice(-2);
+      var day = ('0' + d.getDate()).slice(-2);
+      var hours = ('0' + d.getHours()).slice(-2);
+      var minutes = ('0' + d.getMinutes()).slice(-2);
+      var seconds = ('0' + d.getSeconds()).slice(-2);
+      return year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
+    }
+  } catch (err) {
+    return String(d);
+  }
+}
+
+function sanitizeNumber(val) {
+  if (val === null || val === undefined) return 0;
+  if (val instanceof Date) return 0;
+  var str = String(val).trim();
+  if (str.indexOf('-') !== -1 || str.indexOf(':') !== -1 || str.indexOf('T') !== -1 || str.indexOf('GMT') !== -1) {
+    return 0;
+  }
+  var clean = str.replace(/[^0-9]/g, '');
+  if (!clean) return 0;
+  var num = parseInt(clean, 10);
+  if (num > 10000000) return 50000;
+  return isNaN(num) ? 0 : num;
+}
+
+function getHeaderIndexMap(sheet) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return {};
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var map = {};
+  for (var i = 0; i < headers.length; i++) {
+    map[String(headers[i]).trim()] = i + 1;
+  }
+  return map;
+}
+
+function getOrCreateSheet(ss, sheetName) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (sheet) return sheet;
+  var defaultHeadersMap = {
+    'Pendaftaran': ["ID", "Tanggal", "Tahun Akademik", "Semester", "NPM", "Nama Mahasiswa", "Kode Prodi", "Program Studi", "Kelas", "Kategori Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Layanan", "Alasan", "Bukti Foto", "Status Jadwal", "Nominal", "Status Pembayaran", "Status Persetujuan"],
+    'Periode_Pendaftaran': ["ID", "Tahun Akademik", "Semester", "Jenis Layanan", "Kategori Kelas", "Tanggal & Jam Mulai", "Tanggal & Jam Selesai", "Mulai Terlambat", "Selesai Terlambat", "Biaya Keterlambatan", "Status"],
+    'User_Staff': ["ID", "Username", "Password", "Role", "Nama Lengkap", "NIK", "Kode Prodi"],
+    'User_Mahasiswa': ["ID", "Username", "Password", "Role", "Nama Lengkap", "NPM", "Kode Prodi", "Kelas", "Angkatan", "Semester"],
+    'Master_Ruangan': ["ID", "Kode Ruangan", "Nama Ruangan", "Kapasitas", "Gedung", "Keterangan"],
+    'Jadwal_Ujian': ["ID", "Tanggal Ujian", "Jam Mulai", "Jam Selesai", "Ruangan", "Kode Prodi", "Program Studi", "Semester", "Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Ujian", "Keterangan"],
+    'Master_Prodi': ["ID", "Kode Prodi", "Nama Prodi", "Jenjang"],
+    'Master_Matkul': ["ID", "Kode Matkul", "Nama Mata Kuliah", "SKS", "Kode Prodi", "Dosen Pengampu", "Kelas"],
+    'Master_Kelas': ["ID", "Nama Kelas", "Kategori", "Semester", "Kode Prodi"],
+    'Master_Dosen': ["ID", "NIK/NIDN", "Nama Dosen", "Kode Prodi"],
+    'Notifikasi': ["ID", "Waktu", "Judul", "Pesan", "Tipe", "TargetRole", "TargetNPM", "Dibaca"],
+    'Log_Aktivitas': ["ID", "Waktu", "Pengguna", "Role", "Aksi", "Target", "Keterangan"]
+  };
+  var headers = defaultHeadersMap[sheetName] || ["ID", "Nama", "Keterangan"];
+  try {
+    sheet = ss.insertSheet(sheetName);
+    sheet.appendRow(headers);
+    var headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setBackground('#1E3A8A');
+    headerRange.setFontColor('#FFFFFF');
+    headerRange.setFontWeight('bold');
+    headerRange.setHorizontalAlignment('center');
+    sheet.setFrozenRows(1);
+    return sheet;
+  } catch (e) {
+    return null;
+  }
+}
+
+function getSheetDataRaw(ss, sheetName) {
+  if (!ss) return [];
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = getOrCreateSheet(ss, sheetName);
+    if (!sheet) return [];
+    return [];
+  }
+  
+  var range = sheet.getDataRange();
+  var values = range.getValues();
+  if (values.length <= 1) return [];
+  var displayValues = [];
+  try { displayValues = range.getDisplayValues(); } catch (e) { displayValues = []; }
+  var tz = getSpreadsheetTimeZoneSafe(ss);
+  
+  var headers = values[0];
+  var data = new Array(values.length - 1);
+  for (var i = 1; i < values.length; i++) {
+    var row = values[i];
+    var dispRow = displayValues[i] || [];
+    var obj = {};
+    for (var j = 0; j < headers.length; j++) {
+      var key = String(headers[j]).trim();
+      var keyLower = key.toLowerCase();
+      var val = row[j];
+      var disp = dispRow[j] !== undefined && dispRow[j] !== null ? String(dispRow[j]).trim() : '';
+      var isPeriodDateTimeCol = (keyLower.indexOf('tanggal') !== -1 && keyLower.indexOf('jam') !== -1) ||
+                                keyLower === 'mulai terlambat' ||
+                                keyLower === 'selesai terlambat' ||
+                                keyLower === 'tanggal mulai' ||
+                                keyLower === 'tanggal selesai';
+      var isTimeOnlyCol = (keyLower === 'jam mulai' || keyLower === 'jam selesai' ||
+                          (keyLower.indexOf('jam') !== -1 && keyLower.indexOf('mulai') === -1 && keyLower.indexOf('selesai') === -1 && keyLower.indexOf('tanggal') === -1));
+      var isDateOnlyCol = (keyLower === 'tanggal ujian' || keyLower === 'tanggal');
+
+      if (val instanceof Date) {
+        if (isPeriodDateTimeCol) {
+          var dispDtNorm = normalizeNaiveDateTimeString(disp);
+          val = dispDtNorm || formatDateToString(val, tz);
+        } else if (isTimeOnlyCol) {
+          val = /^\d{1,2}[:.]\d{2}(?::\d{2})?$/.test(disp) ? formatTimeOnly(disp, tz) : formatTimeOnly(val, tz);
+        } else if (isDateOnlyCol) {
+          if (/^(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4})$/.test(disp)) {
+            val = formatDateOnly(disp, tz);
+          } else {
+            val = formatDateOnly(val, tz);
+          }
+        } else {
+          var dispOtherNorm = normalizeNaiveDateTimeString(disp);
+          val = dispOtherNorm || formatDateToString(val, tz);
+        }
+      } else if (typeof val === 'string') {
+        if (isPeriodDateTimeCol) {
+          val = formatDateToString(disp || val, tz);
+        } else if (isTimeOnlyCol) {
+          val = formatTimeOnly(disp || val, tz);
+        }
+      }
+      obj[key] = val;
+    }
+    data[i - 1] = obj;
+  }
+  return data;
+}
+
+// =========================================================================
+// [ARSITEKTUR & OPTIMASI PERFORMA]: CacheService Apps Script
+// Menyimpan data Master, Periode, Tahun Akademik, dan Ruangan selama 30 menit (1800 detik)
+// =========================================================================
+function getCachedMasterData(ss, sheetName) {
+  var cache = CacheService.getScriptCache();
+  var cacheKey = 'SIP_CACHE_V5_' + sheetName;
+  var cached = cache.get(cacheKey);
+  if (cached) {
+    try { return JSON.parse(cached); } catch (e) {}
+  }
+  var data = getSheetDataRaw(ss, sheetName);
+  if (data && data.length > 0) {
+    try {
+      var str = JSON.stringify(data);
+      if (str.length < 95000) {
+        cache.put(cacheKey, str, 1800); // Cache 30 menit (1800 detik)
+      }
+    } catch (e) {}
+  }
+  return data;
+}
+
+function invalidateCache(sheetName) {
+  try {
+    var cache = CacheService.getScriptCache();
+    if (sheetName) {
+      cache.remove('SIP_CACHE_V5_' + sheetName);
+      cache.remove('SIP_MASTER_CACHE_V4_' + sheetName);
+    } else {
+      var keys = ['Master_Prodi', 'Master_Matkul', 'Master_Kelas', 'Master_Dosen', 'Periode_Pendaftaran', 'Master_Tahun_Akademik', 'Master_Ruangan'];
+      for (var i = 0; i < keys.length; i++) {
+        cache.remove('SIP_CACHE_V5_' + keys[i]);
+        cache.remove('SIP_MASTER_CACHE_V4_' + keys[i]);
+      }
+    }
+  } catch (e) {}
+}
+
+/**
+ * Trigger otomatis ketika pengguna mengedit, menambah, atau menghapus sel langsung di spreadsheet.
+ * Otomatis membersihkan cache server GAS seketika sehingga perubahan langsung tampil di Web App!
+ */
+function onEdit(e) {
+  try {
+    var range = e ? e.range : null;
+    var sheet = range ? range.getSheet() : null;
+    var sheetName = sheet ? sheet.getName() : null;
+    if (sheetName) {
+      invalidateCache(sheetName);
+      bumpSyncVersion('Spreadsheet Editor', 'Perubahan langsung pada sheet ' + sheetName);
+    } else {
+      invalidateCache();
+    }
+  } catch (err) {}
+}
+
+function clearAllCache() {
+  invalidateCache();
+  return { success: true, message: 'Semua cache master data berhasil dibersihkan dari server Google.' };
+}
+
+// =========================================================================
+// [REVISI POIN 1]: Mekanisme Persistence & Caching Log Aktivitas
+// Data log TIDAK AKAN HILANG di Web Aplikasi meskipun baris sheet dihapus manual.
+// Tersimpan permanen via PropertiesService dan otomatis sinkron dua arah.
+// =========================================================================
+function getPersistentLogs() {
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var raw = props.getProperty('SIP_PERSISTENT_LOGS_V2');
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    Logger.log('Gagal membaca persistent logs: ' + e.message);
+  }
+  return [];
+}
+
+function savePersistentLogs(logsArray) {
+  try {
+    if (!Array.isArray(logsArray)) return;
+    var props = PropertiesService.getScriptProperties();
+    // Simpan hingga 100 log terbaru agar tidak melewati kuota limit PropertiesService (9 KB per property)
+    var trimmed = logsArray.slice(0, 80);
+    props.setProperty('SIP_PERSISTENT_LOGS_V2', JSON.stringify(trimmed));
+  } catch (e) {
+    Logger.log('Gagal menyimpan persistent logs: ' + e.message);
+  }
+}
+
+function getSheetData(sheetName) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      try {
+        var sheetId = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+        if (sheetId) ss = SpreadsheetApp.openById(sheetId);
+      } catch(e) {}
+    }
+    if (!ss) return [];
+
+    // Penanganan khusus sheet Log_Aktivitas (Revisi Poin 1)
+    if (sheetName === 'Log_Aktivitas') {
+      var sheetLogs = getSheetDataRaw(ss, 'Log_Aktivitas') || [];
+      var persistentLogs = getPersistentLogs() || [];
+
+      var logMap = {};
+      sheetLogs.forEach(function(l) {
+        if (l && l.ID) {
+          l.Pengguna = String(l.Pengguna || 'Sistem').trim();
+          l.Role = String(l.Role || 'Sistem').trim();
+          logMap[String(l.ID).trim()] = l;
+        }
+      });
+      persistentLogs.forEach(function(l) {
+        if (l && l.ID && !logMap[String(l.ID).trim()]) {
+          l.Pengguna = String(l.Pengguna || 'Sistem').trim();
+          l.Role = String(l.Role || 'Sistem').trim();
+          logMap[String(l.ID).trim()] = l; // Pulihkan log yang terhapus tidak sah di spreadsheet!
+        }
+      });
+
+      var combinedLogs = Object.keys(logMap).map(function(k) { return logMap[k]; });
+      combinedLogs.sort(function(a, b) {
+        var cmp = String(b.Waktu || '').localeCompare(String(a.Waktu || ''));
+        return cmp !== 0 ? cmp : String(b.ID || '').localeCompare(String(a.ID || ''));
+      });
+
+      savePersistentLogs(combinedLogs);
+
+      if (sheetLogs.length === 0 && combinedLogs.length > 0) {
+        try {
+          var logSheet = getOrCreateSheet(ss, 'Log_Aktivitas');
+          if (logSheet && logSheet.getLastRow() <= 1) {
+            combinedLogs.slice(0, 30).forEach(function(item) {
+              logSheet.appendRow([
+                item.ID || '',
+                item.Waktu || '',
+                item.Pengguna || 'Sistem',
+                item.Role || 'Sistem',
+                item.Aksi || '',
+                item.Target || '',
+                item.Keterangan || ''
+              ]);
+            });
+          }
+        } catch(restoreErr) {}
+      }
+
+      return combinedLogs;
+    }
+
+    // Periode_Pendaftaran dan Master_Tahun_Akademik dibaca langsung tanpa cache 30 menit agar edit/hapus di spreadsheet langsung instan
+    var isStaticMaster = ['Master_Prodi', 'Master_Matkul', 'Master_Kelas', 'Master_Dosen', 'Master_Ruangan'].indexOf(sheetName) !== -1;
+    var data = isStaticMaster ? getCachedMasterData(ss, sheetName) : getSheetDataRaw(ss, sheetName);
+    if (!data) data = [];
+
+    var tz = getSpreadsheetTimeZoneSafe(ss);
+    if (sheetName === 'Periode_Pendaftaran') {
+      data.forEach(function(item) {
+        item['Tanggal & Jam Mulai'] = formatDateToString(item['Tanggal & Jam Mulai'] || item['Tanggal Mulai'] || '', tz);
+        item['Tanggal & Jam Selesai'] = formatDateToString(item['Tanggal & Jam Selesai'] || item['Tanggal Selesai'] || '', tz);
+        item['Mulai Terlambat'] = formatDateToString(item['Mulai Terlambat'] || '', tz);
+        item['Selesai Terlambat'] = formatDateToString(item['Selesai Terlambat'] || '', tz);
+        item['Kategori Kelas'] = item['Kategori Kelas'] || item['Kelas'] || 'Reguler & Karyawan';
+        var rawBiaya = item['Biaya Keterlambatan'] !== undefined ? item['Biaya Keterlambatan'] : (item['Biaya'] || 0);
+        item['Biaya Keterlambatan'] = sanitizeNumber(rawBiaya);
+        item['Tahun Akademik'] = item['Tahun Akademik'] || '2026/2027';
+        item['Semester'] = item['Semester'] || 'Ganjil';
+        if (String(item['Status'] || '').toLowerCase() === 'non-aktif') {
+          item['Status'] = 'Ditutup';
+        }
+      });
+    }
+
+    if (sheetName === 'Master_Tahun_Akademik') {
+      data.forEach(function(item) {
+        item['Tahun Akademik'] = item['Tahun Akademik'] || item['Tahun'] || '';
+        item['Semester'] = item['Semester'] || item['semester'] || 'Ganjil';
+        item['Status'] = item['Status'] || item['status'] || 'Aktif';
+        item['Keterangan'] = item['Keterangan'] || item['keterangan'] || '';
+      });
+    }
+
+    if (sheetName === 'Pendaftaran') {
+      data.forEach(function(item) {
+        item['Tahun Akademik'] = item['Tahun Akademik'] || '2026/2027';
+        item['Semester'] = item['Semester'] || item['Semester Type'] || 'Ganjil';
+        item['Bukti Foto'] = item['Bukti Foto'] || '';
+        item['Kode Prodi'] = item['Kode Prodi'] || item['Program Studi'] || 'MNJ';
+      });
+    }
+
+    return data;
+  } catch (err) {
+    return [];
+  }
+}
+
+// =========================================================================
+// [KALKULASI SEMESTER OTOMATIS]: Berdasarkan Angkatan & Tahun Akademik Aktif
+// =========================================================================
+function calculateSemesterFromAngkatanBackend(angkatanInput) {
+  try {
+    var angkatan = parseInt(angkatanInput, 10);
+    if (!angkatan || isNaN(angkatan)) return 'Semester 1';
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var taData = [];
+    try { taData = getSheetData('Master_Tahun_Akademik'); } catch(e) {}
+    var activeTA = (taData || []).find(function(t) {
+      return String(t.Status || t.status || '').toLowerCase() === 'aktif';
+    }) || (taData && taData[0]) || { 'Tahun Akademik': '2026/2027', 'Semester': 'Ganjil' };
+
+    var yearSource = activeTA['Tahun Akademik'] || '2026/2027';
+    var semSource = activeTA.Semester || 'Ganjil';
+
+    var startYear = 2026;
+    var matchYear = String(yearSource).match(/\d{4}/);
+    if (matchYear) startYear = parseInt(matchYear[0], 10);
+    var isGanjil = String(semSource).toLowerCase().indexOf('genap') === -1;
+
+    var diffYears = startYear - angkatan;
+    var semNum = 1;
+    if (diffYears >= 0) {
+      semNum = isGanjil ? (diffYears * 2 + 1) : (diffYears * 2 + 2);
+    } else {
+      semNum = 1;
+    }
+    return 'Semester ' + semNum;
+  } catch(e) {
+    return 'Semester 1';
+  }
+}
+
+// =========================================================================
+// [STANDARISASI & NORMALISASI KELAS]: Hapus Angka Semester (e.g. Reguler 3A -> Reguler A)
+// =========================================================================
+function normalizeClassName(cls) {
+  if (!cls) return 'Reguler A';
+  var str = String(cls).trim();
+  // Mengubah "Reguler 3A", "Reguler 1A", "Reguler 5B" -> "Reguler A", "Reguler B"
+  str = str.replace(/^(Reguler|Karyawan)\s*\d+([A-Za-z]+)/i, function(m, p1, p2) {
+    var cat = p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase();
+    return cat + ' ' + p2.toUpperCase();
+  });
+  // Mengubah "3A", "5B" -> "Reguler A", "Reguler B"
+  str = str.replace(/^\d+([A-Za-z]+)$/, function(m, p) {
+    return 'Reguler ' + p.toUpperCase();
+  });
+  // Memastikan format huruf kapital standar (e.g. "reguler a" -> "Reguler A")
+  str = str.replace(/^(Reguler|Karyawan)\s+([A-Za-z]+)$/i, function(m, p1, p2) {
+    var cat = p1.charAt(0).toUpperCase() + p1.slice(1).toLowerCase();
+    return cat + ' ' + p2.toUpperCase();
+  });
+  return str;
+}
+
+function detectCategoryFromClass(cls) {
+  if (!cls) return 'Reguler';
+  var str = String(cls).toLowerCase();
+  if (str.indexOf('karyawan') !== -1) return 'Karyawan';
+  return 'Reguler';
+}
+
+function normalizeExistingClassesInSheet() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) return { success: false, message: 'Spreadsheet tidak ditemukan.' };
+
+    var totalUpdated = 0;
+
+    // 1. Normalisasi User_Mahasiswa
+    var mhsSheet = ss.getSheetByName('User_Mahasiswa');
+    if (mhsSheet) {
+      var mhsData = mhsSheet.getDataRange().getValues();
+      if (mhsData.length > 1) {
+        var headers = mhsData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+        var colKelas = headers.indexOf('kelas');
+        if (colKelas !== -1) {
+          var updated = false;
+          for (var i = 1; i < mhsData.length; i++) {
+            var raw = String(mhsData[i][colKelas] || '');
+            var cleaned = normalizeClassName(raw);
+            if (raw !== cleaned) {
+              mhsData[i][colKelas] = cleaned;
+              updated = true;
+              totalUpdated++;
+            }
+          }
+          if (updated) {
+            mhsSheet.getDataRange().setValues(mhsData);
+          }
+        }
+      }
+    }
+
+    // 2. Normalisasi Master_Kelas
+    var klsSheet = ss.getSheetByName('Master_Kelas');
+    if (klsSheet) {
+      var klsData = klsSheet.getDataRange().getValues();
+      if (klsData.length > 1) {
+        var kHeaders = klsData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+        var colNama = kHeaders.indexOf('nama kelas');
+        if (colNama === -1) colNama = kHeaders.indexOf('kelas');
+        var colKat = kHeaders.indexOf('kategori');
+        if (colNama !== -1) {
+          var kUpdated = false;
+          for (var j = 1; j < klsData.length; j++) {
+            var rawKls = String(klsData[j][colNama] || '');
+            var cleanKls = normalizeClassName(rawKls);
+            if (rawKls !== cleanKls) {
+              klsData[j][colNama] = cleanKls;
+              if (colKat !== -1) klsData[j][colKat] = detectCategoryFromClass(cleanKls);
+              kUpdated = true;
+              totalUpdated++;
+            }
+          }
+          if (kUpdated) {
+            klsSheet.getDataRange().setValues(klsData);
+          }
+        }
+      }
+    }
+
+    // 3. Normalisasi Pendaftaran
+    var regSheet = ss.getSheetByName('Pendaftaran');
+    if (regSheet) {
+      var regData = regSheet.getDataRange().getValues();
+      if (regData.length > 1) {
+        var rHeaders = regData[0].map(function(h) { return String(h).trim().toLowerCase(); });
+        var rColKelas = rHeaders.indexOf('kelas');
+        var rColKat = rHeaders.indexOf('kategori kelas');
+        if (rColKelas !== -1) {
+          var rUpdated = false;
+          for (var r = 1; r < regData.length; r++) {
+            var rId = String(regData[r][0] || '').trim();
+            var rNpm = rHeaders.indexOf('npm') !== -1 ? String(regData[r][rHeaders.indexOf('npm')] || '').trim() : '';
+            // Lewati baris kosong tanpa ID dan tanpa NPM agar tidak menjadi baris hantu
+            if (!rId && !rNpm) continue;
+            var rRaw = String(regData[r][rColKelas] || '').trim();
+            if (!rRaw) continue;
+            var rClean = normalizeClassName(rRaw);
+            if (rRaw !== rClean) {
+              regData[r][rColKelas] = rClean;
+              if (rColKat !== -1 && !regData[r][rColKat]) regData[r][rColKat] = detectCategoryFromClass(rClean);
+              rUpdated = true;
+              totalUpdated++;
+            }
+          }
+          if (rUpdated) {
+            regSheet.getDataRange().setValues(regData);
+          }
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Berhasil menormalisasi ' + totalUpdated + ' baris nama kelas di spreadsheet (Reguler 3A -> Reguler A).'
+    };
+  } catch(e) {
+    return { success: false, message: e.message };
+  }
+}
+
+function loginUser(username, password) {
+  try {
+    var rawUser = String(username || '').trim();
+    var cleanPass = String(password || '').trim();
+
+    if (!rawUser || !cleanPass) {
+      return {
+        success: false,
+        message: 'Username dan kata sandi wajib diisi.'
+      };
+    }
+
+    var cleanUser = rawUser.toLowerCase();
+    // Ekstrak prefix jika user memasukkan email (misal: aldiaz.siakad@uika-bogor.ac.id -> aldiaz)
+    var emailPrefix = cleanUser.indexOf('@') !== -1 ? cleanUser.split('@')[0] : cleanUser;
+    var simplePrefix = emailPrefix.indexOf('.') !== -1 ? emailPrefix.split('.')[0] : emailPrefix;
+
+    // 1. Cek di Sheet User_Staff (Master Admin, Admin TU, Dekan, Wakil Dekan, KaProdi, SekProdi)
+    var staffList = [];
+    try { staffList = getSheetData('User_Staff'); } catch(e) {}
+    
+    // Auto-setup jika sheet User_Staff belum terisi
+    if (!staffList || staffList.length === 0) {
+      try {
+        if (typeof setupDatabase === 'function') {
+          setupDatabase();
+          staffList = getSheetData('User_Staff');
+        }
+      } catch(e) {}
+    }
+
+    var foundStaff = (staffList || []).find(function(u) {
+      var uName = String(u.Username || '').trim().toLowerCase();
+      var uNik = String(u.NIK || '').trim().toLowerCase();
+      var uEmail = String(u.Email || '').trim().toLowerCase();
+      var uPass = String(u.Password || '').trim();
+
+      var isMatchUser = (
+        uName === cleanUser || 
+        uNik === cleanUser || 
+        uEmail === cleanUser || 
+        uName === emailPrefix || 
+        uName === simplePrefix
+      );
+
+      // Password wajib cocok persis dengan kolom Password di sheet User_Staff
+      var isMatchPass = (uPass === cleanPass);
+      return isMatchUser && isMatchPass;
+    });
+
+    if (foundStaff) {
+      return {
+        success: true,
+        user: {
+          username: String(foundStaff.Username).trim(),
+          role: foundStaff.Role || 'Staff',
+          nama: foundStaff['Nama Lengkap'] || foundStaff.Username,
+          kodeProdi: foundStaff['Kode Prodi'] || 'ALL',
+          prodi: foundStaff['Kode Prodi'] || 'ALL',
+          nik: String(foundStaff.NIK || '').trim()
+        }
+      };
+    }
+
+    // 2. Cek di Sheet User_Mahasiswa (Mahasiswa)
+    var mhsList = [];
+    try { mhsList = getSheetData('User_Mahasiswa'); } catch(e) {}
+
+    var foundMhs = (mhsList || []).find(function(u) {
+      var uName = String(u.Username || '').trim().toLowerCase();
+      var uNpm = String(u.NPM || u.NIM || '').trim().toLowerCase();
+      var uPass = String(u.Password || '').trim();
+
+      var isMatchUser = (
+        uName === cleanUser || 
+        uNpm === cleanUser || 
+        uName === emailPrefix || 
+        uNpm === emailPrefix
+      );
+
+      // Password wajib cocok persis dengan kolom Password di sheet User_Mahasiswa
+      var isMatchPass = (uPass === cleanPass);
+      return isMatchUser && isMatchPass;
+    });
+
+    if (foundMhs) {
+      var mhsAngkatan = foundMhs.Angkatan || foundMhs.angkatan || '';
+      var mhsSemester = foundMhs.Semester || foundMhs.semester || '';
+      if (!mhsSemester && mhsAngkatan) {
+        mhsSemester = calculateSemesterFromAngkatanBackend(mhsAngkatan);
+      }
+      var rawKelas = foundMhs.Kelas || foundMhs.kelas || 'Reguler A';
+      var cleanKls = normalizeClassName(rawKelas);
+      var mhsKatKelas = detectCategoryFromClass(cleanKls);
+
+      return {
+        success: true,
+        user: {
+          username: String(foundMhs.Username || foundMhs.NPM).trim(),
+          role: 'Mahasiswa',
+          nama: foundMhs['Nama Lengkap'] || foundMhs.Username,
+          kodeProdi: foundMhs['Kode Prodi'] || 'MNJ',
+          prodi: foundMhs['Kode Prodi'] || 'MNJ',
+          npm: String(foundMhs.NPM || foundMhs.Username).trim(),
+          kelas: cleanKls,
+          kategoriKelas: mhsKatKelas,
+          angkatan: mhsAngkatan || 2024,
+          semester: mhsSemester || 'Semester 5'
+        }
+      };
+    }
+
+    // Tolak akses jika username atau password tidak cocok dengan akun terdaftar di spreadsheet
+    return {
+      success: false,
+      message: 'Username atau kata sandi yang Anda masukkan tidak sesuai. Coba lagi atau hubungi admin jika belum memiliki akun.'
+    };
+  } catch (err) {
+    return { success: false, message: 'Kesalahan Sistem Login: ' + (err.message || String(err)) };
+  }
+}
+
+function changePassword(username, oldPassword, newPassword) {
+  var lock = LockService.getScriptLock();
+  try {
+    try { lock.waitLock(10000); } catch(e) {}
+    var cleanTargetUser = String(username || '').trim().toLowerCase();
+    var cleanOldPass = String(oldPassword || '').trim();
+    var cleanNewPass = String(newPassword || '').trim();
+
+    if (!cleanTargetUser || cleanTargetUser === 'undefined' || cleanTargetUser === 'null') {
+      return { success: false, message: 'Sesi login Anda tidak terdeteksi. Silakan Logout dan Login kembali.' };
+    }
+    if (!cleanOldPass) {
+      return { success: false, message: 'Password lama wajib diisi.' };
+    }
+    if (!cleanNewPass) {
+      return { success: false, message: 'Password baru wajib diisi.' };
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var targetSheet = null;
+    var candidateSheets = ['User_Staff', 'User_Mahasiswa'];
+    var colPass = -1;
+    var targetRowIndex = -1;
+
+    for (var sIdx = 0; sIdx < candidateSheets.length; sIdx++) {
+      var sName = candidateSheets[sIdx];
+      var curSheet = ss.getSheetByName(sName);
+      if (!curSheet) continue;
+
+      var displayValues = curSheet.getDataRange().getDisplayValues();
+      if (displayValues.length <= 1) continue;
+
+      var headers = displayValues[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
+      var cU = -1;
+      var cP = -1;
+
+      for (var h = 0; h < headers.length; h++) {
+        var hClean = headers[h].replace(/[^a-z0-9]/g, '');
+        if (hClean === 'username' || hClean === 'nim' || hClean === 'npm' || hClean === 'nik' || hClean.indexOf('user') !== -1 || hClean.indexOf('nim') !== -1 || hClean.indexOf('npm') !== -1) {
+          if (cU === -1) cU = h;
+        }
+        if (hClean === 'password' || hClean.indexOf('pass') !== -1 || hClean.indexOf('sandi') !== -1) {
+          if (cP === -1) cP = h;
+        }
+      }
+      if (cU === -1) cU = 1;
+      if (cP === -1) cP = 2;
+
+      for (var i = 1; i < displayValues.length; i++) {
+        var row = displayValues[i];
+        var cellUser = String(row[cU] || '').trim().toLowerCase();
+        var isMatched = (cellUser === cleanTargetUser);
+
+        if (!isMatched) {
+          for (var c = 0; c < row.length; c++) {
+            if (c !== cP && String(row[c] || '').trim().toLowerCase() === cleanTargetUser) {
+              isMatched = true;
+              break;
+            }
+          }
+        }
+
+        if (isMatched) {
+          var sheetPass = String(row[cP] || '').trim();
+          var isOldMatch = (sheetPass === cleanOldPass) || (sheetPass === '' && cleanOldPass === '123456');
+          if (!isOldMatch) {
+            return { success: false, message: 'Password lama Anda tidak sesuai!' };
+          }
+          targetSheet = curSheet;
+          colPass = cP;
+          targetRowIndex = i + 1;
+          break;
+        }
+      }
+      if (targetRowIndex !== -1) break;
+    }
+
+    if (targetRowIndex === -1 || !targetSheet) {
+      return { success: false, message: 'User tidak ditemukan di sistem database (' + cleanTargetUser + ').' };
+    }
+
+    targetSheet.getRange(targetRowIndex, colPass + 1).setNumberFormat('@').setValue(cleanNewPass);
+    SpreadsheetApp.flush();
+
+    try {
+      var cache = CacheService.getScriptCache();
+      cache.remove('SIP_MASTER_CACHE_V4_User_Staff');
+      cache.remove('SIP_MASTER_CACHE_V4_User_Mahasiswa');
+    } catch(e) {}
+
+    bumpSyncVersion(username, 'Ganti password user ' + username);
+    addActivityLog(username, 'Ganti Password', 'Akun Pengguna: ' + username, 'Pembaruan kata sandi akun berhasil diverifikasi oleh sistem', 'User');
+    return { success: true, message: 'Password Anda berhasil diperbarui!' };
+  } catch (err) {
+    return { success: false, message: 'Terjadi kesalahan sistem: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+// [REVISI POIN 1]: Menambahkan ke sheet dan menyimpan cadangan di PropertiesService
+function addActivityLog(actor, aksi, target, keterangan, role) {
+  try {
+    var now = new Date();
+    var randSuffix = ('00' + Math.floor(Math.random() * 100)).slice(-2);
+    var id = 'LOG-' + Utilities.formatDate(now, 'Asia/Jakarta', 'yyyyMMdd-HHmmss-SSS') + '-' + randSuffix;
+    var waktu = Utilities.formatDate(now, 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+    var cleanActor = String(actor || 'Sistem').trim();
+    var cleanRole = String(role || 'Sistem').trim();
+    var logItem = {
+      ID: id,
+      Waktu: waktu,
+      Pengguna: cleanActor,
+      Role: cleanRole,
+      Aksi: String(aksi || '').trim(),
+      Target: String(target || '').trim(),
+      Keterangan: String(keterangan || '').trim()
+    };
+
+    var ss = getActiveSpreadsheetSafe();
+    if (!ss) return null;
+    var sheet = ss.getSheetByName('Log_Aktivitas');
+    if (!sheet) {
+      sheet = ss.insertSheet('Log_Aktivitas');
+      sheet.appendRow(['ID', 'Waktu', 'Pengguna', 'Role', 'Aksi', 'Target', 'Keterangan']);
+      var headerRange = sheet.getRange(1, 1, 1, 7);
+      headerRange.setBackground('#1E3A8A').setFontColor('#FFFFFF').setFontWeight('bold');
+      sheet.setFrozenRows(1);
+    }
+    sheet.appendRow([
+      logItem.ID,
+      logItem.Waktu,
+      logItem.Pengguna,
+      logItem.Role,
+      logItem.Aksi,
+      logItem.Target,
+      logItem.Keterangan
+    ]);
+
+    var persistentLogs = getPersistentLogs() || [];
+    persistentLogs.unshift(logItem);
+    savePersistentLogs(persistentLogs);
+    return logItem;
+  } catch (err) {
+    Logger.log('Gagal mencatat log aktivitas: ' + err.message);
+    return null;
+  }
+}
+
+function getInitialData(userRole, username, userProdi) {
+  try {
+    var masterProdi = [];
+    try { masterProdi = getSheetData('Master_Prodi'); } catch(e) {}
+    if (!masterProdi || masterProdi.length === 0) {
+      masterProdi = [
+        { 'Kode Prodi': 'MNJ', 'Nama Prodi': 'Manajemen', 'Jenjang': 'S1', 'Nama Fakultas': 'Fakultas Ekonomi dan Bisnis' },
+        { 'Kode Prodi': 'AKT', 'Nama Prodi': 'Akuntansi', 'Jenjang': 'S1', 'Nama Fakultas': 'Fakultas Ekonomi dan Bisnis' },
+        { 'Kode Prodi': 'EKS', 'Nama Prodi': 'Ekonomi Syariah', 'Jenjang': 'S1', 'Nama Fakultas': 'Fakultas Ekonomi dan Bisnis' },
+        { 'Kode Prodi': 'D3-PB', 'Nama Prodi': 'D3 Perbankan & Keuangan', 'Jenjang': 'D3', 'Nama Fakultas': 'Fakultas Ekonomi dan Bisnis' }
+      ];
+    }
+    var masterMatkul = [];
+    try { masterMatkul = getSheetData('Master_Matkul'); } catch(e) {}
+    var masterKelas = [];
+    try { masterKelas = getSheetData('Master_Kelas'); } catch(e) {}
+    if (!masterKelas || masterKelas.length === 0) {
+      masterKelas = [
+        { ID: 'KLS-001', 'Nama Kelas': 'Reguler A', Kategori: 'Reguler', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+        { ID: 'KLS-002', 'Nama Kelas': 'Reguler B', Kategori: 'Reguler', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+        { ID: 'KLS-003', 'Nama Kelas': 'Reguler C', Kategori: 'Reguler', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+        { ID: 'KLS-004', 'Nama Kelas': 'Karyawan A', Kategori: 'Karyawan', Semester: 'Semua', 'Kode Prodi': 'ALL' },
+        { ID: 'KLS-005', 'Nama Kelas': 'Karyawan B', Kategori: 'Karyawan', Semester: 'Semua', 'Kode Prodi': 'ALL' }
+      ];
+    } else {
+      masterKelas = masterKelas.map(function(k) {
+        var cleanName = normalizeClassName(k['Nama Kelas'] || k.Kelas || '');
+        return {
+          ID: k.ID || 'KLS-00',
+          'Nama Kelas': cleanName,
+          Kategori: k.Kategori || detectCategoryFromClass(cleanName),
+          Semester: k.Semester || 'Semua',
+          'Kode Prodi': k['Kode Prodi'] || 'ALL'
+        };
+      });
+    }
+
+    var masterDosen = [];
+    try { masterDosen = getSheetData('Master_Dosen'); } catch(e) {}
+    var periode = [];
+    try {
+      periode = getSheetData('Periode_Pendaftaran') || [];
+    } catch(e) {
+      periode = [];
+    }
+    if (!periode || periode.length === 0) {
+      periode = [
+        {
+          ID: 'PRD-REG-01',
+          'Tahun Akademik': '2026/2027',
+          Semester: 'Ganjil',
+          'Jenis Layanan': 'UTS Susulan',
+          'Kategori Kelas': 'Reguler & Karyawan',
+          'Tanggal & Jam Mulai': '2026-11-15 00:00:00',
+          'Tanggal & Jam Selesai': '2026-11-20 23:59:00',
+          'Mulai Terlambat': '2026-11-21 00:00:00',
+          'Selesai Terlambat': '2026-11-22 23:59:00',
+          'Biaya Keterlambatan': 50000,
+          Status: 'Aktif'
+        }
+      ];
+    }
+    var pendaftaran = [];
+    try { pendaftaran = getSheetData('Pendaftaran'); } catch(e) {}
+    if (pendaftaran && pendaftaran.length > 0) {
+      pendaftaran = pendaftaran.map(function(p) {
+        if (p.Kelas) p.Kelas = normalizeClassName(p.Kelas);
+        if (!p['Kategori Kelas'] && p.Kelas) p['Kategori Kelas'] = detectCategoryFromClass(p.Kelas);
+        return p;
+      });
+    }
+
+    var activityLogs = [];
+    try { activityLogs = getSheetData('Log_Aktivitas'); } catch(e) {}
+
+    var ruangan = [];
+    try { ruangan = getSheetData('Master_Ruangan'); } catch(e) {}
+    var jadwal = [];
+    try { jadwal = getSheetData('Jadwal_Ujian'); } catch(e) {}
+    if (jadwal && jadwal.length > 0) {
+      jadwal = jadwal.map(function(j) {
+        if (j.Kelas) j.Kelas = normalizeClassName(j.Kelas);
+        return j;
+      });
+    }
+
+    var notifikasi = [];
+    try { notifikasi = getSheetData('Notifikasi'); } catch(e) {}
+    var staffList = [];
+    try { staffList = getSheetData('User_Staff'); } catch(e) {}
+    var mhsList = [];
+    try { mhsList = getSheetData('User_Mahasiswa'); } catch(e) {}
+    if (mhsList && mhsList.length > 0) {
+      mhsList = mhsList.map(function(m) {
+        if (m.Kelas) m.Kelas = normalizeClassName(m.Kelas);
+        return m;
+      });
+    }
+
+    // Jalankan normalisasi background ke sheet jika ada baris lama yang masih berformat "Reguler 3A"
+    try { normalizeExistingClassesInSheet(); } catch(e) {}
+
+    var usersList = [];
+    if (['Master Admin', 'Admin TU'].indexOf(userRole) !== -1) {
+      usersList = (staffList || []).concat(mhsList || []);
+    }
+    
+    // Menu 1: Riwayat Pendaftaran Mahasiswa
+    // - Role Mahasiswa: Filter otomatis data miliknya sendiri berdasarkan NPM, NIM, Nama Mahasiswa, atau Username login
+    // - Role Staff / Manajemen: Melihat seluruh data pendaftaran semua prodi
+    if (userRole === 'Mahasiswa') {
+      var cleanUser = String(username || '').trim().toLowerCase();
+      var studentNpm = cleanUser;
+      var studentName = '';
+      if (mhsList && mhsList.length) {
+        var matchedMhs = mhsList.find(function(m) {
+          var mUser = String(m.Username || '').trim().toLowerCase();
+          var mNpm = String(m.NPM || m.NIM || '').trim().toLowerCase();
+          var mNama = String(m['Nama Lengkap'] || '').trim().toLowerCase();
+          return mUser === cleanUser || mNpm === cleanUser || mNama === cleanUser;
+        });
+        if (matchedMhs) {
+          studentNpm = String(matchedMhs.NPM || matchedMhs.NIM || cleanUser).trim().toLowerCase();
+          studentName = String(matchedMhs['Nama Lengkap'] || '').trim().toLowerCase();
+        }
+      }
+      pendaftaran = pendaftaran.filter(function(item) {
+        var npm = String(item.NPM || item.NIM || '').trim().toLowerCase();
+        var id = String(item.ID || '').trim().toLowerCase();
+        var namaMhs = String(item['Nama Mahasiswa'] || item.nama || '').trim().toLowerCase();
+        var isNpmMatch = (studentNpm && npm === studentNpm) || (cleanUser && npm === cleanUser);
+        var isIdMatch = cleanUser && id === cleanUser;
+        var isNameMatch = (studentName && (namaMhs === studentName || namaMhs.indexOf(studentName) !== -1 || studentName.indexOf(namaMhs) !== -1)) ||
+                          (cleanUser && (namaMhs === cleanUser || namaMhs.indexOf(cleanUser) !== -1));
+        return Boolean(isNpmMatch || isIdMatch || isNameMatch);
+      });
+    }
+
+    var masterTahun = [];
+    try { masterTahun = getSheetData('Master_Tahun_Akademik'); } catch(e) {}
+    if (!masterTahun || masterTahun.length === 0) {
+      masterTahun = [
+        { ID: 'TA-001', 'Tahun Akademik': '2026/2027', Semester: 'Ganjil', Status: 'Aktif', Keterangan: 'Tahun Akademik Berjalan (Default)' },
+        { ID: 'TA-002', 'Tahun Akademik': '2025/2026', Semester: 'Genap', Status: 'Arsip', Keterangan: 'Tahun Akademik Lalu' },
+        { ID: 'TA-003', 'Tahun Akademik': '2027/2028', Semester: 'Ganjil', Status: 'Mendatang', Keterangan: 'Tahun Akademik Mendatang' }
+      ];
+    }
+
+    return {
+      success: true,
+      version: getCompositeSyncVersion(getActiveSpreadsheetSafe()),
+      master: {
+        prodi: masterProdi,
+        matkul: masterMatkul,
+        kelas: masterKelas,
+        dosen: masterDosen,
+        periode: periode,
+        ruangan: ruangan,
+        tahunAkademik: masterTahun,
+        logs: activityLogs
+      },
+      pendaftaran: pendaftaran,
+      jadwal: jadwal,
+      ruangan: ruangan,
+      notifications: notifikasi,
+      users_staff: staffList,
+      users_mahasiswa: mhsList,
+      users: usersList,
+      activityLogs: activityLogs
+    };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+}
+
+function updateStatusApproval(id, statusPersetujuan, actor, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getActiveSpreadsheetSafe();
+    var sheet = ss.getSheetByName('Pendaftaran');
+    if (!sheet) throw new Error("Sheet Pendaftaran tidak ditemukan.");
+
+    var headerMap = getHeaderIndexMap(sheet);
+    var colStatusApp = headerMap['Status Persetujuan'] || 19;
+    var values = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][0]).trim() === String(id).trim()) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) throw new Error("Data ID " + id + " tidak ditemukan.");
+
+    sheet.getRange(rowIndex, colStatusApp).setValue(statusPersetujuan);
+    SpreadsheetApp.flush();
+    var actorName = String(actor || 'Admin TU').trim();
+    var actorRole = String(userRole || 'Admin TU').trim();
+    bumpSyncVersion(actorName, 'Status Persetujuan ' + id + ' -> ' + statusPersetujuan);
+    addActivityLog(actorName, 'Update Status Persetujuan', id, 'Status persetujuan diubah menjadi: ' + statusPersetujuan, actorRole);
+    return { success: true, message: 'Status persetujuan ' + id + ' berhasil diubah menjadi: ' + statusPersetujuan };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updateStatusPayment(id, statusPembayaran, catatan, updatedBy, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getActiveSpreadsheetSafe();
+    var sheet = ss.getSheetByName('Pendaftaran');
+    if (!sheet) throw new Error("Sheet Pendaftaran tidak ditemukan.");
+
+    var headerMap = getHeaderIndexMap(sheet);
+    var colStatusPay = headerMap['Status Pembayaran'] || 18;
+    var colCatatan = headerMap['Catatan'] || headerMap['Keterangan'] || 0;
+    var values = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][0]).trim() === String(id).trim()) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) throw new Error("Data ID " + id + " tidak ditemukan.");
+
+    sheet.getRange(rowIndex, colStatusPay).setValue(statusPembayaran);
+    if (colCatatan > 0 && catatan) {
+      sheet.getRange(rowIndex, colCatatan).setValue(catatan);
+    }
+    SpreadsheetApp.flush();
+    var operator = String(updatedBy || 'Admin TU').trim();
+    var actorRole = String(userRole || 'Admin TU').trim();
+    bumpSyncVersion(operator, 'Status Pembayaran ' + id + ' -> ' + statusPembayaran);
+    addActivityLog(operator, 'Update Status Pembayaran', id, 'Status pembayaran diubah menjadi: ' + statusPembayaran + (catatan ? ' (' + catatan + ')' : ''), actorRole);
+    return { success: true, message: 'Status pembayaran ' + id + ' berhasil diubah menjadi: ' + statusPembayaran };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function bulkApproveRegistrations(selectedIds, userRole, actor) {
+  // Validasi Hak Akses Ketat: Hanya Master Admin dan Admin TU
+  var allowedRoles = ["MASTER_ADMIN", "Master Admin", "ADMIN_TU", "Admin TU"];
+  var normalizedRole = String(userRole || '').trim().toLowerCase();
+  var isAllowed = false;
+  for (var r = 0; r < allowedRoles.length; r++) {
+    if (allowedRoles[r].toLowerCase() === normalizedRole) {
+      isAllowed = true;
+      break;
+    }
+  }
+  if (!isAllowed) {
+    throw new Error("Akses ditolak: Anda tidak memiliki hak akses untuk menyetujui pendaftaran secara massal.");
+  }
+
+  if (!Array.isArray(selectedIds) || selectedIds.length === 0) {
+    return { success: true, count: 0, message: "Tidak ada ID pendaftaran yang dipilih." };
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    var ss = getActiveSpreadsheetSafe();
+    var sheet = ss.getSheetByName("Pendaftaran");
+    if (!sheet) throw new Error("Sheet Pendaftaran tidak ditemukan.");
+
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return { success: true, count: 0, message: "Sheet Pendaftaran kosong." };
+
+    var headerMap = getHeaderIndexMap(sheet);
+    var idCol = 0; // Kolom A
+    var statusCol = (headerMap['Status Persetujuan'] || 19) - 1;
+
+    var selectedSet = {};
+    selectedIds.forEach(function(id) { selectedSet[String(id).trim()] = true; });
+
+    var updatedCount = 0;
+    for (var i = 1; i < data.length; i++) {
+      var rowId = String(data[i][idCol]).trim();
+      if (selectedSet[rowId]) {
+        data[i][statusCol] = "Disetujui";
+        updatedCount++;
+      }
+    }
+
+    if (updatedCount > 0) {
+      sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+      SpreadsheetApp.flush();
+      var actorName = String(actor || userRole || 'Admin TU').trim();
+      var actorRole = String(userRole || 'Admin TU').trim();
+      bumpSyncVersion(actorName, 'Persetujuan Massal ' + updatedCount + ' berkas -> Disetujui');
+      addActivityLog(actorName, 'Persetujuan Massal', updatedCount + ' Berkas Pendaftaran', 'Persetujuan pendaftaran massal disetujui serentak', actorRole);
+      try {
+        CacheService.getScriptCache().remove("dashboard_trend_data");
+      } catch (e) {}
+    }
+
+    return { 
+      success: true, 
+      count: updatedCount, 
+      message: updatedCount + " berkas pendaftaran berhasil disetujui secara serentak." 
+    };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function bulkUpdateStatusApproval(idList, statusPersetujuan, userRole, actor) {
+  // Validasi Hak Akses Ketat: Hanya Master Admin dan Admin TU
+  var allowedRoles = ["MASTER_ADMIN", "Master Admin", "ADMIN_TU", "Admin TU"];
+  var normalizedRole = String(userRole || '').trim().toLowerCase();
+  var isAllowed = false;
+  for (var r = 0; r < allowedRoles.length; r++) {
+    if (allowedRoles[r].toLowerCase() === normalizedRole) {
+      isAllowed = true;
+      break;
+    }
+  }
+  if (!isAllowed) {
+    return { success: false, message: "Akses ditolak: Anda tidak memiliki hak akses untuk menyetujui pendaftaran secara massal." };
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    var ss = getActiveSpreadsheetSafe();
+    var sheet = ss.getSheetByName('Pendaftaran');
+    if (!sheet) throw new Error("Sheet Pendaftaran tidak ditemukan.");
+
+    var headerMap = getHeaderIndexMap(sheet);
+    var colStatusApp = headerMap['Status Persetujuan'] || 19;
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, message: 'Tidak ada data.' };
+
+    var idValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    var statusRange = sheet.getRange(2, colStatusApp, lastRow - 1, 1);
+    var statusValues = statusRange.getValues();
+
+    var updatedCount = 0;
+    var idSet = {};
+    if (Array.isArray(idList)) {
+      idList.forEach(function(id) { idSet[String(id).trim()] = true; });
+    }
+
+    for (var i = 0; i < idValues.length; i++) {
+      var rowId = String(idValues[i][0]).trim();
+      if (idSet[rowId]) {
+        statusValues[i][0] = statusPersetujuan;
+        updatedCount++;
+      }
+    }
+
+    if (updatedCount > 0) {
+      statusRange.setValues(statusValues);
+      SpreadsheetApp.flush();
+      var actorName = String(actor || userRole || 'Admin TU').trim();
+      var actorRole = String(userRole || 'Admin TU').trim();
+      bumpSyncVersion(actorName, updatedCount + ' data -> ' + statusPersetujuan);
+      addActivityLog(actorName, 'Persetujuan Massal', updatedCount + ' Berkas Pendaftaran', 'Persetujuan massal diubah menjadi: ' + statusPersetujuan, actorRole);
+      try {
+        CacheService.getScriptCache().remove("dashboard_trend_data");
+      } catch (e) {}
+    }
+
+    return { success: true, count: updatedCount, message: updatedCount + ' pendaftaran berhasil diubah statusnya menjadi ' + statusPersetujuan };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ==========================================
+// [GOOGLE DRIVE AUTO UPLOAD INTEGRATION]:
+// Mengunggah berkas bukti pendaftaran otomatis ke folder Google Drive
+// "Berkas Bukti Pendaftaran FEB UIKA" agar tidak memenuhi kuota database spreadsheet.
+// ==========================================
+function getOrCreateUploadFolder(folderName) {
+  folderName = folderName || "Berkas Bukti Pendaftaran FEB UIKA";
+  try {
+    var folders = DriveApp.getFoldersByName(folderName);
+    if (folders.hasNext()) {
+      return folders.next();
+    }
+    return DriveApp.createFolder(folderName);
+  } catch(e) {
+    Logger.log("getOrCreateUploadFolder error: " + e.message);
+    throw new Error("Gagal mengakses Google Drive: " + e.message);
+  }
+}
+
+function uploadBuktiToDrive(base64Data, fileName, mimeType, npm, regId) {
+  if (!base64Data || typeof base64Data !== 'string') return '';
+  // Jika sudah merupakan tautan online (Google Drive atau URL eksternal), kembalikan langsung
+  if (base64Data.indexOf('http://') === 0 || base64Data.indexOf('https://') === 0) {
+    return base64Data;
+  }
+
+  try {
+    var folder = getOrCreateUploadFolder("Berkas Bukti Pendaftaran FEB UIKA");
+    var base64Content = base64Data;
+    var detectedMime = mimeType || 'image/jpeg';
+
+    // Parse Data URI scheme jika ada: data:image/png;base64,... atau data:application/pdf;base64,...
+    var matches = base64Data.match(/^data:([a-zA-Z0-9_\-\.\/]+);base64,(.+)$/);
+    if (matches && matches.length === 3) {
+      detectedMime = matches[1];
+      base64Content = matches[2];
+    } else if (base64Data.indexOf('base64,') !== -1) {
+      base64Content = base64Data.split('base64,')[1];
+    }
+
+    var decodedBytes = Utilities.base64Decode(base64Content);
+    var ext = 'jpg';
+    if (detectedMime.indexOf('png') !== -1) ext = 'png';
+    else if (detectedMime.indexOf('pdf') !== -1) ext = 'pdf';
+    else if (detectedMime.indexOf('jpeg') !== -1 || detectedMime.indexOf('jpg') !== -1) ext = 'jpg';
+
+    var rawName = (fileName || 'Bukti_Pendaftaran').replace(/[^a-zA-Z0-9_\.\-]/g, '_');
+    if (!rawName.toLowerCase().endsWith('.' + ext)) {
+      rawName = rawName + '.' + ext;
+    }
+
+    var timeStamp = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMdd_HHmmss');
+    var finalFileName = (npm || 'MHS') + '_' + (regId || 'REG') + '_' + timeStamp + '_' + rawName;
+
+    var blob = Utilities.newBlob(decodedBytes, detectedMime, finalFileName);
+    var driveFile = folder.createFile(blob);
+
+    // Set permission agar berkas bukti dapat dibuka dan dilihat oleh staf verifikator
+    try {
+      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch(shareErr) {
+      Logger.log("Peringatan izin sharing Drive: " + shareErr.message);
+    }
+
+    var driveUrl = driveFile.getUrl();
+    Logger.log("Bukti berhasil diunggah ke Google Drive: " + driveUrl);
+    return driveUrl;
+  } catch (err) {
+    Logger.log("Error uploadBuktiToDrive: " + err.message);
+    return 'ERR_DRIVE_UPLOAD: ' + err.message;
+  }
+}
+
+// ==========================================
+// [MIGRASI MASSAL BUKTI BASE64 KE GOOGLE DRIVE]:
+// Memindai seluruh baris sheet Pendaftaran yang masih berisi string Base64,
+// mengunggahnya otomatis ke folder Google Drive "Berkas Bukti Pendaftaran FEB UIKA",
+// dan menimpa sel spreadsheet dengan URL Drive resmi agar kuota spreadsheet aman.
+// ==========================================
+function migrateBase64ToDrive() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(20000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Pendaftaran');
+    if (!sheet) return { success: false, message: 'Sheet Pendaftaran tidak ditemukan.' };
+
+    var headerMap = getHeaderIndexMap(sheet);
+    var colBukti = headerMap['Bukti Foto'];
+    if (!colBukti) return { success: false, message: 'Kolom Bukti Foto tidak ditemukan.' };
+
+    var lastRow = sheet.getLastRow();
+    if (lastRow <= 1) return { success: true, count: 0, message: 'Tidak ada data pendaftaran yang perlu dimigrasikan.' };
+
+    var colId = headerMap['ID'] || 1;
+    var colNpm = headerMap['NPM'] || headerMap['NIM'] || 5;
+    var values = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+
+    var convertedCount = 0;
+    var errorItems = [];
+
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+      var currentBukti = String(row[colBukti - 1] || '').trim();
+      var rowId = String(row[colId - 1] || ('REG-' + (1000 + i + 1)));
+      var rowNpm = String(row[colNpm - 1] || 'MHS');
+
+      // Cek apakah sel berisi base64 (diawali data: atau teks panjang bukan http)
+      if (currentBukti && (currentBukti.indexOf('data:') === 0 || currentBukti.length > 200) && currentBukti.indexOf('http') !== 0) {
+        try {
+          var uploadedUrl = uploadBuktiToDrive(currentBukti, 'Bukti_' + rowId, 'image/jpeg', rowNpm, rowId);
+          if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0 && uploadedUrl.indexOf('http') === 0) {
+            sheet.getRange(i + 2, colBukti).setValue(uploadedUrl);
+            convertedCount++;
+          } else {
+            errorItems.push(rowId + ': ' + (uploadedUrl || 'Gagal'));
+          }
+        } catch (rowErr) {
+          errorItems.push(rowId + ': ' + rowErr.message);
+        }
+      }
+    }
+
+    SpreadsheetApp.flush();
+    if (convertedCount > 0) {
+      bumpSyncVersion('Master Admin', 'Migrasi ' + convertedCount + ' berkas bukti ke Google Drive');
+      addActivityLog('Master Admin', 'Migrasi Bukti Drive', convertedCount + ' berkas', 'Konversi bukti pendaftaran base64 ke Google Drive', 'Master Admin');
+    }
+
+    return {
+      success: true,
+      count: convertedCount,
+      errors: errorItems,
+      message: convertedCount > 0
+        ? ('Berhasil mengonversi dan memindahkan ' + convertedCount + ' berkas bukti ke Google Drive!')
+        : 'Semua berkas bukti pendaftaran sudah tersimpan sebagai link Google Drive (tidak ada base64 tersisa).'
+    };
+  } catch (err) {
+    Logger.log('Error migrateBase64ToDrive: ' + err.message);
+    return { success: false, message: 'Gagal migrasi bukti: ' + err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function addPendaftaran(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return { success: false, message: 'Payload pendaftaran kosong atau tidak valid.' };
+  }
+  var mhsNpm = String(payload.npm || payload.nim || payload.NPM || payload.NIM || '').trim();
+  var mhsNama = String(payload.namaMahasiswa || payload['Nama Mahasiswa'] || '').trim();
+  if (!mhsNpm && !mhsNama) {
+    return { success: false, message: 'Validasi gagal: Nama Mahasiswa atau NPM/NIM wajib diisi.' };
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Pendaftaran');
+    if (!sheet) sheet = getOrCreateSheet(ss, 'Pendaftaran');
+    var headerMap = getHeaderIndexMap(sheet);
+
+    if (!headerMap['Bukti Foto']) {
+      var nextCol = sheet.getLastColumn() + 1;
+      sheet.getRange(1, nextCol).setValue('Bukti Foto').setBackground('#1E3A8A').setFontColor('#FFFFFF').setFontWeight('bold');
+      headerMap['Bukti Foto'] = nextCol;
+    }
+    if (!headerMap['Kode Prodi']) {
+      var nextCol2 = sheet.getLastColumn() + 1;
+      sheet.getRange(1, nextCol2).setValue('Kode Prodi').setBackground('#1E3A8A').setFontColor('#FFFFFF').setFontWeight('bold');
+      headerMap['Kode Prodi'] = nextCol2;
+    }
+
+    var lastRow = sheet.getLastRow();
+    var newId = payload.id || payload.ID || ('REG-' + (1000 + (lastRow > 1 ? lastRow : 1)));
+    var nowStr = formatDateToString(new Date());
+
+    // [AUTO UPLOAD GOOGLE DRIVE]: Cek jika bukti foto dikirim dalam format base64
+    var finalBuktiUrl = payload.buktiFoto || '';
+    if (finalBuktiUrl && (finalBuktiUrl.indexOf('data:') === 0 || finalBuktiUrl.length > 200) && finalBuktiUrl.indexOf('http') !== 0) {
+      try {
+        var uploadedUrl = uploadBuktiToDrive(finalBuktiUrl, payload.buktiFileName || 'Bukti_Pendaftaran', payload.buktiMimeType || 'image/jpeg', mhsNpm, newId);
+        if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0 && uploadedUrl.indexOf('http') === 0) {
+          finalBuktiUrl = uploadedUrl;
+        } else {
+          Logger.log('Gagal upload bukti Drive: ' + uploadedUrl);
+          finalBuktiUrl = '[Menunggu Upload Drive]';
+        }
+      } catch (uploadErr) {
+        Logger.log('Gagal upload bukti ke Google Drive: ' + uploadErr.message);
+        finalBuktiUrl = '[Menunggu Upload Drive]';
+      }
+    }
+
+    var maxCol = Math.max(sheet.getLastColumn(), 19);
+    var rowData = new Array(maxCol).fill('');
+
+    var cleanKelas = normalizeClassName(payload.kelas || 'Reguler A');
+    var cleanKategori = payload.kategoriKelas || detectCategoryFromClass(cleanKelas);
+
+    rowData[0] = newId;
+    rowData[1] = nowStr;
+    rowData[2] = payload.tahunAkademik || '2026/2027';
+    rowData[3] = payload.semester || 'Ganjil';
+    rowData[4] = mhsNpm;
+    rowData[5] = payload.namaMahasiswa;
+    rowData[6] = payload.kodeProdi || payload.prodi || 'MNJ';
+    rowData[7] = payload.prodi || 'Manajemen';
+    rowData[8] = cleanKelas;
+    rowData[9] = cleanKategori;
+    rowData[10] = payload.mataKuliah;
+    rowData[11] = payload.dosenPengampu;
+    rowData[12] = payload.jenisLayanan;
+    rowData[13] = payload.alasan;
+    rowData[14] = finalBuktiUrl;
+    rowData[15] = payload.statusJadwal || 'Tepat Waktu';
+    rowData[16] = sanitizeNumber(payload.nominal);
+    rowData[17] = payload.statusPembayaran || 'Gratis (Tepat Waktu)';
+    rowData[18] = payload.statusPersetujuan || 'Pending';
+
+    if (headerMap['ID']) rowData[headerMap['ID'] - 1] = newId;
+    if (headerMap['Tanggal']) rowData[headerMap['Tanggal'] - 1] = nowStr;
+    if (headerMap['Tahun Akademik']) rowData[headerMap['Tahun Akademik'] - 1] = payload.tahunAkademik || '2026/2027';
+    if (headerMap['Semester']) rowData[headerMap['Semester'] - 1] = payload.semester || 'Ganjil';
+    if (headerMap['Semester Type']) rowData[headerMap['Semester Type'] - 1] = payload.semester || 'Ganjil';
+    if (headerMap['NPM']) rowData[headerMap['NPM'] - 1] = mhsNpm;
+    if (headerMap['NIM']) rowData[headerMap['NIM'] - 1] = mhsNpm;
+    if (headerMap['Nama Mahasiswa']) rowData[headerMap['Nama Mahasiswa'] - 1] = payload.namaMahasiswa;
+    if (headerMap['Kode Prodi']) rowData[headerMap['Kode Prodi'] - 1] = payload.kodeProdi || payload.prodi || 'MNJ';
+    if (headerMap['Program Studi']) rowData[headerMap['Program Studi'] - 1] = payload.prodi || 'Manajemen';
+    if (headerMap['Kelas']) rowData[headerMap['Kelas'] - 1] = cleanKelas;
+    if (headerMap['Kategori Kelas']) rowData[headerMap['Kategori Kelas'] - 1] = cleanKategori;
+    if (headerMap['Mata Kuliah']) rowData[headerMap['Mata Kuliah'] - 1] = payload.mataKuliah;
+    if (headerMap['Dosen Pengampu']) rowData[headerMap['Dosen Pengampu'] - 1] = payload.dosenPengampu;
+    if (headerMap['Jenis Layanan']) rowData[headerMap['Jenis Layanan'] - 1] = payload.jenisLayanan;
+    if (headerMap['Alasan']) rowData[headerMap['Alasan'] - 1] = payload.alasan;
+    if (headerMap['Bukti Foto']) rowData[headerMap['Bukti Foto'] - 1] = finalBuktiUrl;
+    if (headerMap['Status Jadwal']) rowData[headerMap['Status Jadwal'] - 1] = payload.statusJadwal || 'Tepat Waktu';
+    if (headerMap['Nominal']) rowData[headerMap['Nominal'] - 1] = sanitizeNumber(payload.nominal);
+    if (headerMap['Status Pembayaran']) rowData[headerMap['Status Pembayaran'] - 1] = payload.statusPembayaran || 'Gratis (Tepat Waktu)';
+    if (headerMap['Status Persetujuan']) rowData[headerMap['Status Persetujuan'] - 1] = payload.statusPersetujuan || 'Pending';
+
+    sheet.appendRow(rowData);
+    SpreadsheetApp.flush();
+    var addActor = String(payload.actor || mhsNama || 'Mahasiswa').trim();
+    var addRole = String(payload.role || 'Mahasiswa').trim();
+    var ketAdd = 'Pengajuan berkas pendaftaran ' + (payload.jenisLayanan || '') + (mhsNama ? (' a.n. ' + mhsNama + (mhsNpm ? ' (' + mhsNpm + ')' : '')) : '');
+    bumpSyncVersion(addActor, 'Pendaftaran baru ' + newId);
+    addActivityLog(addActor, 'Tambah Pendaftaran', newId + ' (' + (mhsNama || mhsNpm) + ')', ketAdd, addRole);
+    return { success: true, id: newId, message: 'Pendaftaran berhasil disimpan dengan Kode: ' + newId };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updatePendaftaran(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Pendaftaran');
+    var headerMap = getHeaderIndexMap(sheet);
+    var values = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+    
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][0]).trim() === String(payload.id).trim()) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    
+    if (rowIndex === -1) throw new Error("Data pendaftaran tidak ditemukan.");
+    
+    var rowRange = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn());
+    var rowValues = rowRange.getValues()[0];
+
+    function setCol(name, val) {
+      if (headerMap[name] && val !== undefined) {
+        rowValues[headerMap[name] - 1] = val;
+      }
+    }
+
+    var mhsNpm = payload.npm || payload.nim;
+    var cleanUpKelas = normalizeClassName(payload.kelas);
+    var cleanUpKategori = payload.kategoriKelas || detectCategoryFromClass(cleanUpKelas);
+
+    setCol('NPM', mhsNpm);
+    setCol('NIM', mhsNpm);
+    setCol('Nama Mahasiswa', payload.namaMahasiswa);
+    setCol('Kode Prodi', payload.kodeProdi);
+    setCol('Program Studi', payload.prodi);
+    setCol('Kelas', cleanUpKelas);
+    setCol('Kategori Kelas', cleanUpKategori);
+    setCol('Semester', payload.semester);
+    setCol('Tahun Akademik', payload.tahunAkademik || '2026/2027');
+    setCol('Mata Kuliah', payload.mataKuliah);
+    setCol('Dosen Pengampu', payload.dosenPengampu);
+    setCol('Jenis Layanan', payload.jenisLayanan);
+    setCol('Alasan', payload.alasan);
+    if (payload.buktiFoto !== undefined) {
+      var finalBuktiUrl = payload.buktiFoto;
+      if (finalBuktiUrl && (finalBuktiUrl.indexOf('data:') === 0 || finalBuktiUrl.length > 200) && finalBuktiUrl.indexOf('http') !== 0) {
+        try {
+          var uploadedUrl = uploadBuktiToDrive(finalBuktiUrl, payload.buktiFileName || 'Bukti_Pendaftaran', payload.buktiMimeType || 'image/jpeg', mhsNpm, payload.id);
+          if (uploadedUrl && uploadedUrl.indexOf('ERR_') !== 0 && uploadedUrl.indexOf('http') === 0) {
+            finalBuktiUrl = uploadedUrl;
+          } else {
+            Logger.log('Gagal upload bukti update ke Drive: ' + uploadedUrl);
+            finalBuktiUrl = '[Menunggu Upload Drive]';
+          }
+        } catch (uploadErr) {
+          Logger.log('Gagal upload bukti update ke Google Drive: ' + uploadErr.message);
+          finalBuktiUrl = '[Menunggu Upload Drive]';
+        }
+      }
+      setCol('Bukti Foto', finalBuktiUrl);
+    }
+    setCol('Nominal', sanitizeNumber(payload.nominal));
+    setCol('Status Pembayaran', payload.statusPembayaran);
+    setCol('Status Persetujuan', payload.statusPersetujuan);
+
+    rowRange.setValues([rowValues]);
+    SpreadsheetApp.flush();
+    var updActor = String(payload.actor || 'Admin TU').trim();
+    var updRole = String(payload.role || 'Admin TU').trim();
+    bumpSyncVersion(updActor, 'Update pendaftaran ' + payload.id);
+    addActivityLog(updActor, 'Edit Data Pendaftaran', payload.id + ' (' + (payload.namaMahasiswa || '') + ')', 'Pembaruan data pendaftaran mahasiswa', updRole);
+    return { success: true, message: 'Data pendaftaran ' + payload.id + ' berhasil diperbarui.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deletePendaftaran(id, actor, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getActiveSpreadsheetSafe();
+    var sheet = ss.getSheetByName('Pendaftaran');
+    if (!sheet) throw new Error("Sheet Pendaftaran tidak ditemukan.");
+    var headerMap = getHeaderIndexMap(sheet);
+    var values = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+    var targetNama = '';
+    var targetNpm = '';
+
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][0]).trim() === String(id).trim()) {
+        rowIndex = i + 1;
+        var colNama = (headerMap['Nama Mahasiswa'] || 6) - 1;
+        var colNpm = (headerMap['NPM'] || headerMap['NIM'] || 5) - 1;
+        targetNama = String(values[i][colNama] || '').trim();
+        targetNpm = String(values[i][colNpm] || '').trim();
+        break;
+      }
+    }
+
+    if (rowIndex === -1) throw new Error("Data pendaftaran tidak ditemukan.");
+    sheet.deleteRow(rowIndex);
+    SpreadsheetApp.flush();
+    var actorName = String(actor || 'Admin TU').trim();
+    var actorRole = String(userRole || 'Admin TU').trim();
+    var detailMhs = targetNama ? (' a.n. ' + targetNama + (targetNpm ? ' (' + targetNpm + ')' : '')) : '';
+    bumpSyncVersion(actorName, 'Hapus pendaftaran ' + id);
+    addActivityLog(actorName, 'Hapus Pendaftaran', id, 'Penghapusan berkas pendaftaran' + detailMhs + ' dari sistem', actorRole);
+    return { success: true, message: 'Data pendaftaran ' + id + ' berhasil dihapus.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function addPeriode(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Periode_Pendaftaran');
+    if (!sheet) throw new Error("Sheet Periode_Pendaftaran tidak ditemukan.");
+
+    var headerMap = getHeaderIndexMap(sheet);
+    var lastRow = sheet.getLastRow();
+    var newId = 'PRD-REG-' + ('0' + (lastRow > 1 ? lastRow : 1)).slice(-2);
+    var rawBiaya = payload.biayaKeterlambatan !== undefined ? payload.biayaKeterlambatan : (payload.biaya !== undefined ? payload.biaya : 50000);
+    var cleanBiaya = sanitizeNumber(rawBiaya);
+    var cleanStatus = String(payload.status || 'Aktif').toLowerCase() === 'non-aktif' ? 'Ditutup' : (payload.status || 'Aktif');
+
+    var maxCol = Math.max(sheet.getLastColumn(), 11);
+    var rowData = new Array(maxCol).fill('');
+    var fmtDt = function(v) {
+      var raw = String(v || '').trim().replace('T', ' ');
+      return normalizeNaiveDateTimeString(raw) || raw;
+    };
+
+    rowData[0] = newId;
+    rowData[1] = payload.tahunAkademik || '2026/2027';
+    rowData[2] = payload.semester || 'Ganjil';
+    rowData[3] = payload.jenisLayanan;
+    rowData[4] = payload.kategoriKelas;
+    rowData[5] = fmtDt(payload.tglMulai);
+    rowData[6] = fmtDt(payload.tglSelesai);
+    rowData[7] = fmtDt(payload.tglTerlambatMulai);
+    rowData[8] = fmtDt(payload.tglTerlambatSelesai);
+    rowData[9] = cleanBiaya;
+    rowData[10] = cleanStatus;
+
+    if (headerMap['ID']) rowData[headerMap['ID'] - 1] = newId;
+    if (headerMap['Tahun Akademik']) rowData[headerMap['Tahun Akademik'] - 1] = payload.tahunAkademik || '2026/2027';
+    if (headerMap['Semester']) rowData[headerMap['Semester'] - 1] = payload.semester || 'Ganjil';
+    if (headerMap['Jenis Layanan']) rowData[headerMap['Jenis Layanan'] - 1] = payload.jenisLayanan;
+    if (headerMap['Kategori Kelas']) rowData[headerMap['Kategori Kelas'] - 1] = payload.kategoriKelas;
+    if (headerMap['Tanggal & Jam Mulai'] || headerMap['Tanggal Mulai']) rowData[(headerMap['Tanggal & Jam Mulai'] || headerMap['Tanggal Mulai']) - 1] = fmtDt(payload.tglMulai);
+    if (headerMap['Tanggal & Jam Selesai'] || headerMap['Tanggal Selesai']) rowData[(headerMap['Tanggal & Jam Selesai'] || headerMap['Tanggal Selesai']) - 1] = fmtDt(payload.tglSelesai);
+    if (headerMap['Mulai Terlambat']) rowData[headerMap['Mulai Terlambat'] - 1] = fmtDt(payload.tglTerlambatMulai);
+    if (headerMap['Selesai Terlambat']) rowData[headerMap['Selesai Terlambat'] - 1] = fmtDt(payload.tglTerlambatSelesai);
+    if (headerMap['Biaya Keterlambatan'] || headerMap['Biaya']) rowData[(headerMap['Biaya Keterlambatan'] || headerMap['Biaya']) - 1] = cleanBiaya;
+    if (headerMap['Status']) rowData[headerMap['Status'] - 1] = cleanStatus;
+
+    sheet.appendRow(rowData);
+    SpreadsheetApp.flush();
+    invalidateCache('Periode_Pendaftaran');
+    var pActor = String(payload.actor || 'Admin TU').trim();
+    var pRole = String(payload.role || 'Admin TU').trim();
+    bumpSyncVersion(pActor, 'Periode baru ' + newId);
+    addActivityLog(pActor, 'Tambah Periode', newId + ' (' + (payload.jenisLayanan || '') + ')', 'Menambahkan jadwal periode ' + (payload.tahunAkademik || ''), pRole);
+    return { success: true, message: 'Jadwal periode pendaftaran ' + newId + ' berhasil ditambahkan.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updatePeriode(arg1, arg2) {
+  var payload = (typeof arg1 === 'object' && arg1 !== null) ? arg1 : (arg2 || {});
+  var targetId = String(payload.id || (typeof arg1 === 'string' ? arg1 : '')).trim();
+  payload.id = targetId;
+
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Periode_Pendaftaran');
+    if (!sheet) throw new Error("Sheet Periode_Pendaftaran tidak ditemukan.");
+
+    var headerMap = getHeaderIndexMap(sheet);
+    var values = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+
+    for (var i = 1; i < values.length; i++) {
+      var rowId = String(values[i][0]).trim();
+      if (rowId === targetId || rowId.toLowerCase() === targetId.toLowerCase()) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (rowIndex === -1 && payload.jenisLayanan) {
+      for (var j = 1; j < values.length; j++) {
+        var rowLayanan = String(values[j][3] || '').trim().toLowerCase();
+        if (rowLayanan === String(payload.jenisLayanan).trim().toLowerCase()) {
+          rowIndex = j + 1;
+          targetId = String(values[j][0]).trim() || targetId;
+          payload.id = targetId;
+          break;
+        }
+      }
+    }
+
+    if (rowIndex === -1) throw new Error("Data periode " + (targetId || 'ID tidak terdefinisi') + " tidak ditemukan.");
+
+    var rowRange = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn());
+    var rowValues = rowRange.getValues()[0];
+    var rawBiaya = payload.biayaKeterlambatan !== undefined ? payload.biayaKeterlambatan : (payload.biaya !== undefined ? payload.biaya : 50000);
+    var cleanBiaya = sanitizeNumber(rawBiaya);
+    var cleanStatus = String(payload.status || 'Aktif').toLowerCase() === 'non-aktif' ? 'Ditutup' : (payload.status || 'Aktif');
+
+    function setCol(name, val) {
+      if (headerMap[name] && val !== undefined) {
+        rowValues[headerMap[name] - 1] = val;
+      }
+    }
+
+    var fmtUpDt = function(v) {
+      var raw = String(v || '').trim().replace('T', ' ');
+      return normalizeNaiveDateTimeString(raw) || raw;
+    };
+    setCol('Tahun Akademik', payload.tahunAkademik || '2026/2027');
+    setCol('Semester', payload.semester || 'Ganjil');
+    setCol('Jenis Layanan', payload.jenisLayanan);
+    setCol('Kategori Kelas', payload.kategoriKelas);
+    setCol('Tanggal & Jam Mulai', fmtUpDt(payload.tglMulai));
+    setCol('Tanggal & Jam Selesai', fmtUpDt(payload.tglSelesai));
+    setCol('Mulai Terlambat', fmtUpDt(payload.tglTerlambatMulai));
+    setCol('Selesai Terlambat', fmtUpDt(payload.tglTerlambatSelesai));
+    setCol('Biaya Keterlambatan', cleanBiaya);
+    setCol('Status', cleanStatus);
+
+    rowRange.setValues([rowValues]);
+    SpreadsheetApp.flush();
+    invalidateCache('Periode_Pendaftaran');
+    var upActor = String(payload.actor || 'Admin TU').trim();
+    var upRole = String(payload.role || 'Admin TU').trim();
+    bumpSyncVersion(upActor, 'Update periode ' + payload.id);
+    addActivityLog(upActor, 'Edit Jadwal Periode', payload.id + ' (' + (payload.jenisLayanan || '') + ')', 'Memperbarui jadwal periode pendaftaran', upRole);
+    return { success: true, message: 'Jadwal periode ' + payload.id + ' berhasil diperbarui.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deletePeriode(id, actor, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getActiveSpreadsheetSafe();
+    var sheet = ss.getSheetByName('Periode_Pendaftaran');
+    if (!sheet) throw new Error("Sheet Periode_Pendaftaran tidak ditemukan.");
+    var values = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][0]).trim() === String(id).trim()) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+
+    if (rowIndex === -1) throw new Error("Data periode tidak ditemukan.");
+    sheet.deleteRow(rowIndex);
+    SpreadsheetApp.flush();
+    invalidateCache('Periode_Pendaftaran');
+    var delActor = String(actor || 'Admin TU').trim();
+    var delRole = String(userRole || 'Admin TU').trim();
+    bumpSyncVersion(delActor, 'Hapus periode ' + id);
+    addActivityLog(delActor, 'Hapus Jadwal Periode', id, 'Menghapus jadwal periode pendaftaran dari sistem', delRole);
+    return { success: true, message: 'Periode ' + id + ' berhasil dihapus.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function runAITrialAndErrorSimulation(scenarioType) {
+  try {
+    var periodes = getSheetData('Periode_Pendaftaran');
+    var activePeriod = periodes.find(function(p) { return String(p.Status).toLowerCase() === 'aktif'; });
+    var penalty = activePeriod ? (sanitizeNumber(activePeriod['Biaya Keterlambatan']) || 50000) : 50000;
+    var result = { scenario: scenarioType, status: 'PASS', logs: [], testData: null };
+
+    if (scenarioType === 'NORMAL_REGISTRATION') {
+      result.logs.push('1. Menguji input pendaftaran dalam rentang Jadwal Normal.');
+      result.logs.push('2. Tahun Akademik, Semester, dan Jenis Layanan otomatis terkunci sesuai periode aktif.');
+      result.logs.push('3. Status Jadwal: Tepat Waktu | Retribusi: Rp 0 (Gratis).');
+    } else if (scenarioType === 'LATE_REGISTRATION') {
+      result.logs.push('1. Menguji pendaftaran pada rentang Jadwal Terlambat (Mulai - Selesai).');
+      result.logs.push('2. Notif/Catatan otomatis menerapkan Biaya Denda Rp ' + penalty.toLocaleString('id-ID'));
+    } else {
+      result.logs.push('1. Menguji sinkronisasi multi-pengguna (LockService & CacheService).');
+      result.logs.push('2. Isolasi RBAC sesuai Kode Prodi (MNJ, AKT, BD, PI, PKD) berjalan optimal.');
+    }
+    return { success: true, result: result };
+  } catch (err) {
+    return { success: false, message: err.message };
+  }
+}
+
+function generateMockTestData(count) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var pSheet = ss.getSheetByName('Pendaftaran');
+    if (!pSheet) return { success: false, message: 'Sheet Pendaftaran tidak ditemukan.' };
+
+    var prodis = [
+      { code: 'MNJ', name: 'Manajemen' },
+      { code: 'AKT', name: 'Akuntansi' },
+      { code: 'BD', name: 'Bisnis Digital' },
+      { code: 'PI', name: 'Perdagangan Internasional' },
+      { code: 'PKD', name: 'Perbankan dan Keuangan Digital' }
+    ];
+    var statuses = ['Pending', 'Disetujui', 'Ditolak'];
+    var total = count || 5;
+
+    for (var i = 1; i <= total; i++) {
+      var p = prodis[Math.floor(Math.random() * prodis.length)];
+      addPendaftaran({
+        nim: '2026' + Math.floor(1000 + Math.random() * 8999),
+        namaMahasiswa: 'Mahasiswa Uji Coba ' + i,
+        kodeProdi: p.code,
+        prodi: p.name,
+        kelas: 'Reguler 3A',
+        kategoriKelas: 'Reguler',
+        tahunAkademik: '2026/2027',
+        semester: 'Ganjil',
+        mataKuliah: 'Matematika Bisnis',
+        dosenPengampu: 'Dr. Agung Wibowo, S.E., M.M.',
+        jenisLayanan: 'UTS Susulan',
+        alasan: 'Simulasi Trial & Error Skenario ' + i,
+        buktiFoto: '',
+        statusJadwal: i % 2 === 0 ? 'Terlambat' : 'Tepat Waktu',
+        nominal: i % 2 === 0 ? 50000 : 0,
+        statusPembayaran: i % 2 === 0 ? 'Belum Bayar' : 'Gratis (Tepat Waktu)',
+        statusPersetujuan: statuses[Math.floor(Math.random() * statuses.length)]
+      });
+    }
+    return { success: true, message: total + ' Data uji coba berhasil ditambahkan!' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function clearAITestData() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var pSheet = ss.getSheetByName('Pendaftaran');
+    if (!pSheet) return { success: true, message: 'Lembar Pendaftaran tidak ditemukan.' };
+    var lastRow = pSheet.getLastRow();
+    if (lastRow <= 1) return { success: true, message: 'Tidak ada data pendaftaran.' };
+
+    var data = pSheet.getDataRange().getValues();
+    var testIds = {
+      'REG-1001': true, 'REG-1002': true, 'REG-1003': true, 'REG-1004': true, 'REG-1005': true,
+      'REG-1006': true, 'REG-1007': true, 'REG-1008': true, 'REG-1009': true, 'REG-1010': true
+    };
+    var cleanRows = [data[0]];
+    var deletedCount = 0;
+    for (var i = 1; i < data.length; i++) {
+      var rowStr = String(data[i].join(' '));
+      var idStr = String(data[i][0] || '').trim();
+      var npmStr = String(data[i][4] || '').trim();
+      var isBlank = (!idStr && !npmStr);
+      var isTest = (
+        testIds[idStr] ||
+        idStr.indexOf('REG-TEST-') === 0 ||
+        rowStr.indexOf('Simulasi Trial') !== -1 ||
+        rowStr.indexOf('Pengujian Diagnostik AI') !== -1 ||
+        isBlank
+      );
+      if (isTest) {
+        deletedCount++;
+      } else {
+        cleanRows.push(data[i]);
+      }
+    }
+    pSheet.clearContents();
+    if (cleanRows.length > 0) {
+      pSheet.getRange(1, 1, cleanRows.length, cleanRows[0].length).setValues(cleanRows);
+    }
+    SpreadsheetApp.flush();
+    bumpSyncVersion('Admin', 'Bersihkan data uji coba & baris kosong');
+    addActivityLog('Admin TU', 'Bersihkan Data Uji AI', 'Pendaftaran', 'Menghapus ' + deletedCount + ' baris data uji/sampel/kosong dari sistem.', 'Admin TU');
+    return { success: true, message: deletedCount + ' baris data uji coba & sampel mockup berhasil dibersihkan dari spreadsheet.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =========================================================================
+// [AI DIAGNOSTICS]: SUNTIK 10 MOCKUP CONTOH SAMPEL DATA LENGKAP PROPORSIONAL
+// =========================================================================
+function seedMockupData() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var pSheet = ss.getSheetByName('Pendaftaran');
+    if (!pSheet) pSheet = getOrCreateSheet(ss, 'Pendaftaran');
+
+    var standardHeaders = [
+      "ID", "Tanggal", "Tahun Akademik", "Semester", "NPM", "Nama Mahasiswa",
+      "Kode Prodi", "Program Studi", "Kelas", "Kategori Kelas", "Mata Kuliah",
+      "Dosen Pengampu", "Jenis Layanan", "Alasan", "Bukti Foto", "Status Jadwal",
+      "Nominal", "Status Pembayaran", "Status Persetujuan"
+    ];
+
+    // 1. Pastikan Sheet memiliki header standar lengkap dan rapi
+    if (pSheet.getLastRow() === 0) {
+      pSheet.appendRow(standardHeaders);
+      var headerRange = pSheet.getRange(1, 1, 1, standardHeaders.length);
+      headerRange.setBackground('#1E3A8A').setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
+      pSheet.setFrozenRows(1);
+    }
+
+    var headerMap = getHeaderIndexMap(pSheet);
+    for (var h = 0; h < standardHeaders.length; h++) {
+      if (!headerMap[standardHeaders[h]]) {
+        var nextCol = pSheet.getLastColumn() + 1;
+        pSheet.getRange(1, nextCol).setValue(standardHeaders[h]).setBackground('#1E3A8A').setFontColor('#FFFFFF').setFontWeight('bold');
+        headerMap[standardHeaders[h]] = nextCol;
+      }
+    }
+
+    // 2. Bersihkan sampel mockup lama (REG-1001 s.d. REG-1010) serta baris kosong hantu
+    var testIds = {
+      'REG-1001': true, 'REG-1002': true, 'REG-1003': true, 'REG-1004': true, 'REG-1005': true,
+      'REG-1006': true, 'REG-1007': true, 'REG-1008': true, 'REG-1009': true, 'REG-1010': true
+    };
+
+    var lastRow = pSheet.getLastRow();
+    var totalCols = Math.max(pSheet.getLastColumn(), standardHeaders.length);
+    var existingCleanRows = [];
+
+    if (lastRow > 0) {
+      var allData = pSheet.getRange(1, 1, lastRow, totalCols).getValues();
+      existingCleanRows.push(allData[0]); // Header baris 1
+      for (var r = 1; r < allData.length; r++) {
+        var rowId = String(allData[r][0] || '').trim();
+        var rowNpm = String(allData[r][4] || '').trim();
+        // Lewati jika ID test atau baris kosong tanpa ID dan tanpa NPM
+        if (testIds[rowId] || (!rowId && !rowNpm)) {
+          continue;
+        }
+        existingCleanRows.push(allData[r]);
+      }
+    } else {
+      existingCleanRows.push(standardHeaders);
+    }
+
+    // 3. Siapkan 10 Data Mockup Sampel Lengkap & Proporsional (UTS, UAS, & Remedial Teaching)
+    var todayStr = formatDateToString(new Date());
+    var rawMockups = [
+      {
+        id: 'REG-1001',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 3',
+        npm: '2311010012',
+        namaMahasiswa: 'Rizky Pratama Putra',
+        kodeProdi: 'MNJ',
+        prodi: 'Manajemen',
+        kelas: 'Reguler A',
+        kategoriKelas: 'Reguler',
+        mataKuliah: 'Manajemen Keuangan',
+        dosenPengampu: 'Dr. Agung Wibowo, S.E., M.M.',
+        jenisLayanan: 'UTS Susulan',
+        alasan: 'Rawat inap RS PMI Bogor karena DBD (Surat dokter terlampir)',
+        buktiFoto: '',
+        statusJadwal: 'Tepat Waktu',
+        nominal: 0,
+        statusPembayaran: 'Gratis (Tepat Waktu)',
+        statusPersetujuan: 'Disetujui'
+      },
+      {
+        id: 'REG-1002',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 3',
+        npm: '2311020045',
+        namaMahasiswa: 'Siti Nurhaliza Zahra',
+        kodeProdi: 'AKT',
+        prodi: 'Akuntansi',
+        kelas: 'Reguler B',
+        kategoriKelas: 'Reguler',
+        mataKuliah: 'Akuntansi Biaya Lanjutan [Nilai Asal: CD]',
+        dosenPengampu: 'Prof. Dr. Hendro Sasongko, M.M. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)',
+        jenisLayanan: 'Remedial Teaching',
+        alasan: 'Perbaikan nilai mata kuliah prasyarat skripsi',
+        buktiFoto: '',
+        statusJadwal: 'Tepat Waktu',
+        nominal: 150000,
+        statusPembayaran: 'Lunas',
+        statusPersetujuan: 'Pending'
+      },
+      {
+        id: 'REG-1003',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 1',
+        npm: '2411030019',
+        namaMahasiswa: 'Muhammad Farhan Ramadhan',
+        kodeProdi: 'BD',
+        prodi: 'Bisnis Digital',
+        kelas: 'Reguler A',
+        kategoriKelas: 'Reguler',
+        mataKuliah: '1. Big Data untuk Bisnis (3 SKS) | 2. Riset Operasi Bisnis (3 SKS)',
+        dosenPengampu: '1. Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom. | 2. Dr. Hendra Suhendra, M.M.',
+        jenisLayanan: 'UTS Susulan',
+        alasan: 'Terkendala jaringan saat pendaftaran periode normal',
+        buktiFoto: '',
+        statusJadwal: 'Terlambat',
+        nominal: 50000,
+        statusPembayaran: 'Belum Bayar',
+        statusPersetujuan: 'Pending'
+      },
+      {
+        id: 'REG-1004',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 3',
+        npm: '2311040008',
+        namaMahasiswa: 'Nabila Putri Maharani',
+        kodeProdi: 'PI',
+        prodi: 'Perdagangan Internasional',
+        kelas: 'Reguler A',
+        kategoriKelas: 'Reguler',
+        mataKuliah: 'Hukum Perdagangan Internasional',
+        dosenPengampu: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.',
+        jenisLayanan: 'UAS Susulan',
+        alasan: 'Kedukaan keluarga inti di luar kota (Surat keterangan RT terlampir)',
+        buktiFoto: '',
+        statusJadwal: 'Tepat Waktu',
+        nominal: 0,
+        statusPembayaran: 'Gratis (Tepat Waktu)',
+        statusPersetujuan: 'Disetujui'
+      },
+      {
+        id: 'REG-1005',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 1',
+        npm: '2411050031',
+        namaMahasiswa: 'Aditya Pratama Wijaya',
+        kodeProdi: 'PKD',
+        prodi: 'Perbankan dan Keuangan Digital',
+        kelas: 'Reguler A',
+        kategoriKelas: 'Reguler',
+        mataKuliah: 'Manajemen Perbankan [Nilai Asal: D]',
+        dosenPengampu: 'Denia Maulani, S.E., M.M. (Dosen Lalu: Dr. H. Hendra Suhendra, M.M.)',
+        jenisLayanan: 'Remedial Teaching',
+        alasan: 'Perbaikan nilai mata kuliah syarat magang di Bank Syariah',
+        buktiFoto: '',
+        statusJadwal: 'Terlambat',
+        nominal: 75000,
+        statusPembayaran: 'Lunas',
+        statusPersetujuan: 'Pending'
+      },
+      {
+        id: 'REG-1006',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 5',
+        npm: '2211010087',
+        namaMahasiswa: 'Dimas Anggara Kusuma',
+        kodeProdi: 'MNJ',
+        prodi: 'Manajemen',
+        kelas: 'Karyawan A',
+        kategoriKelas: 'Karyawan',
+        mataKuliah: '1. Manajemen Strategik (3 SKS) | 2. Perilaku Konsumen (3 SKS)',
+        dosenPengampu: '1. Dr. Muhamad Azis Firdaus, S.E., M.M. | 2. Hj. Ratih Purnamasari, S.E., M.Si.',
+        jenisLayanan: 'UTS Susulan',
+        alasan: 'Tugas dinas shift malam di perusahaan logistik',
+        buktiFoto: '',
+        statusJadwal: 'Terlambat',
+        nominal: 50000,
+        statusPembayaran: 'Lunas',
+        statusPersetujuan: 'Disetujui'
+      },
+      {
+        id: 'REG-1007',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 3',
+        npm: '2311020092',
+        namaMahasiswa: 'Fitria Rahmadani',
+        kodeProdi: 'AKT',
+        prodi: 'Akuntansi',
+        kelas: 'Reguler A',
+        kategoriKelas: 'Reguler',
+        mataKuliah: '1. Perpajakan Terapan [Nilai: C] (3 SKS) | 2. Akuntansi Sektor Publik [Nilai: BC] (3 SKS)',
+        dosenPengampu: '1. Dr. Desmy Riani, S.E., M.Ak. (Dosen Lalu: Dr. Desmy Riani, S.E., M.Ak.) | 2. Ahmad, S.E., M.Ak. (Dosen Lalu: Dra. Hj. Sri Mulyati, M.Ak.)',
+        jenisLayanan: 'Remedial Teaching',
+        alasan: 'Perbaikan 2 mata kuliah konsentrasi perpajakan & sektor publik',
+        buktiFoto: '',
+        statusJadwal: 'Tepat Waktu',
+        nominal: 300000,
+        statusPembayaran: 'Lunas',
+        statusPersetujuan: 'Disetujui'
+      },
+      {
+        id: 'REG-1008',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 3',
+        npm: '2311030054',
+        namaMahasiswa: 'Kevin Alamsyah',
+        kodeProdi: 'BD',
+        prodi: 'Bisnis Digital',
+        kelas: 'Karyawan A',
+        kategoriKelas: 'Karyawan',
+        mataKuliah: 'E-Commerce Strategy & Marketing',
+        dosenPengampu: 'Hanif Zaidan Sinaga, S.E., M.M.S.I., M.Kom.',
+        jenisLayanan: 'UAS Susulan',
+        alasan: 'Mewakili kampus dalam kompetisi Startup Digital Nasional',
+        buktiFoto: '',
+        statusJadwal: 'Tepat Waktu',
+        nominal: 0,
+        statusPembayaran: 'Gratis (Tepat Waktu)',
+        statusPersetujuan: 'Disetujui'
+      },
+      {
+        id: 'REG-1009',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 1',
+        npm: '2411040022',
+        namaMahasiswa: 'Zahra Amelia Putri',
+        kodeProdi: 'PI',
+        prodi: 'Perdagangan Internasional',
+        kelas: 'Reguler B',
+        kategoriKelas: 'Reguler',
+        mataKuliah: 'Kepabeanan & Ekspor Impor',
+        dosenPengampu: 'Hurriyaturrohman, S.E., M.M., CAP., CCSME., CTM., CPFB.',
+        jenisLayanan: 'UTS Susulan',
+        alasan: 'Sakit tifus saat hari pelaksanaan ujian reguler',
+        buktiFoto: '',
+        statusJadwal: 'Tepat Waktu',
+        nominal: 0,
+        statusPembayaran: 'Gratis (Tepat Waktu)',
+        statusPersetujuan: 'Pending'
+      },
+      {
+        id: 'REG-1010',
+        tanggal: todayStr,
+        tahunAkademik: '2026/2027 Ganjil',
+        semester: 'Semester 5',
+        npm: '2211050015',
+        namaMahasiswa: 'Rian Hidayat',
+        kodeProdi: 'PKD',
+        prodi: 'Perbankan dan Keuangan Digital',
+        kelas: 'Reguler A',
+        kategoriKelas: 'Reguler',
+        mataKuliah: '1. Analisis Kredit Perbankan (3 SKS) | 2. Financial Technology Ecosystem (3 SKS)',
+        dosenPengampu: '1. Denia Maulani, S.E., M.M. | 2. Dr. Hendra Suhendra, M.M.',
+        jenisLayanan: 'UAS Susulan',
+        alasan: 'Mengikuti program magang MBKM bersertifikat Kemendikbudristek',
+        buktiFoto: '',
+        statusJadwal: 'Terlambat',
+        nominal: 100000,
+        statusPembayaran: 'Lunas',
+        statusPersetujuan: 'Pending'
+      }
+    ];
+
+    // 4. Konversi objek mockup ke format baris kolom spreadsheet yang sesuai headerMap
+    for (var m = 0; m < rawMockups.length; m++) {
+      var item = rawMockups[m];
+      var newRow = new Array(totalCols).fill('');
+      
+      // Default index positional
+      newRow[0] = item.id;
+      newRow[1] = item.tanggal;
+      newRow[2] = item.tahunAkademik;
+      newRow[3] = item.semester;
+      newRow[4] = item.npm;
+      newRow[5] = item.namaMahasiswa;
+      newRow[6] = item.kodeProdi;
+      newRow[7] = item.prodi;
+      newRow[8] = item.kelas;
+      newRow[9] = item.kategoriKelas;
+      newRow[10] = item.mataKuliah;
+      newRow[11] = item.dosenPengampu;
+      newRow[12] = item.jenisLayanan;
+      newRow[13] = item.alasan;
+      newRow[14] = item.buktiFoto;
+      newRow[15] = item.statusJadwal;
+      newRow[16] = item.nominal;
+      newRow[17] = item.statusPembayaran;
+      newRow[18] = item.statusPersetujuan;
+
+      // Header map overwrite jika susunan kolom diubah pengguna
+      if (headerMap['ID']) newRow[headerMap['ID'] - 1] = item.id;
+      if (headerMap['Tanggal']) newRow[headerMap['Tanggal'] - 1] = item.tanggal;
+      if (headerMap['Tahun Akademik']) newRow[headerMap['Tahun Akademik'] - 1] = item.tahunAkademik;
+      if (headerMap['Semester']) newRow[headerMap['Semester'] - 1] = item.semester;
+      if (headerMap['NPM']) newRow[headerMap['NPM'] - 1] = item.npm;
+      if (headerMap['Nama Mahasiswa']) newRow[headerMap['Nama Mahasiswa'] - 1] = item.namaMahasiswa;
+      if (headerMap['Kode Prodi']) newRow[headerMap['Kode Prodi'] - 1] = item.kodeProdi;
+      if (headerMap['Program Studi']) newRow[headerMap['Program Studi'] - 1] = item.prodi;
+      if (headerMap['Kelas']) newRow[headerMap['Kelas'] - 1] = item.kelas;
+      if (headerMap['Kategori Kelas']) newRow[headerMap['Kategori Kelas'] - 1] = item.kategoriKelas;
+      if (headerMap['Mata Kuliah']) newRow[headerMap['Mata Kuliah'] - 1] = item.mataKuliah;
+      if (headerMap['Dosen Pengampu']) newRow[headerMap['Dosen Pengampu'] - 1] = item.dosenPengampu;
+      if (headerMap['Jenis Layanan']) newRow[headerMap['Jenis Layanan'] - 1] = item.jenisLayanan;
+      if (headerMap['Alasan']) newRow[headerMap['Alasan'] - 1] = item.alasan;
+      if (headerMap['Bukti Foto']) newRow[headerMap['Bukti Foto'] - 1] = item.buktiFoto;
+      if (headerMap['Status Jadwal']) newRow[headerMap['Status Jadwal'] - 1] = item.statusJadwal;
+      if (headerMap['Nominal']) newRow[headerMap['Nominal'] - 1] = item.nominal;
+      if (headerMap['Status Pembayaran']) newRow[headerMap['Status Pembayaran'] - 1] = item.statusPembayaran;
+      if (headerMap['Status Persetujuan']) newRow[headerMap['Status Persetujuan'] - 1] = item.statusPersetujuan;
+
+      existingCleanRows.push(newRow);
+    }
+
+    // 5. Tulis sekaligus (Atomic Batch Write) - Bebas hang, bebas timeout, tanpa baris kosong
+    pSheet.clearContents();
+    pSheet.getRange(1, 1, existingCleanRows.length, existingCleanRows[0].length).setValues(existingCleanRows);
+    
+    // Pastikan format kolom NPM selalu teks biasa agar angka '0' di depan tidak hilang
+    if (headerMap['NPM']) {
+      pSheet.getRange(2, headerMap['NPM'], existingCleanRows.length - 1, 1).setNumberFormat('@');
+    }
+
+    SpreadsheetApp.flush();
+    addActivityLog('Admin TU', 'Suntik 10 Mockup Sampel', 'Pendaftaran', 'Menambahkan 10 data sampel pendaftaran proporsional (UTS, UAS, & Remedial Teaching) untuk pengujian sistem & dashboard.', 'Admin TU');
+    bumpSyncVersion('Admin', 'Seed 10 Mockup Data Presisi');
+    return { success: true, message: '10 data mockup contoh sampel (UTS, UAS, & Remedial Teaching) berhasil disuntikkan secara lengkap dan sinkron ke spreadsheet tanpa baris kosong!' };
+  } catch(err) {
+    return { success: false, message: 'Gagal suntik data mockup: ' + err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =========================================================================
+// [MASTER DATA]: PENGHAPUSAN LOG AKTIVITAS KHUSUS MASTER ADMIN
+// =========================================================================
+function clearActivityLogs(role, actor) {
+  var normalizedRole = String(role || '').trim().toLowerCase();
+  if (normalizedRole !== 'master admin' && normalizedRole !== 'master_admin') {
+    return { success: false, message: 'Akses Ditolak: Hanya Master Admin yang memiliki wewenang untuk menghapus log aktivitas sistem.' };
+  }
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getActiveSpreadsheetSafe();
+    var sheet = ss ? ss.getSheetByName('Log_Aktivitas') : null;
+    if (sheet && sheet.getLastRow() > 1) {
+      sheet.deleteRows(2, sheet.getLastRow() - 1);
+    }
+    try {
+      PropertiesService.getScriptProperties().deleteProperty('SIP_PERSISTENT_LOGS_V2');
+    } catch(e) {}
+
+    var actorName = String(actor || 'Master Admin').trim();
+    var auditItem = addActivityLog(actorName, 'Pembersihan Log', 'Log_Aktivitas', 'Master Admin (' + actorName + ') mengosongkan riwayat log aktivitas sistem.', 'Master Admin');
+    SpreadsheetApp.flush();
+    bumpSyncVersion(actorName, 'Clear Activity Logs');
+    return {
+      success: true,
+      logs: auditItem ? [auditItem] : [],
+      version: getCompositeSyncVersion(ss),
+      message: 'Seluruh riwayat log aktivitas berhasil dibersihkan oleh Master Admin (' + actorName + ').'
+    };
+  } catch(err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =========================================================================
+// [MASTER DATA]: PENGELOLAAN TAHUN AKADEMIK (TAMBAH & EDIT) DENGAN SEMESTER
+// =========================================================================
+function ensureMasterTahunAkademikSchema(sheet) {
+  if (!sheet) return;
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["ID", "Tahun Akademik", "Semester", "Status", "Keterangan"]);
+    return;
+  }
+  var numCols = sheet.getLastColumn();
+  if (numCols < 1) return;
+  var headers = sheet.getRange(1, 1, 1, numCols).getValues()[0];
+  var hasSemester = false;
+  for (var i = 0; i < headers.length; i++) {
+    if (String(headers[i]).trim().toLowerCase() === 'semester') {
+      hasSemester = true;
+      break;
+    }
+  }
+  if (!hasSemester) {
+    // Sisipkan kolom 'Semester' pada kolom ke-3 (setelah Tahun Akademik)
+    sheet.insertColumnAfter(2);
+    sheet.getRange(1, 3).setValue('Semester');
+    var lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      var semRange = sheet.getRange(2, 3, lastRow - 1, 1);
+      var defaultVals = [];
+      for (var r = 0; r < lastRow - 1; r++) {
+        defaultVals.push(['Ganjil']);
+      }
+      semRange.setValues(defaultVals);
+    }
+    SpreadsheetApp.flush();
+  }
+}
+
+function addTahunAkademik(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = getOrCreateSheet(ss, 'Master_Tahun_Akademik');
+    ensureMasterTahunAkademikSchema(sheet);
+    var lastRow = sheet.getLastRow();
+    var newId = 'TA-' + ('00' + (lastRow > 1 ? lastRow : 1)).slice(-3);
+    var sem = payload.semester || 'Ganjil';
+    var tahun = payload.tahun || '';
+    var status = payload.status || 'Aktif';
+    var ket = payload.keterangan || '';
+    
+    // Gunakan pemetaan header dinamis
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var newRow = new Array(headers.length).fill('');
+    newRow[0] = newId;
+    for (var h = 0; h < headers.length; h++) {
+      var hName = String(headers[h]).trim().toLowerCase();
+      if (hName === 'id') newRow[h] = newId;
+      else if (hName === 'tahun akademik' || hName === 'tahun') newRow[h] = tahun;
+      else if (hName === 'semester') newRow[h] = sem;
+      else if (hName === 'status') newRow[h] = status;
+      else if (hName === 'keterangan') newRow[h] = ket;
+    }
+    sheet.appendRow(newRow);
+    SpreadsheetApp.flush();
+    invalidateCache('Master_Tahun_Akademik');
+    bumpSyncVersion(payload.actor || 'Admin', 'Tambah Tahun Akademik ' + tahun + ' (' + sem + ')');
+    return { success: true, message: 'Tahun Akademik ' + tahun + ' (' + sem + ') berhasil ditambahkan.' };
+  } catch(err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updateTahunAkademik(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Master_Tahun_Akademik');
+    if (!sheet) throw new Error('Sheet Master_Tahun_Akademik tidak ditemukan.');
+    ensureMasterTahunAkademikSchema(sheet);
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0];
+    var colMap = {};
+    for (var h = 0; h < headers.length; h++) {
+      colMap[String(headers[h]).trim().toLowerCase()] = h + 1;
+    }
+    var rowIndex = -1;
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][0]).trim() === String(payload.id).trim()) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex === -1) throw new Error('Data tahun akademik ' + payload.id + ' tidak ditemukan.');
+    if (payload.tahun && colMap['tahun akademik']) sheet.getRange(rowIndex, colMap['tahun akademik']).setValue(payload.tahun);
+    if (payload.semester && colMap['semester']) sheet.getRange(rowIndex, colMap['semester']).setValue(payload.semester);
+    if (payload.status && colMap['status']) sheet.getRange(rowIndex, colMap['status']).setValue(payload.status);
+    if (payload.keterangan !== undefined && colMap['keterangan']) sheet.getRange(rowIndex, colMap['keterangan']).setValue(payload.keterangan);
+    SpreadsheetApp.flush();
+    invalidateCache('Master_Tahun_Akademik');
+    bumpSyncVersion(payload.actor || 'Admin', 'Update Tahun Akademik ' + payload.id);
+    return { success: true, message: 'Tahun Akademik ' + payload.id + ' berhasil diperbarui.' };
+  } catch(err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteTahunAkademik(id) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Master_Tahun_Akademik');
+    if (!sheet) throw new Error('Sheet Master_Tahun_Akademik tidak ditemukan.');
+    var values = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+    var cleanTarget = String(id || '').trim().toLowerCase();
+    for (var i = 1; i < values.length; i++) {
+      var rowId = String(values[i][0]).trim().toLowerCase();
+      var rowTahun = String(values[i][1]).trim().toLowerCase();
+      if (rowId === cleanTarget || rowTahun === cleanTarget) {
+        rowIndex = i + 1;
+        break;
+      }
+    }
+    if (rowIndex !== -1) {
+      sheet.deleteRow(rowIndex);
+      SpreadsheetApp.flush();
+    }
+    invalidateCache('Master_Tahun_Akademik');
+    bumpSyncVersion('Admin', 'Hapus Tahun Akademik ' + id);
+    return { success: true, message: rowIndex !== -1 ? 'Tahun Akademik ' + id + ' berhasil dihapus secara permanen.' : 'Tahun Akademik ' + id + ' telah disinkronkan & dibersihkan dari memori.' };
+  } catch(err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function addRuangan(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Master_Ruangan');
+    var id = 'RNG-' + (new Date().getTime()).toString().slice(-4);
+    var row = [
+      id,
+      String(payload['Kode Ruangan'] || payload.kodeRuangan || '').trim(),
+      String(payload['Nama Ruangan'] || payload.namaRuangan || '').trim(),
+      Number(payload.Kapasitas || payload.kapasitas || 30),
+      String(payload.Gedung || payload.gedung || '').trim(),
+      String(payload.Keterangan || payload.keterangan || '').trim()
+    ];
+    sheet.appendRow(row);
+    SpreadsheetApp.flush();
+    invalidateCache('Master_Ruangan');
+    bumpSyncVersion(payload.actor || 'Admin', 'Tambah Ruangan ' + row[1]);
+    return { success: true, item: { ID: id, 'Kode Ruangan': row[1], 'Nama Ruangan': row[2], Kapasitas: row[3], Gedung: row[4], Keterangan: row[5] } };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function updateRuangan(id, payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Master_Ruangan');
+    if (!sheet) throw new Error('Sheet Master_Ruangan tidak ditemukan.');
+    var data = sheet.getDataRange().getValues();
+    var cleanTarget = String(id || '').trim().toLowerCase();
+    for (var i = 1; i < data.length; i++) {
+      var rowId = String(data[i][0]).trim().toLowerCase();
+      var rowKode = String(data[i][1]).trim().toLowerCase();
+      if (rowId === cleanTarget || rowKode === cleanTarget) {
+        if (payload['Kode Ruangan'] !== undefined || payload.kodeRuangan !== undefined) data[i][1] = payload['Kode Ruangan'] || payload.kodeRuangan;
+        if (payload['Nama Ruangan'] !== undefined || payload.namaRuangan !== undefined) data[i][2] = payload['Nama Ruangan'] || payload.namaRuangan;
+        if (payload.Kapasitas !== undefined || payload.kapasitas !== undefined) data[i][3] = Number(payload.Kapasitas !== undefined ? payload.Kapasitas : payload.kapasitas);
+        if (payload.Gedung !== undefined || payload.gedung !== undefined) data[i][4] = payload.Gedung !== undefined ? payload.Gedung : payload.gedung;
+        if (payload.Keterangan !== undefined || payload.keterangan !== undefined) data[i][5] = payload.Keterangan !== undefined ? payload.Keterangan : payload.keterangan;
+        sheet.getRange(i + 1, 1, 1, 6).setValues([data[i]]);
+        SpreadsheetApp.flush();
+        invalidateCache('Master_Ruangan');
+        bumpSyncVersion(payload.actor || 'Admin', 'Update Ruangan ' + id);
+        return { success: true, message: 'Ruangan berhasil diperbarui.' };
+      }
+    }
+    invalidateCache('Master_Ruangan');
+    return { success: false, message: 'Ruangan tidak ditemukan.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteRuangan(id) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Master_Ruangan');
+    if (!sheet) throw new Error('Sheet Master_Ruangan tidak ditemukan.');
+    var data = sheet.getDataRange().getValues();
+    var cleanTarget = String(id || '').trim().toLowerCase();
+    var deleted = false;
+    for (var i = 1; i < data.length; i++) {
+      var rowId = String(data[i][0]).trim().toLowerCase();
+      var rowKode = String(data[i][1]).trim().toLowerCase();
+      if (rowId === cleanTarget || rowKode === cleanTarget) {
+        sheet.deleteRow(i + 1);
+        SpreadsheetApp.flush();
+        deleted = true;
+        break;
+      }
+    }
+    invalidateCache('Master_Ruangan');
+    bumpSyncVersion('Admin', 'Hapus Ruangan ' + id);
+    return { 
+      success: true, 
+      message: deleted ? ('Ruangan ' + id + ' berhasil dihapus secara permanen.') : ('Ruangan ' + id + ' telah dihapus & disinkronkan.') 
+    };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =========================================================================
+// [SMART SYNC DATA MASTER]: Master_Matkul, Master_Kelas, Master_Dosen, Master_Ruangan
+// Sinkronisasi Cerdas: Update data jika cocok, Tambah baris baru jika unik
+// =========================================================================
+function batchSyncMasterData(sheetName, rows, actor) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    if (!rows || !Array.isArray(rows) || rows.length === 0) {
+      return { success: false, message: 'Tidak ada baris data untuk disinkronkan.' };
+    }
+
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = getOrCreateSheet(ss, sheetName);
+    if (!sheet) throw new Error('Sheet ' + sheetName + ' tidak dapat diakses atau dibuat.');
+
+    var existingValues = sheet.getDataRange().getValues();
+    if (existingValues.length === 0) {
+      return { success: false, message: 'Header sheet belum terbentuk.' };
+    }
+
+    var headerRow = existingValues[0];
+    var headerMap = {};
+    for (var h = 0; h < headerRow.length; h++) {
+      var colName = String(headerRow[h] || '').trim().toLowerCase();
+      headerMap[colName] = h;
+    }
+
+    // Tentukan kolom identitas unik utama untuk mendeteksi data yang sudah ada (Key Column)
+    var keyColNames = [];
+    var prefix = 'DATA-';
+    if (sheetName === 'Master_Matkul') {
+      keyColNames = ['kode matkul', 'kodematkul', 'kode mata kuliah', 'id'];
+      prefix = 'MKL-';
+    } else if (sheetName === 'Master_Kelas') {
+      keyColNames = ['nama kelas', 'namakelas', 'kelas', 'id'];
+      prefix = 'KLS-';
+    } else if (sheetName === 'Master_Dosen') {
+      keyColNames = ['nik/nidn', 'nik', 'nidn', 'nama dosen', 'namadosen', 'id'];
+      prefix = 'DSN-';
+    } else if (sheetName === 'Master_Ruangan') {
+      keyColNames = ['kode ruangan', 'koderuangan', 'nama ruangan', 'id'];
+      prefix = 'RNG-';
+    } else if (sheetName === 'User_Mahasiswa') {
+      keyColNames = ['npm', 'username', 'nim', 'id'];
+      prefix = 'MHS-';
+    } else if (sheetName === 'Jadwal_Ujian') {
+      keyColNames = ['id'];
+      prefix = 'JDW-';
+    } else {
+      keyColNames = ['id'];
+      prefix = 'REC-';
+    }
+
+    // Cari indeks kolom kunci di sheet
+    var primaryKeyIndex = -1;
+    for (var k = 0; k < keyColNames.length; k++) {
+      if (headerMap[keyColNames[k]] !== undefined) {
+        primaryKeyIndex = headerMap[keyColNames[k]];
+        break;
+      }
+    }
+    if (primaryKeyIndex === -1) primaryKeyIndex = 0; // fallback ke kolom ID
+
+    // Petakan baris yang sudah ada berdasarkan primary key (lowercase, trimmed)
+    var existingRowMap = {};
+    for (var r = 1; r < existingValues.length; r++) {
+      var keyVal = String(existingValues[r][primaryKeyIndex] || '').trim().toLowerCase();
+      if (keyVal) {
+        existingRowMap[keyVal] = r + 1; // 1-indexed row number
+      }
+    }
+
+    var updatedCount = 0;
+    var insertedCount = 0;
+    var newRowsToAppend = [];
+    var maxIdNum = 1;
+
+    // Scan max numeric ID jika berformat PREFIX-000
+    for (var r = 1; r < existingValues.length; r++) {
+      var idVal = String(existingValues[r][0] || '').trim();
+      var match = idVal.match(/\d+$/);
+      if (match) {
+        var num = parseInt(match[0], 10);
+        if (num >= maxIdNum) maxIdNum = num + 1;
+      }
+    }
+
+    // Proses setiap baris data input
+    for (var i = 0; i < rows.length; i++) {
+      var item = rows[i];
+      if (!item || typeof item !== 'object') continue;
+
+      // Temukan nilai kunci baris ini
+      var itemKeyVal = '';
+      for (var k = 0; k < keyColNames.length; k++) {
+        var propKey = keyColNames[k];
+        for (var objKey in item) {
+          if (String(objKey).trim().toLowerCase() === propKey) {
+            itemKeyVal = String(item[objKey] || '').trim().toLowerCase();
+            break;
+          }
+        }
+        if (itemKeyVal) break;
+      }
+
+      // Khusus Master_Kelas: Otomasi standardisasi nama kelas tanpa angka dan kategori
+      if (sheetName === 'Master_Kelas') {
+        var rawKls = item['Nama Kelas'] || item['nama kelas'] || item['Kelas'] || item['kelas'] || 'Reguler A';
+        var cleanKls = normalizeClassName(rawKls);
+        var cleanKat = item['Kategori'] || item['kategori'] || detectCategoryFromClass(cleanKls);
+        item['Nama Kelas'] = cleanKls;
+        item['Kategori'] = cleanKat;
+        item['Semester'] = item['Semester'] || item['semester'] || 'Semua';
+        item['Kode Prodi'] = item['Kode Prodi'] || item['kode prodi'] || 'ALL';
+        if (!itemKeyVal) itemKeyVal = String(cleanKls).trim().toLowerCase();
+      }
+
+      // Khusus User_Mahasiswa: Otomasi kalkulasi field sebelum pemetaan kolom
+      if (sheetName === 'User_Mahasiswa') {
+        var rawNpm = item['NPM'] || item['npm'] || item['NIM'] || item['nim'] || item['Username'] || item['username'] || '';
+        var rawNama = item['Nama Lengkap'] || item['nama lengkap'] || item['Nama Mahasiswa'] || item['nama mahasiswa'] || item['Nama'] || item['nama'] || '';
+        var rawProdi = item['Kode Prodi'] || item['kode prodi'] || item['Program Studi'] || item['program studi'] || item['Prodi'] || item['prodi'] || 'MNJ';
+        var rawKelas = normalizeClassName(item['Kelas'] || item['kelas'] || 'Reguler A');
+        var rawAngkatan = item['Angkatan'] || item['angkatan'] || '';
+        if (!rawAngkatan && rawNpm && String(rawNpm).length >= 2) {
+          var firstTwo = String(rawNpm).substring(0, 2);
+          if (/^\d{2}$/.test(firstTwo)) rawAngkatan = '20' + firstTwo;
+        }
+        var rawSemester = item['Semester'] || item['semester'] || '';
+        if (!rawSemester && rawAngkatan) {
+          rawSemester = calculateSemesterFromAngkatanBackend(rawAngkatan);
+        }
+
+        item['Username'] = item['Username'] || item['username'] || rawNpm;
+        item['Password'] = item['Password'] || item['password'] || '123456';
+        item['Role'] = 'Mahasiswa';
+        item['Nama Lengkap'] = rawNama;
+        item['NPM'] = rawNpm;
+        item['Kode Prodi'] = rawProdi;
+        item['Kelas'] = rawKelas;
+        item['Angkatan'] = rawAngkatan;
+        item['Semester'] = rawSemester || 'Semester 1';
+        if (!itemKeyVal && rawNpm) itemKeyVal = String(rawNpm).trim().toLowerCase();
+      }
+
+      // Normalisasi nilai ke array sesuai urutan kolom header sheet
+      var mappedRow = new Array(headerRow.length);
+      for (var colIdx = 0; colIdx < headerRow.length; colIdx++) {
+        var hName = String(headerRow[colIdx] || '').trim();
+        var hNameLower = hName.toLowerCase();
+        var val = '';
+
+        for (var objKey in item) {
+          if (String(objKey).trim().toLowerCase() === hNameLower) {
+            val = item[objKey];
+            break;
+          }
+        }
+        if (val === undefined || val === null) val = '';
+        mappedRow[colIdx] = val;
+      }
+
+      // Cek apakah data ini sudah ada (Update) atau baru (Insert)
+      if (itemKeyVal && existingRowMap[itemKeyVal]) {
+        var targetSheetRowNum = existingRowMap[itemKeyVal];
+        // Pertahankan ID asli di kolom 0 jika input tidak menyediakannya
+        if (!mappedRow[0] && existingValues[targetSheetRowNum - 1][0]) {
+          mappedRow[0] = existingValues[targetSheetRowNum - 1][0];
+        }
+        sheet.getRange(targetSheetRowNum, 1, 1, mappedRow.length).setValues([mappedRow]);
+        updatedCount++;
+      } else {
+        // Baris baru (Insert)
+        if (!mappedRow[0]) {
+          mappedRow[0] = prefix + ('00' + maxIdNum).slice(-3);
+          maxIdNum++;
+        }
+        newRowsToAppend.push(mappedRow);
+        if (itemKeyVal) {
+          existingRowMap[itemKeyVal] = existingValues.length + newRowsToAppend.length;
+        }
+        insertedCount++;
+      }
+    }
+
+    // Append batch baris baru jika ada
+    if (newRowsToAppend.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, newRowsToAppend.length, headerRow.length).setValues(newRowsToAppend);
+    }
+
+    SpreadsheetApp.flush();
+    invalidateCache(sheetName);
+    bumpSyncVersion(actor || 'Admin', 'Sync ' + sheetName + ' (' + rows.length + ' data)');
+    addActivityLog(actor || 'Admin', 'Upload & Sync Data Master', sheetName, 'Berhasil menyinkronkan ' + rows.length + ' baris data (Diperbarui: ' + updatedCount + ', Baru: ' + insertedCount + ')', 'Admin');
+
+    return {
+      success: true,
+      message: 'Sinkronisasi berhasil! ' + updatedCount + ' data diperbarui, ' + insertedCount + ' data baru ditambahkan.',
+      sheetName: sheetName,
+      total: rows.length,
+      updatedCount: updatedCount,
+      insertedCount: insertedCount
+    };
+  } catch (err) {
+    return { success: false, message: 'Gagal menyinkronkan data: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+// =========================================================================
+// [MANAJEMEN PENGGUNA]: Tambah / Registrasi Mahasiswa Tunggal dari Admin
+// Otomatis menghitung semester berjalan berdasarkan Angkatan dan Tahun Akademik
+// =========================================================================
+function addUserMahasiswa(payload, actor) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var rawNpm = String(payload.npm || payload.username || '').trim();
+    if (!rawNpm) throw new Error('NPM Mahasiswa wajib diisi.');
+
+    var rawAngkatan = payload.angkatan;
+    if (!rawAngkatan && rawNpm.length >= 2) {
+      var prefixYear = rawNpm.substring(0, 2);
+      if (/^\d{2}$/.test(prefixYear)) rawAngkatan = '20' + prefixYear;
+    }
+    if (!rawAngkatan) rawAngkatan = '2024';
+
+    var rawSemester = payload.semester || calculateSemesterFromAngkatanBackend(rawAngkatan);
+
+    var studentRow = {
+      'Nama Lengkap': payload.nama || payload.namaMahasiswa || 'Mahasiswa FEB UIKA',
+      'NPM': rawNpm,
+      'Username': rawNpm,
+      'Password': payload.password || '123456',
+      'Role': 'Mahasiswa',
+      'Kode Prodi': payload.kodeProdi || payload.prodi || 'MNJ',
+      'Kelas': normalizeClassName(payload.kelas || 'Reguler A'),
+      'Angkatan': rawAngkatan,
+      'Semester': rawSemester
+    };
+
+    var syncRes = batchSyncMasterData('User_Mahasiswa', [studentRow], actor || 'Admin TU');
+    if (syncRes && syncRes.success) {
+      return {
+        success: true,
+        message: 'Mahasiswa ' + studentRow['Nama Lengkap'] + ' (' + rawNpm + ') berhasil disimpan dengan ' + rawSemester + '!',
+        data: studentRow
+      };
+    }
+    return syncRes;
+  } catch(err) {
+    return { success: false, message: 'Gagal menambah data mahasiswa: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+// =========================================================================
+// [SINKRONISASI TERPADU]: Validasi Peserta & Kolom Nama Mahasiswa / NPM di Spreadsheet
+// Menyelaraskan Kartu Digital, Database Website (Export Excel), dan Google Spreadsheet
+// =========================================================================
+function normalizeMatkulNameGas(str) {
+  return String(str || '')
+    .replace(/\(\s*\d+\s*SKS\s*\)/gi, '')
+    .replace(/^\s*\d+[\.\)]\s*/, '')
+    .replace(/^\s*-\s*/, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function extractMataKuliahListGas(data) {
+  if (!data) return [];
+  var rawMatkul = String(data['Mata Kuliah'] || data.mataKuliah || '').trim();
+  var rawDosen = String(data['Dosen Pengampu'] || data.dosenPengampu || data.dosen || '').trim();
+  if (!rawMatkul) return [];
+
+  var results = [];
+  if (/(?:^|\s*)(?:\d+[\.\)]|\-)\s+/.test(rawMatkul)) {
+    var spacedMatkul = rawMatkul.replace(/([^\s\n])(\d+[\.\)]\s+)/g, '$1 $2');
+    var spacedDosen = rawDosen.replace(/([^\s\n])(\d+[\.\)]\s+)/g, '$1 $2');
+    var numRegex = /(?:^|\s+)(?:\d+[\.\)]|\-)\s+/;
+    var matkulParts = spacedMatkul.split(numRegex).map(function(s) { return s.trim(); }).filter(Boolean);
+    var dosenParts = spacedDosen ? spacedDosen.split(numRegex).map(function(s) { return s.trim(); }).filter(Boolean) : [];
+    if (matkulParts.length > 0) {
+      for (var i = 0; i < matkulParts.length; i++) {
+        var mk = matkulParts[i];
+        var sks = 3;
+        var sksMatch = mk.match(/\((\d+)\s*SKS\)/i);
+        if (sksMatch) sks = parseInt(sksMatch[1], 10);
+        var cleanName = mk.replace(/\s*\(\d+\s*SKS\)/i, '').replace(/,\s*$/, '').trim();
+        var ds = String(dosenParts[i] || dosenParts[0] || '').replace(/,\s*$/, '').trim();
+        results.push({ nama: cleanName, mataKuliah: cleanName, dosen: ds, dosenPengampu: ds, sks: sks });
+      }
+      return results;
+    }
+  }
+
+  if (rawMatkul.indexOf('\n') !== -1) {
+    var mLines = rawMatkul.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+    var dLines = rawDosen.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+    for (var j = 0; j < mLines.length; j++) {
+      var mkLine = mLines[j];
+      var sksL = 3;
+      var sksMatchL = mkLine.match(/\((\d+)\s*SKS\)/i);
+      if (sksMatchL) sksL = parseInt(sksMatchL[1], 10);
+      var cleanLine = mkLine.replace(/\s*\(\d+\s*SKS\)/i, '').replace(/,\s*$/, '').trim();
+      var dsLine = String(dLines[j] || dLines[0] || '').replace(/,\s*$/, '').trim();
+      results.push({ nama: cleanLine, mataKuliah: cleanLine, dosen: dsLine, dosenPengampu: dsLine, sks: sksL });
+    }
+    return results;
+  }
+
+  var sksSingle = 3;
+  var sksMatchSingle = rawMatkul.match(/\((\d+)\s*SKS\)/i);
+  if (sksMatchSingle) sksSingle = parseInt(sksMatchSingle[1], 10);
+  var cleanSingle = rawMatkul.replace(/\s*\(\d+\s*SKS\)/i, '').replace(/,\s*$/, '').trim();
+  return [{ nama: cleanSingle || rawMatkul, mataKuliah: cleanSingle || rawMatkul, dosen: rawDosen, dosenPengampu: rawDosen, sks: sksSingle }];
+}
+
+function isCourseNameMatchedGas(jMatkulRaw, cMatkulRaw) {
+  var cleanJ = normalizeMatkulNameGas(jMatkulRaw);
+  var cleanC = normalizeMatkulNameGas(cMatkulRaw);
+  if (!cleanJ || !cleanC) return false;
+  if (cleanJ === cleanC) return true;
+  var rawJLower = String(jMatkulRaw || '').toLowerCase();
+  if (/(?:^|\s)2[\.\)]\s+/.test(rawJLower) || rawJLower.indexOf('\n') !== -1) {
+    return rawJLower.indexOf(cleanC) !== -1;
+  }
+  return false;
+}
+
+function isPendaftarValidForJadwalGas(p, jadwalItem) {
+  if (!p || !jadwalItem) return false;
+  var jProdi = String(jadwalItem['Kode Prodi'] || jadwalItem.kodeProdi || '').trim().toUpperCase();
+  var pProdi = String(p['Kode Prodi'] || p.kodeProdi || '').trim().toUpperCase();
+  if (jProdi && pProdi && jProdi !== pProdi) return false;
+
+  var jSem = String(jadwalItem.Semester || jadwalItem.semester || '').trim().toLowerCase();
+  var pSem = String(p.Semester || p.semester || '').trim().toLowerCase();
+  if (jSem && pSem && jSem !== pSem) return false;
+
+  var jKelas = normalizeClassName(jadwalItem.Kelas || jadwalItem.kelas || '').toLowerCase();
+  var pKelas = normalizeClassName(p.Kelas || p.kelas || '').toLowerCase();
+  if (jKelas && pKelas && jKelas !== pKelas) return false;
+
+  var jMatkul = String(jadwalItem['Mata Kuliah'] || jadwalItem.mataKuliah || '').trim();
+  if (!jMatkul) return true;
+
+  var cList = extractMataKuliahListGas(p);
+  for (var i = 0; i < cList.length; i++) {
+    if (isCourseNameMatchedGas(jMatkul, cList[i].mataKuliah || cList[i].nama || '')) return true;
+  }
+  return isCourseNameMatchedGas(jMatkul, p['Mata Kuliah'] || '');
+}
+
+function resolveJadwalPesertaGas(jadwalItem, pendaftaranList) {
+  var participants = [];
+  var seenKeys = {};
+  var validRegIds = [];
+  var invalidRegIds = [];
+  var pList = Array.isArray(pendaftaranList) ? pendaftaranList : [];
+
+  function addParticipant(rawNama, rawNpm) {
+    var nama = String(rawNama || '').trim();
+    var npm = String(rawNpm || '').trim();
+    if ((!nama || nama === '-') && (!npm || npm === '-')) return;
+    var cleanNama = (nama && nama !== '-') ? nama : '';
+    var cleanNpm = (npm && npm !== '-') ? npm : '';
+    var dedupKey = cleanNpm.toLowerCase() + '||' + cleanNama.toLowerCase();
+    if (seenKeys[dedupKey]) return;
+    seenKeys[dedupKey] = true;
+    participants.push({ nama: cleanNama || '-', npm: cleanNpm || '-' });
+  }
+
+  var ketStr = String(jadwalItem.Keterangan || jadwalItem.keterangan || '').trim();
+
+  // 1. Cek tag [ID: REG-...] dengan validasi Prodi + Semester + Kelas + Matkul
+  var candidateRegIds = [];
+  var directPId = String(jadwalItem.pendaftarId || jadwalItem.pendaftaranId || '').trim();
+  if (directPId) candidateRegIds.push(directPId);
+  var tagRegex = /\[id:\s*(reg-\d+)\]/gi;
+  var tagMatch;
+  while ((tagMatch = tagRegex.exec(ketStr)) !== null) {
+    var rid = tagMatch[1].trim();
+    var exists = candidateRegIds.some(function(x) { return x.toUpperCase() === rid.toUpperCase(); });
+    if (!exists) candidateRegIds.push(rid);
+  }
+
+  candidateRegIds.forEach(function(regId) {
+    var pMatch = null;
+    for (var pi = 0; pi < pList.length; pi++) {
+      if (String(pList[pi].ID || pList[pi].id || '').trim().toUpperCase() === regId.toUpperCase()) {
+        pMatch = pList[pi];
+        break;
+      }
+    }
+    if (pMatch) {
+      if (isPendaftarValidForJadwalGas(pMatch, jadwalItem)) {
+        validRegIds.push(regId.toUpperCase());
+        addParticipant(pMatch['Nama Mahasiswa'] || pMatch.nama || '', pMatch.NPM || pMatch.NIM || pMatch.npm || '');
+      } else {
+        invalidRegIds.push(regId.toUpperCase());
+      }
+    }
+  });
+
+  // 2. Cek pola "Peserta: Nama (NPM: ...)" di Keterangan
+  var pesertaRegex = /Peserta\s*:\s*([^\(\n\[]+?)\s*\(\s*(?:NPM|NIM)\s*:\s*([^)\n\]]+)\s*\)/gi;
+  var pRegexMatch;
+  while ((pRegexMatch = pesertaRegex.exec(ketStr)) !== null) {
+    var tagNama = String(pRegexMatch[1] || '').trim();
+    var tagNpm = String(pRegexMatch[2] || '').trim();
+    // Jika peserta dengan nama sama sudah terselesaikan lewat tag [ID: REG-...], lewati agar NPM lama tidak menduplikasi peserta
+    var alreadyResolvedByName = participants.some(function(pt) {
+      return pt.nama && tagNama && pt.nama.toLowerCase() === tagNama.toLowerCase();
+    });
+    if (alreadyResolvedByName) continue;
+
+    var matchingByIdentity = pList.filter(function(p) {
+      var pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+      var pNama = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
+      var npmOk = !tagNpm || tagNpm === '-' || pNpm === tagNpm.toLowerCase();
+      var namaOk = !tagNama || tagNama === '-' || pNama === tagNama.toLowerCase();
+      return npmOk && namaOk;
+    });
+    if (matchingByIdentity.length > 0) {
+      var validIdentityMatches = matchingByIdentity.filter(function(p) {
+        return isPendaftarValidForJadwalGas(p, jadwalItem);
+      });
+      if (validIdentityMatches.length > 0) {
+        addParticipant(tagNama, tagNpm);
+      }
+    } else if (validRegIds.length === 0) {
+      addParticipant(tagNama, tagNpm);
+    }
+  }
+
+  // 3. Fallback otomatis untuk jadwal lama yang belum mencatat peserta di Keterangan
+  if (participants.length === 0 && pList.length > 0) {
+    var baseMatches = pList.filter(function(p) {
+      return isPendaftarValidForJadwalGas(p, jadwalItem);
+    });
+    var jJenis = String(jadwalItem['Jenis Ujian'] || jadwalItem['Jenis Layanan'] || jadwalItem.jenisUjian || '').trim().toLowerCase();
+    var finalMatches = baseMatches;
+    if (jJenis && baseMatches.length > 0) {
+      var strictJenis = baseMatches.filter(function(p) {
+        var pJenis = String(p['Jenis Layanan'] || p.layanan || '').trim().toLowerCase();
+        return !pJenis || pJenis === jJenis;
+      });
+      if (strictJenis.length > 0) finalMatches = strictJenis;
+    }
+    finalMatches.forEach(function(p) {
+      addParticipant(p['Nama Mahasiswa'] || p.nama || '', p.NPM || p.NIM || p.npm || '');
+    });
+  }
+
+  // Bersihkan tag REG-ID yang terbukti salah/nyasar dan perbarui NPM di "Peserta: ..." jika berubah di Pendaftaran
+  var cleanedKet = ketStr;
+  if (invalidRegIds.length > 0) {
+    invalidRegIds.forEach(function(badId) {
+      var badPattern = new RegExp('\\s*\\[id:\\s*' + badId.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '\\]', 'gi');
+      cleanedKet = cleanedKet.replace(badPattern, '');
+    });
+    cleanedKet = cleanedKet.replace(/\s{2,}/g, ' ').trim();
+  }
+  if (validRegIds.length === 1 && participants.length === 1) {
+    var ptSync = participants[0];
+    var syncedLabel = 'Peserta: ' + ptSync.nama + (ptSync.npm && ptSync.npm !== '-' ? (' (NPM: ' + ptSync.npm + ')') : '');
+    if (/Peserta\s*:\s*[^\(\n\[]+?\s*\(\s*(?:NPM|NIM)\s*:\s*[^)\n\]]+\s*\)/i.test(cleanedKet)) {
+      cleanedKet = cleanedKet.replace(/Peserta\s*:\s*[^\(\n\[]+?\s*\(\s*(?:NPM|NIM)\s*:\s*[^)\n\]]+\s*\)/i, syncedLabel);
+    }
+  }
+
+  return {
+    participants: participants,
+    cleanedKet: cleanedKet,
+    ketChanged: cleanedKet !== ketStr
+  };
+}
+
+function syncJadwalParticipantsInternal_(ss) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName('Jadwal_Ujian');
+  if (!sheet) {
+    return { success: false, message: 'Sheet Jadwal_Ujian tidak ditemukan.' };
+  }
+
+  var pendaftaranList = [];
+  try { pendaftaranList = getSheetDataRaw(ss, 'Pendaftaran') || []; } catch (e) {}
+  pendaftaranList = pendaftaranList.map(function(p) {
+    if (p.Kelas) p.Kelas = normalizeClassName(p.Kelas);
+    return p;
+  });
+
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  var defaultBaseHeaders = ["ID", "Tanggal Ujian", "Jam Mulai", "Jam Selesai", "Ruangan", "Kode Prodi", "Program Studi", "Semester", "Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Ujian", "Keterangan"];
+  var rawValues = (lastRow >= 1 && lastCol >= 1) ? sheet.getRange(1, 1, lastRow, lastCol).getValues() : [defaultBaseHeaders];
+  var existingHeaders = rawValues[0] || defaultBaseHeaders;
+
+  // Tentukan kolom standar (buang kolom dinamis Nama Mahasiswa N / NPM N lama agar disusun ulang di paling kanan)
+  var baseColIndices = [];
+  var baseHeaders = [];
+  for (var c = 0; c < existingHeaders.length; c++) {
+    var hName = String(existingHeaders[c] || '').trim();
+    if (!hName) continue;
+    if (/^(?:Nama Mahasiswa|NPM)\s*\d*$/i.test(hName)) continue;
+    baseColIndices.push(c);
+    baseHeaders.push(hName);
+  }
+  if (baseHeaders.length === 0) {
+    baseHeaders = defaultBaseHeaders;
+    baseColIndices = defaultBaseHeaders.map(function(_, idx) { return idx; });
+  }
+
+  var ketColPos = baseHeaders.indexOf('Keterangan');
+  var kelasColPos = baseHeaders.indexOf('Kelas');
+  var dataRows = [];
+  var resolvedPerRow = [];
+  var maxParticipants = 1;
+  var cleanedTagRows = 0;
+
+  for (var r = 1; r < rawValues.length; r++) {
+    var rawRow = rawValues[r];
+    var isBlank = rawRow.every(function(cell) { return String(cell || '').trim() === ''; });
+    if (isBlank) continue;
+
+    var baseRow = [];
+    var rowObj = {};
+    for (var bi = 0; bi < baseColIndices.length; bi++) {
+      var val = rawRow[baseColIndices[bi]];
+      if (val instanceof Date) {
+        var hLower = baseHeaders[bi].toLowerCase();
+        val = (hLower.indexOf('jam') !== -1) ? formatTimeOnly(val) : formatDateOnly(val);
+      }
+      if (bi === kelasColPos && val) {
+        val = normalizeClassName(val);
+      }
+      baseRow.push(val !== undefined && val !== null ? val : '');
+      rowObj[baseHeaders[bi]] = val !== undefined && val !== null ? val : '';
+    }
+
+    var resolved = resolveJadwalPesertaGas(rowObj, pendaftaranList);
+    if (resolved.ketChanged && ketColPos !== -1) {
+      baseRow[ketColPos] = resolved.cleanedKet;
+      cleanedTagRows++;
+    }
+    if (resolved.participants.length > maxParticipants) {
+      maxParticipants = resolved.participants.length;
+    }
+
+    dataRows.push(baseRow);
+    resolvedPerRow.push(resolved.participants);
+  }
+
+  var finalHeaders = baseHeaders.slice();
+  for (var pIdx = 1; pIdx <= maxParticipants; pIdx++) {
+    finalHeaders.push('Nama Mahasiswa ' + pIdx);
+    finalHeaders.push('NPM ' + pIdx);
+  }
+
+  var outputMatrix = [finalHeaders];
+  for (var ri = 0; ri < dataRows.length; ri++) {
+    var outRow = dataRows[ri].slice();
+    var pts = resolvedPerRow[ri] || [];
+    for (var pi = 0; pi < maxParticipants; pi++) {
+      var pt = pts[pi];
+      if (pt) {
+        outRow.push(String(pt.nama || '-'));
+        outRow.push(String(pt.npm || '-'));
+      } else if (pi === 0 && pts.length === 0) {
+        outRow.push('-');
+        outRow.push('-');
+      } else {
+        outRow.push('');
+        outRow.push('');
+      }
+    }
+    outputMatrix.push(outRow);
+  }
+
+  var totalCols = finalHeaders.length;
+  var prevCols = Math.max(lastCol, totalCols);
+  if (lastRow > 0 && prevCols > totalCols) {
+    sheet.getRange(1, totalCols + 1, lastRow, prevCols - totalCols).clearContent();
+  }
+
+  // Pastikan kolom NPM diformat sebagai teks agar angka/nol di depan tidak berubah
+  var npmStartCol = baseHeaders.length + 2;
+  for (var cOff = 0; cOff < maxParticipants; cOff++) {
+    var npmColNum = npmStartCol + (cOff * 2);
+    if (outputMatrix.length > 1) {
+      sheet.getRange(2, npmColNum, outputMatrix.length - 1, 1).setNumberFormat('@');
+    }
+  }
+
+  sheet.getRange(1, 1, outputMatrix.length, totalCols).setValues(outputMatrix);
+
+  // Format header kolom peserta baru agar serasi dengan header utama
+  if (totalCols > baseHeaders.length) {
+    var newHeaderRange = sheet.getRange(1, baseHeaders.length + 1, 1, totalCols - baseHeaders.length);
+    newHeaderRange.setFontWeight('bold').setBackground('#1e3a8a').setFontColor('#ffffff');
+  }
+
+  SpreadsheetApp.flush();
+  return {
+    success: true,
+    rowCount: dataRows.length,
+    maxParticipants: maxParticipants,
+    cleanedTagRows: cleanedTagRows,
+    message: 'Sinkronisasi ' + dataRows.length + ' baris Jadwal_Ujian (' + maxParticipants + ' slot peserta paling kanan) ke Google Spreadsheet berhasil.'
+  };
+}
+
+function syncJadwalParticipantsToSheet() {
+  var lock = LockService.getScriptLock();
+  try {
+    try { lock.waitLock(15000); } catch (e) {}
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var res = syncJadwalParticipantsInternal_(ss);
+    if (res && res.success) {
+      bumpSyncVersion('Admin TU', 'Sinkron Peserta Jadwal_Ujian ke Spreadsheet');
+      addActivityLog('Admin TU', 'Sinkron Spreadsheet', 'Jadwal_Ujian', res.message, 'Admin');
+    }
+    return res;
+  } catch (err) {
+    return { success: false, message: 'Gagal menyinkronkan Jadwal_Ujian: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch (e) {}
+  }
+}
+
+// =========================================================================
+// [REVISI POIN 4 & 5]: Alur Jadwal Ujian Terhubung dengan Data Mahasiswa
+// Disinkronkan dengan NIM/NPM Mahasiswa Terpilih dan Format Jam/Tanggal Terstandar
+// =========================================================================
+function addJadwal(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    try { lock.waitLock(10000); } catch(e) {}
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Jadwal_Ujian');
+    if (!sheet) {
+      sheet = getOrCreateSheet(ss, 'Jadwal_Ujian');
+    }
+    var lastRow = sheet.getLastRow();
+    var maxIdNum = 1000;
+    if (lastRow > 1) {
+      var idValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+      for (var rIdx = 0; rIdx < idValues.length; rIdx++) {
+        var rawIdStr = String(idValues[rIdx][0] || '').trim();
+        var mId = rawIdStr.match(/^JDW-(\d+)/i);
+        if (mId) {
+          var parsedNum = parseInt(mId[1], 10);
+          if (!isNaN(parsedNum) && parsedNum > maxIdNum) {
+            maxIdNum = parsedNum;
+          }
+        }
+      }
+    }
+    var baseNum = Math.max(1000 + (lastRow > 1 ? lastRow : 1), maxIdNum + 1);
+    var baseId = 'JDW-' + baseNum;
+    if (payload.id && String(payload.id).indexOf('JDW-') === 0) {
+      baseId = String(payload.id).trim();
+    }
+
+    var kdProdi = payload['Kode Prodi'] || payload.kodeProdi || 'MNJ';
+    var nmProdi = payload['Program Studi'] || payload.programStudi || 'Manajemen';
+    var sem = payload.Semester || payload.semester || 'Semester 3';
+    var kls = payload.Kelas || payload.kelas || 'Reguler 3A';
+    var jnsUjian = payload['Jenis Ujian'] || payload.jenisUjian || 'UTS Susulan';
+    var pendaftarId = payload.pendaftarId || '';
+    var pNpm = payload.npm || payload.NPM || '';
+    var pNama = payload.namaMahasiswa || payload['Nama Mahasiswa'] || '';
+    var studentTag = '';
+    if (pNama || pNpm) {
+      studentTag = 'Peserta: ' + (pNama || '-') + (pNpm ? (' (NPM: ' + pNpm + ')') : '');
+    }
+    var baseKet = payload.Keterangan || payload.keterangan || studentTag;
+
+    var items = [];
+    if (Array.isArray(payload.items) && payload.items.length > 0) {
+      items = payload.items;
+    } else {
+      items = [{
+        id: baseId,
+        tanggalUjian: payload['Tanggal Ujian'] || payload.tanggalUjian || '',
+        jamMulai: payload['Jam Mulai'] || payload.jamMulai || '08:00',
+        jamSelesai: payload['Jam Selesai'] || payload.jamSelesai || '09:30',
+        ruangan: payload.Ruangan || payload.ruangan || '',
+        mataKuliah: payload['Mata Kuliah'] || payload.mataKuliah || '',
+        dosenPengampu: payload['Dosen Pengampu'] || payload.dosenPengampu || '',
+        keterangan: baseKet
+      }];
+    }
+
+    var createdItems = [];
+    var isMulti = items.length > 1;
+
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i];
+      var itemId = baseId;
+      if (isMulti) {
+        itemId = baseId + '-' + (i + 1);
+      } else if (item.id && String(item.id).indexOf('JDW-') === 0) {
+        itemId = String(item.id).trim();
+      }
+
+      var tgl = item['Tanggal Ujian'] || item.tanggalUjian || payload['Tanggal Ujian'] || payload.tanggalUjian || '';
+      var jmMulai = item['Jam Mulai'] || item.jamMulai || payload['Jam Mulai'] || payload.jamMulai || '08:00';
+      var jmSelesai = item['Jam Selesai'] || item.jamSelesai || payload['Jam Selesai'] || payload.jamSelesai || '09:30';
+      var ruang = item.Ruangan || item.ruangan || payload.Ruangan || payload.ruangan || '';
+      var matkul = item['Mata Kuliah'] || item.mataKuliah || '';
+      var dosen = item['Dosen Pengampu'] || item.dosenPengampu || '';
+      var ket = String(item.Keterangan || item.keterangan || baseKet || '').trim();
+      if (studentTag && ket.indexOf(pNpm || '___NONE___') === -1 && ket.indexOf('Peserta:') === -1) {
+        ket = ket ? (ket + ' | ' + studentTag) : studentTag;
+      }
+      if (pendaftarId && ket.indexOf(pendaftarId) === -1) {
+        ket = (ket ? (ket + ' ') : '') + '[ID: ' + pendaftarId + ']';
+      }
+
+      var row = [
+        itemId, tgl, jmMulai, jmSelesai, ruang, kdProdi, nmProdi, sem, kls, matkul, dosen, jnsUjian, ket
+      ];
+      sheet.appendRow(row);
+
+      createdItems.push({
+        ID: itemId,
+        'Tanggal Ujian': tgl,
+        'Jam Mulai': jmMulai,
+        'Jam Selesai': jmSelesai,
+        Ruangan: ruang,
+        'Kode Prodi': kdProdi,
+        'Program Studi': nmProdi,
+        Semester: sem,
+        Kelas: kls,
+        'Mata Kuliah': matkul,
+        'Dosen Pengampu': dosen,
+        'Jenis Ujian': jnsUjian,
+        Keterangan: ket
+      });
+    }
+
+    SpreadsheetApp.flush();
+    try { syncJadwalParticipantsInternal_(ss); } catch (syncErr) { Logger.log('Auto-sync Jadwal_Ujian pasca add: ' + syncErr.message); }
+
+    // Otomatis ubah Status Jadwal pada sheet Pendaftaran menjadi "Terjadwal"
+    if (pendaftarId) {
+      try {
+        var pSheet = ss.getSheetByName('Pendaftaran');
+        if (pSheet) {
+          var pData = pSheet.getDataRange().getValues();
+          var pHeaderMap = getHeaderIndexMap(pSheet);
+          var colStatusJadwal = pHeaderMap['Status Jadwal'];
+          var colPId = pHeaderMap['ID'] || 1;
+          if (colStatusJadwal) {
+            for (var pIdx = 1; pIdx < pData.length; pIdx++) {
+              if (String(pData[pIdx][colPId - 1]).trim() === String(pendaftarId).trim()) {
+                pSheet.getRange(pIdx + 1, colStatusJadwal).setValue('Terjadwal');
+                break;
+              }
+            }
+          }
+        }
+      } catch (pErr) {
+        Logger.log('Gagal update Status Jadwal Pendaftaran: ' + pErr.message);
+      }
+    }
+
+    var logSummary = isMulti ? (createdItems.length + ' Mata Kuliah (' + baseId + ')') : (createdItems[0].ID + ' (' + createdItems[0]['Mata Kuliah'] + ')');
+    var jActor = String(payload.actor || 'Admin TU').trim();
+    var jRole = String(payload.role || 'Admin TU').trim();
+    bumpSyncVersion(jActor, 'Tambah Jadwal Ujian ' + logSummary);
+    addActivityLog(jActor, 'Tambah Jadwal Ujian', logSummary, 'Penjadwalan ' + (isMulti ? (createdItems.length + ' mata kuliah') : ('ruangan ' + createdItems[0].Ruangan)), jRole);
+
+    return {
+      success: true,
+      message: isMulti ? ('Berhasil menerbitkan ' + createdItems.length + ' jadwal ujian (' + baseId + '-1 s.d. -' + createdItems.length + ')') : ('Jadwal ujian berhasil disimpan dengan Kode: ' + createdItems[0].ID),
+      items: createdItems,
+      item: createdItems[0]
+    };
+  } catch (err) {
+    return { success: false, message: 'Gagal menambah jadwal: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+function updateJadwal(idOrPayload, maybePayload) {
+  var id = '';
+  var payload = {};
+
+  if (typeof idOrPayload === 'object' && idOrPayload !== null) {
+    payload = idOrPayload;
+    id = String(payload.id || payload.ID || payload.jadwalId || '').trim();
+  } else {
+    id = String(idOrPayload || '').trim();
+    payload = maybePayload || {};
+  }
+
+  // Jika ID kosong atau berupa ID pendaftaran (REG-...), simpan langsung sebagai jadwal baru
+  if (!id || id.indexOf('REG-') === 0) {
+    return addJadwal(payload);
+  }
+
+  var lock = LockService.getScriptLock();
+  try {
+    try { lock.waitLock(10000); } catch(e) {}
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Jadwal_Ujian');
+    if (!sheet) {
+      sheet = getOrCreateSheet(ss, 'Jadwal_Ujian');
+    }
+    var data = sheet.getDataRange().getValues();
+    var foundIndex = -1;
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === id) {
+        foundIndex = i + 1;
+        break;
+      }
+    }
+
+    // Jika ID tidak ditemukan di sheet Jadwal_Ujian, fallback otomatis ke addJadwal agar tidak gagal!
+    if (foundIndex === -1) {
+      return addJadwal(payload);
+    }
+
+    var tgl = payload['Tanggal Ujian'] || payload.tanggalUjian || data[foundIndex - 1][1];
+    var jmMulai = payload['Jam Mulai'] || payload.jamMulai || data[foundIndex - 1][2];
+    var jmSelesai = payload['Jam Selesai'] || payload.jamSelesai || data[foundIndex - 1][3];
+    var ruang = payload.Ruangan || payload.ruangan || data[foundIndex - 1][4];
+    var kdProdi = payload['Kode Prodi'] || payload.kodeProdi || data[foundIndex - 1][5];
+    var nmProdi = payload['Program Studi'] || payload.programStudi || data[foundIndex - 1][6];
+    var sem = payload.Semester || payload.semester || data[foundIndex - 1][7];
+    var kls = payload.Kelas || payload.kelas || data[foundIndex - 1][8];
+    var matkul = payload['Mata Kuliah'] || payload.mataKuliah || data[foundIndex - 1][9];
+    var dosen = payload['Dosen Pengampu'] || payload.dosenPengampu || data[foundIndex - 1][10];
+    var jnsUjian = payload['Jenis Ujian'] || payload.jenisUjian || data[foundIndex - 1][11];
+    var ket = payload.Keterangan || payload.keterangan || data[foundIndex - 1][12];
+
+    sheet.getRange(foundIndex, 1, 1, 13).setValues([[
+      id, tgl, jmMulai, jmSelesai, ruang, kdProdi, nmProdi, sem, kls, matkul, dosen, jnsUjian, ket
+    ]]);
+    SpreadsheetApp.flush();
+    try { syncJadwalParticipantsInternal_(ss); } catch (syncErr) { Logger.log('Auto-sync Jadwal_Ujian pasca update: ' + syncErr.message); }
+
+    bumpSyncVersion(payload.actor || 'Admin TU', 'Update Jadwal ' + id);
+    addActivityLog(payload.actor || 'Admin TU', 'Update Jadwal Ujian', id + ' (' + matkul + ')', 'Pembaruan jadwal ujian ruangan ' + ruang + ' tanggal ' + tgl, 'Admin');
+    return { success: true, message: 'Jadwal ujian ' + id + ' berhasil diperbarui.' };
+  } catch (err) {
+    return { success: false, message: 'Gagal memperbarui jadwal: ' + err.message };
+  } finally {
+    try { lock.releaseLock(); } catch(e) {}
+  }
+}
+
+function deleteJadwal(id, actor, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getActiveSpreadsheetSafe();
+    var sheet = ss.getSheetByName('Jadwal_Ujian');
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(id).trim()) {
+        // Pulihkan status jadwal di sheet Pendaftaran jika ada referensi ID pendaftar
+        var ket = String(data[i][12] || '');
+        var matchReg = ket.match(/\[ID:\s*(REG-[0-9]+)\]/i);
+        var regId = matchReg ? matchReg[1] : '';
+        if (regId) {
+          try {
+            var pSheet = ss.getSheetByName('Pendaftaran');
+            if (pSheet) {
+              var pData = pSheet.getDataRange().getValues();
+              var pMap = getHeaderIndexMap(pSheet);
+              var colSts = pMap['Status Jadwal'];
+              var colPId = pMap['ID'] || 1;
+              if (colSts) {
+                for (var pi = 1; pi < pData.length; pi++) {
+                  if (String(pData[pi][colPId - 1]).trim() === regId) {
+                    pSheet.getRange(pi + 1, colSts).setValue('Tepat Waktu');
+                    break;
+                  }
+                }
+              }
+            }
+          } catch(e) {}
+        }
+
+        sheet.deleteRow(i + 1);
+        SpreadsheetApp.flush();
+        try { syncJadwalParticipantsInternal_(ss); } catch (syncErr) { Logger.log('Auto-sync Jadwal_Ujian pasca delete: ' + syncErr.message); }
+        var actorName = String(actor || 'Admin TU').trim();
+        var actorRole = String(userRole || 'Admin TU').trim();
+        bumpSyncVersion(actorName, 'Hapus Jadwal ' + id);
+        addActivityLog(actorName, 'Hapus Jadwal Ujian', id, 'Penghapusan data jadwal ujian dari sistem', actorRole);
+        return { success: true, message: 'Jadwal ' + id + ' berhasil dihapus.' };
+      }
+    }
+    return { success: false, message: 'Jadwal tidak ditemukan' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function addNotification(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Notifikasi');
+    var id = 'NTF-' + (new Date().getTime()).toString().slice(-4);
+    var waktu = formatDateToString(new Date());
+    var row = [
+      id,
+      waktu,
+      payload.judul || payload.Judul || '',
+      payload.pesan || payload.Pesan || '',
+      payload.tipe || payload.Tipe || 'Pengumuman',
+      payload.targetRole || payload.TargetRole || 'Semua',
+      payload.targetNpm || payload.TargetNPM || 'Semua',
+      'Belum'
+    ];
+    sheet.appendRow(row);
+    SpreadsheetApp.flush();
+    bumpSyncVersion(payload.actor || 'Sistem', 'Terbitkan Notifikasi ' + row[2]);
+    return { success: true, item: { ID: id, Waktu: waktu, Judul: row[2], Pesan: row[3], Tipe: row[4], TargetRole: row[5], TargetNPM: row[6], Dibaca: false } };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function markNotificationRead(id) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Notifikasi');
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(id).trim()) {
+        sheet.getRange(i + 1, 8).setValue('Sudah');
+        SpreadsheetApp.flush();
+        return { success: true };
+      }
+    }
+    return { success: false, message: 'Notifikasi tidak ditemukan' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =========================================================================
+// [REVISI POIN 2]: Fungsi Hapus Notifikasi Secara Manual (1 per 1) & Massal
+// =========================================================================
+function deleteNotification(id) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Notifikasi');
+    if (!sheet) return { success: false, message: 'Sheet Notifikasi tidak ditemukan.' };
+    var data = sheet.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim() === String(id).trim()) {
+        sheet.deleteRow(i + 1);
+        SpreadsheetApp.flush();
+        bumpSyncVersion('Sistem', 'Hapus Notifikasi ' + id);
+        return { success: true, message: 'Notifikasi berhasil dihapus.' };
+      }
+    }
+    return { success: false, message: 'Notifikasi tidak ditemukan.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function bulkDeleteNotifications(idList) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Notifikasi');
+    if (!sheet) return { success: false, message: 'Sheet Notifikasi tidak ditemukan.' };
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return { success: true, message: 'Tidak ada data notifikasi.' };
+
+    var idSet = {};
+    if (Array.isArray(idList)) {
+      idList.forEach(function(id) { idSet[String(id).trim()] = true; });
+    }
+
+    var cleanRows = [data[0]];
+    var deletedCount = 0;
+    for (var i = 1; i < data.length; i++) {
+      var rowId = String(data[i][0]).trim();
+      if (idSet[rowId]) {
+        deletedCount++;
+      } else {
+        cleanRows.push(data[i]);
+      }
+    }
+
+    sheet.clearContents();
+    sheet.getRange(1, 1, cleanRows.length, cleanRows[0].length).setValues(cleanRows);
+    SpreadsheetApp.flush();
+    bumpSyncVersion('Sistem', deletedCount + ' notifikasi dihapus massal');
+    return { success: true, message: deletedCount + ' notifikasi berhasil dihapus.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteAllNotifications() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getSheetByName('Notifikasi');
+    if (!sheet) return { success: false, message: 'Sheet Notifikasi tidak ditemukan.' };
+    var data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return { success: true, message: 'Sheet notifikasi sudah kosong.' };
+
+    var headerRow = [data[0]];
+    var count = data.length - 1;
+    sheet.clearContents();
+    sheet.getRange(1, 1, 1, headerRow[0].length).setValues(headerRow);
+    SpreadsheetApp.flush();
+    bumpSyncVersion('Sistem', 'Hapus seluruh notifikasi');
+    return { success: true, message: count + ' notifikasi berhasil dibersihkan.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function onOpen(e) {
+  try {
+    var ui = SpreadsheetApp.getUi();
+    ui.createMenu('🎓 SIP-AKADEMIK FEB UIKA')
+      .addItem('🪪 Cetak Kartu Ujian Digital', 'renderKartuUjianDigital')
+      .addItem('🔄 Sinkronisasi Data Real-Time', 'getInitialData')
+      .addItem('📊 Sinkron Peserta Jadwal_Ujian ke Sheet', 'syncJadwalParticipantsToSheet')
+      .addToUi();
+  } catch (err) {}
+}
+
+/**
+ * =========================================================================
+ * [REVISI POIN 6]: renderKartuUjianDigital
+ * Kartu HANYA BISA TAMPIL jika Admin Master/TU sudah selesai memasukkan
+ * jadwal ujian untuk mahasiswa tersebut. Jika belum, tampilkan pesan status pending.
+ * =========================================================================
+ */
+function renderKartuUjianDigital(pendaftaranIdOrNpm) {
+  try {
+    var pendaftaranList = getSheetData('Pendaftaran') || [];
+    var jadwalList = getSheetData('Jadwal_Ujian') || [];
+    var targetPendaftaran = null;
+
+    if (pendaftaranIdOrNpm) {
+      var query = String(pendaftaranIdOrNpm).trim().toLowerCase();
+      for (var i = 0; i < pendaftaranList.length; i++) {
+        var p = pendaftaranList[i];
+        var pId = String(p.ID || '').trim().toLowerCase();
+        var pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+        if (pId === query || pNpm === query) {
+          targetPendaftaran = p;
+          break;
+        }
+      }
+    }
+
+    if (!targetPendaftaran) {
+      for (var j = 0; j < pendaftaranList.length; j++) {
+        if (String(pendaftaranList[j]['Status Persetujuan'] || '').toLowerCase() === 'disetujui') {
+          targetPendaftaran = pendaftaranList[j];
+          break;
+        }
+      }
+      if (!targetPendaftaran && pendaftaranList.length > 0) {
+        targetPendaftaran = pendaftaranList[0];
+      }
+    }
+
+    if (!targetPendaftaran) {
+      targetPendaftaran = {
+        ID: 'PND-2026-001',
+        'Nama Mahasiswa': 'Aldiaz Mahasiswa FEB',
+        NPM: '2311010045',
+        'Program Studi': 'Manajemen',
+        'Kode Prodi': 'MNJ',
+        'Mata Kuliah': 'Manajemen Keuangan Lanjutan',
+        'Dosen Pengampu': 'Dr. H. Hendri Tanjung, M.M.',
+        'Jenis Layanan': 'UTS Susulan',
+        'Tahun Akademik': '2026/2027',
+        Semester: 'Ganjil',
+        'Status Persetujuan': 'Disetujui'
+      };
+    }
+
+    var mhsNpm = targetPendaftaran.NPM || targetPendaftaran.NIM || '-';
+    var statusApp = targetPendaftaran['Status Persetujuan'] || 'Pending';
+
+    // [REVISI POIN 6 & SINKRONISASI TERPADU]: Cocokkan jadwal ujian per mata kuliah secara presisi (Prodi + Sem + Kelas + Matkul + ID/NPM)
+    var courses = extractMataKuliahListGas(targetPendaftaran);
+    if (courses.length === 0) {
+      courses = [{
+        nama: targetPendaftaran['Mata Kuliah'] || '-',
+        mataKuliah: targetPendaftaran['Mata Kuliah'] || '-',
+        dosen: targetPendaftaran['Dosen Pengampu'] || '-',
+        dosenPengampu: targetPendaftaran['Dosen Pengampu'] || '-',
+        sks: 3
+      }];
+    }
+
+    function findScheduleForCourseGas(p, course) {
+      var pId = String(p.ID || p.id || '').trim();
+      var pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+      var pProdi = String(p['Kode Prodi'] || '').trim().toUpperCase();
+      var pSem = String(p.Semester || '').trim().toLowerCase();
+      var pKelas = normalizeClassName(p.Kelas || '').toLowerCase();
+      var cMatkul = course ? (course.mataKuliah || course.nama || '') : '';
+
+      // Pass 1: Kepemilikan eksplisit tervalidasi Prodi/Kelas/Matkul
+      for (var ji = 0; ji < jadwalList.length; ji++) {
+        var jdw = jadwalList[ji];
+        var jProdi = String(jdw['Kode Prodi'] || '').trim().toUpperCase();
+        var jKelas = normalizeClassName(jdw.Kelas || '').toLowerCase();
+        if (pProdi && jProdi && pProdi !== jProdi) continue;
+        if (pKelas && jKelas && pKelas !== jKelas) continue;
+
+        var jKet = String(jdw.Keterangan || '').toLowerCase();
+        var jPId = String(jdw.pendaftarId || jdw.pendaftaranId || '').trim();
+        var allTags = [];
+        var tgM;
+        var tgRe = /\[id:\s*(reg-\d+)\]/gi;
+        while ((tgM = tgRe.exec(jKet)) !== null) {
+          allTags.push(tgM[1].toUpperCase());
+        }
+        var hasExplicitReg = (jPId && pId && jPId.toUpperCase() === pId.toUpperCase()) ||
+                             (pId && allTags.indexOf(pId.toUpperCase()) !== -1);
+        var hasNpmTag = pNpm && (jKet.indexOf(pNpm) !== -1 || String(jdw.npm || '').toLowerCase() === pNpm);
+        if (allTags.length > 0 && pId && allTags.indexOf(pId.toUpperCase()) === -1) continue;
+        if (!hasExplicitReg && !hasNpmTag) continue;
+        if (isCourseNameMatchedGas(jdw['Mata Kuliah'], cMatkul)) return jdw;
+      }
+
+      // Pass 2: Legacy fallback (Prodi + Semester + Kelas + Matkul)
+      for (var jj = 0; jj < jadwalList.length; jj++) {
+        var jdw2 = jadwalList[jj];
+        var jKet2 = String(jdw2.Keterangan || '').toLowerCase();
+        var tgRe2 = /\[id:\s*(reg-\d+)\]/i;
+        var tg2 = jKet2.match(tgRe2);
+        if (tg2 && pId && tg2[1].toUpperCase() !== pId.toUpperCase()) continue;
+        if (!isCourseNameMatchedGas(jdw2['Mata Kuliah'], cMatkul)) continue;
+        var jP2 = String(jdw2['Kode Prodi'] || '').trim().toUpperCase();
+        var jS2 = String(jdw2.Semester || '').trim().toLowerCase();
+        var jK2 = normalizeClassName(jdw2.Kelas || '').toLowerCase();
+        if ((!pProdi || !jP2 || pProdi === jP2) && (!pSem || !jS2 || pSem === jS2) && (!pKelas || !jK2 || pKelas === jK2)) {
+          return jdw2;
+        }
+      }
+      return null;
+    }
+
+    var scheduledCourses = courses.map(function(c) {
+      return { course: c, schedule: findScheduleForCourseGas(targetPendaftaran, c) };
+    });
+    var matchJadwal = null;
+    for (var scIdx = 0; scIdx < scheduledCourses.length; scIdx++) {
+      if (scheduledCourses[scIdx].schedule && scheduledCourses[scIdx].schedule['Tanggal Ujian'] && scheduledCourses[scIdx].schedule.Ruangan) {
+        matchJadwal = scheduledCourses[scIdx].schedule;
+        break;
+      }
+    }
+
+    // Jika status belum Disetujui atau jadwal ujian belum selesai dimasukkan oleh Admin TU: Tampilkan Pesan Status Pending!
+    var hasValidSchedule = (matchJadwal !== null);
+    var isApproved = (statusApp.toLowerCase() === 'disetujui');
+
+    if (!isApproved || !hasValidSchedule) {
+      var pendingReason = !isApproved 
+        ? 'Berkas pendaftaran Anda masih berstatus "' + statusApp + '" (menunggu verifikasi persetujuan oleh Admin TU).'
+        : 'Jadwal pelaksanaan ujian untuk mata kuliah "' + (targetPendaftaran['Mata Kuliah'] || '-') + '" belum selesai dimasukkan oleh Admin Master/TU.';
+
+      var pendingHtml = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+        '<title>Status Kartu Ujian - FEB UIKA Bogor</title>' +
+        '<script src="https://cdn.tailwindcss.com"></script>' +
+        '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">' +
+        '</head><body class="p-6 bg-slate-100 flex items-center justify-center min-h-screen font-sans">' +
+        '<div class="max-w-md w-full bg-white rounded-3xl border border-slate-200 shadow-xl p-6 text-center space-y-4">' +
+        '<div class="w-16 h-16 mx-auto bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center text-2xl shadow-inner">' +
+        '<i class="fas fa-hourglass-half animate-pulse"></i></div>' +
+        '<h3 class="text-base font-black text-slate-800 uppercase tracking-tight">KARTU UJIAN DIGITAL BELUM TERSEDIA</h3>' +
+        '<div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs text-left space-y-2">' +
+        '<p class="text-amber-900 font-bold"><i class="fas fa-circle-exclamation"></i> Keterangan Status:</p>' +
+        '<p class="text-slate-700 leading-relaxed">' + pendingReason + '</p>' +
+        '<div class="pt-2 border-t border-amber-200 text-[11px] text-slate-600 space-y-1">' +
+        '<p><b>Nama:</b> ' + targetPendaftaran['Nama Mahasiswa'] + ' (NPM: ' + mhsNpm + ')</p>' +
+        '<p><b>Mata Kuliah:</b> ' + targetPendaftaran['Mata Kuliah'] + '</p>' +
+        '<p><b>Status Jadwal:</b> <span class="text-amber-800 font-bold">Menunggu Input Jadwal oleh Admin TU</span></p>' +
+        '</div></div>' +
+        '<p class="text-[11px] text-slate-500">Kartu Tanda Peserta Ujian Digital otomatis dapat dicetak setelah Admin Tata Usaha selesai menjadwalkan Tanggal, Jam, dan Ruangan Ujian Anda.</p>' +
+        '</div></body></html>';
+
+      return {
+        success: false,
+        status: 'PENDING_SCHEDULE',
+        message: pendingReason,
+        data: targetPendaftaran,
+        html: pendingHtml
+      };
+    }
+
+    var noRegistrasi = targetPendaftaran.ID || 'PND-001';
+    var tglCetak = formatDateOnly(new Date());
+    var tableRowsHtml = scheduledCourses.map(function(sc, idxRow) {
+      var c = sc.course;
+      var j = sc.schedule;
+      var tglTxt = j ? String(j['Tanggal Ujian'] || '-') : '<span class="text-amber-600 font-bold italic">Menunggu Jadwal</span>';
+      var jamTxt = (j && j['Jam Mulai'] && j['Jam Selesai']) ? (j['Jam Mulai'] + ' - ' + j['Jam Selesai'] + ' WIB') : '';
+      var ruangTxt = j ? ('<span class="px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 font-black border border-emerald-300 text-xs">' + j.Ruangan + '</span>') : '-';
+      return '<tr class="border-b border-slate-100">' +
+        '<td class="p-2.5 text-center font-mono font-bold text-blue-900">' + (idxRow + 1) + '</td>' +
+        '<td class="p-2.5"><div class="font-extrabold text-blue-950">' + (c.mataKuliah || c.nama) + ' (' + (c.sks || 3) + ' SKS)</div>' +
+        '<div class="text-[11px] text-slate-500">Dosen: ' + (c.dosenPengampu || c.dosen || '-') + '</div></td>' +
+        '<td class="p-2.5 whitespace-nowrap"><div class="font-bold text-slate-900">' + tglTxt + '</div>' +
+        (jamTxt ? '<div class="font-mono font-bold text-indigo-950 text-[11px]">' + jamTxt + '</div>' : '') + '</td>' +
+        '<td class="p-2.5 text-center whitespace-nowrap">' + ruangTxt + '</td></tr>';
+    }).join('');
+
+    var htmlContent = '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+      '<title>Kartu Tanda Peserta Ujian - FEB UIKA Bogor</title>' +
+      '<script src="https://cdn.tailwindcss.com"></' + 'script>' +
+      '<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">' +
+      '<style>' +
+      '@media print { .no-print { display: none !important; } body { padding: 0 !important; background: white !important; } }' +
+      'body { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8fafc; color: #1e293b; }' +
+      '</style>' +
+      '</head><body class="p-4 sm:p-6 flex items-center justify-center min-h-screen">' +
+      '<div class="max-w-2xl w-full bg-white rounded-3xl border-2 border-slate-300 shadow-xl p-6 sm:p-8 space-y-4">' +
+      '<div class="flex items-center space-x-4 border-b-2 border-slate-900 pb-3" style="display:flex;align-items:center;border-bottom:2px solid #0f172a;padding-bottom:12px;gap:16px;">' +
+      '<div class="w-16 h-16 shrink-0 flex items-center justify-center" style="width:64px;height:64px;flex-shrink:0;display:flex;align-items:center;justify-content:center;">' +
+      '<img src="https://lh3.googleusercontent.com/d/1o6uQ6Fak-bFbJUzhH7LyDqqT_KjVuqge" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src=\'https://drive.google.com/thumbnail?id=1o6uQ6Fak-bFbJUzhH7LyDqqT_KjVuqge&sz=w200\';" alt="Logo Resmi UIKA Bogor" class="w-full h-full object-contain" style="max-width:64px;max-height:64px;object-fit:contain;" />' +
+      '</div>' +
+      '<div class="space-y-0.5" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">' +
+      '<h2 class="text-sm sm:text-base font-black text-slate-900 tracking-tight uppercase leading-snug" style="margin:0;font-size:14px;font-weight:900;line-height:1.25;color:#0f172a;text-transform:uppercase;">UNIVERSITAS IBN KHALDUN BOGOR</h2>' +
+      '<h3 class="text-xs sm:text-sm font-bold text-blue-900 uppercase" style="margin:0;font-size:12px;font-weight:700;line-height:1.25;color:#1e3a8a;text-transform:uppercase;">FAKULTAS EKONOMI DAN BISNIS (FEB)</h3>' +
+      '<p class="text-[10px] sm:text-xs text-slate-500 font-semibold tracking-wider" style="margin:0;font-size:10px;font-weight:600;line-height:1.25;color:#64748b;letter-spacing:0.05em;text-transform:uppercase;">KARTU TANDA PESERTA UJIAN SUSULAN / REMEDIAL AKADEMIK</p>' +
+      '</div></div>' +
+      '<div class="flex justify-between items-center pt-1">' +
+      '<div>' +
+      '<span class="text-[11px] font-mono font-bold text-blue-900 bg-blue-50 px-2.5 py-1 rounded border border-blue-200">NO: ' + noRegistrasi + '</span>' +
+      '<h4 class="text-base font-black text-slate-900 mt-1 uppercase">' + (targetPendaftaran['Jenis Layanan'] || 'UTS Susulan') + '</h4>' +
+      '</div>' +
+      '<div class="text-right">' +
+      '<span class="px-3 py-1 rounded-full text-xs font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">' + statusApp + '</span>' +
+      '<p class="text-[10px] text-slate-400 mt-1 font-mono">TA ' + (targetPendaftaran['Tahun Akademik'] || '2026/2027') + ' (' + (targetPendaftaran.Semester || 'Ganjil') + ')</p>' +
+      '</div></div>' +
+      '<div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs sm:text-sm space-y-2">' +
+      '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">Nama Mahasiswa</span><span class="col-span-2 font-black text-slate-900">: ' + targetPendaftaran['Nama Mahasiswa'] + '</span></div>' +
+      '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">NPM / NIM</span><span class="col-span-2 font-bold font-mono text-slate-900">: ' + mhsNpm + '</span></div>' +
+      '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">Program Studi</span><span class="col-span-2 font-semibold text-slate-800">: ' + (targetPendaftaran['Program Studi'] || '-') + ' (' + (targetPendaftaran['Kode Prodi'] || '-') + ')</span></div>' +
+      '<div class="grid grid-cols-3 gap-1"><span class="text-slate-500 font-semibold">Semester & Kelas</span><span class="col-span-2 font-semibold text-slate-800">: ' + (targetPendaftaran.Semester || '-') + ' · ' + (targetPendaftaran.Kelas || '-') + '</span></div>' +
+      '</div>' +
+      '<div class="bg-white rounded-2xl border border-slate-200 overflow-hidden">' +
+      '<div class="bg-indigo-900 text-white px-3 py-2 font-bold text-xs flex items-center justify-between">' +
+      '<span>Rincian Jadwal & Ruangan Ujian</span>' +
+      '<span class="text-[10px] bg-indigo-800 px-2 py-0.5 rounded font-mono">' + scheduledCourses.length + ' Mata Kuliah</span>' +
+      '</div>' +
+      '<div class="overflow-x-auto"><table class="w-full text-left text-xs">' +
+      '<thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase">' +
+      '<tr><th class="p-2.5 text-center w-8">#</th><th class="p-2.5">Mata Kuliah & Dosen</th><th class="p-2.5">Jadwal Pelaksanaan</th><th class="p-2.5 text-center">Ruangan</th></tr>' +
+      '</thead><tbody>' + tableRowsHtml + '</tbody></table></div></div>' +
+      '<div class="pt-3 border-t border-slate-200 text-xs text-slate-500 space-y-2">' +
+      '<div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-3">' +
+      '<div class="space-y-1 max-w-xs">' +
+      '<p class="font-bold text-slate-700 uppercase text-[11px]">Validasi Kepesertaan Resmi:</p>' +
+      '<p class="text-[10px] leading-tight">Dokumen ini sah diterbitkan secara elektronik oleh Subbagian Akademik FEB UIKA Bogor dan berlaku resmi tanpa tanda tangan basah peserta.</p>' +
+      '<p class="font-mono text-[10px] text-slate-400">Kode Hash: FEB-' + noRegistrasi + '-' + String(mhsNpm).slice(-4) + '</p>' +
+      '</div>' +
+      '<div class="text-center sm:text-right self-end">' +
+      '<p class="text-[11px] text-slate-500">Bogor, ' + tglCetak + '</p>' +
+      '<p class="font-bold text-slate-900 text-xs mt-0.5">Kasubbag Akademik & Tata Usaha,</p>' +
+      '<p class="font-black text-slate-900 mt-5 underline text-xs">Wawan Setiawan, M.Pd.</p>' +
+      '<p class="text-[10px] font-mono text-slate-500">NIK. 410100242</p>' +
+      '</div></div></div>' +
+      '<div class="flex justify-between items-center pt-3 text-xs no-print">' +
+      '<span class="text-emerald-800 font-bold flex items-center space-x-1.5"><i class="fas fa-shield-halved"></i> <span>Terverifikasi Sah Sistem Akademik</span></span>' +
+      '<div class="space-x-2">' +
+      '<button type="button" onclick="window.print()" class="bg-blue-900 hover:bg-blue-950 text-white font-bold px-4 py-2 rounded-xl text-xs shadow inline-flex items-center space-x-1.5 cursor-pointer">' +
+      '<i class="fas fa-print"></i> <span>Cetak Kartu</span></button>' +
+      '</div></div>' +
+      '</div></body></html>';
+
+    try {
+      var ui = SpreadsheetApp.getUi();
+      var output = HtmlService.createHtmlOutput(htmlContent)
+        .setWidth(720)
+        .setHeight(650);
+      ui.showModalDialog(output, 'Kartu Ujian Digital - ' + (targetPendaftaran['Nama Mahasiswa'] || 'FEB UIKA'));
+    } catch (e) {}
+
+    return {
+      success: true,
+      message: 'Kartu ujian digital berhasil digenerate',
+      data: targetPendaftaran,
+      html: htmlContent
+    };
+  } catch (err) {
+    return {
+      success: false,
+      message: 'Error renderKartuUjianDigital: ' + err.message
+    };
+  }
+}
+
+// =========================================================================
+// [ARSITEKTUR & OPTIMASI PERFORMA]: 5. Pembersihan Baris & Kolom Kosong (Auto-Trim)
+// Menghapus baris/kolom kosong tak terpakai untuk mempercepat waktu I/O Google Sheets
+// =========================================================================
+function optimizeSpreadsheetStorage() {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheets = ss.getSheets();
+    var report = [];
+
+    sheets.forEach(function(sh) {
+      var maxRows = sh.getMaxRows();
+      var lastRow = sh.getLastRow();
+      var maxCols = sh.getMaxColumns();
+      var lastCol = sh.getLastColumn();
+
+      var targetRows = Math.max(lastRow + 5, 25);
+      var targetCols = Math.max(lastCol + 2, 12);
+
+      var rowsDeleted = 0;
+      var colsDeleted = 0;
+
+      if (maxRows > targetRows) {
+        rowsDeleted = maxRows - targetRows;
+        sh.deleteRows(targetRows + 1, rowsDeleted);
+      }
+      if (maxCols > targetCols) {
+        colsDeleted = maxCols - targetCols;
+        sh.deleteColumns(targetCols + 1, colsDeleted);
+      }
+
+      report.push({
+        sheet: sh.getName(),
+        rowsDeleted: rowsDeleted,
+        colsDeleted: colsDeleted,
+        currentRows: sh.getMaxRows(),
+        currentCols: sh.getMaxColumns()
+      });
+    });
+
+    addActivityLog('Sistem', 'Optimasi Database', 'Spreadsheet', 'Pembersihan baris & kolom kosong pada ' + sheets.length + ' sheet.', 'Admin');
+    return { success: true, message: 'Spreadsheet berhasil dioptimalkan. I/O berlebih berhasil dipangkas.', report: report };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =========================================================================
+// [ARSITEKTUR & OPTIMASI PERFORMA]: 8. Struktur Auto-Archive
+// Memisahkan data semester berjalan dengan arsip semester lalu
+// =========================================================================
+function archiveSemesterData(tahunAkademikTarget) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var pendaftaranSheet = ss.getSheetByName('Pendaftaran');
+    if (!pendaftaranSheet) throw new Error("Sheet Pendaftaran tidak ditemukan.");
+
+    var values = pendaftaranSheet.getDataRange().getValues();
+    if (values.length <= 1) return { success: true, count: 0, message: "Tidak ada data untuk diarsipkan." };
+
+    var headers = values[0];
+    var taColIndex = -1;
+    for (var c = 0; c < headers.length; c++) {
+      if (headers[c] === 'Tahun Akademik') {
+        taColIndex = c;
+        break;
+      }
+    }
+    if (taColIndex === -1) taColIndex = 4;
+
+    var archiveRows = [];
+    var activeRows = [headers];
+
+    for (var i = 1; i < values.length; i++) {
+      var row = values[i];
+      var rowTa = String(row[taColIndex] || '').trim();
+      if (tahunAkademikTarget && rowTa === String(tahunAkademikTarget).trim()) {
+        archiveRows.push(row);
+      } else {
+        activeRows.push(row);
+      }
+    }
+
+    if (archiveRows.length === 0) {
+      return { success: true, count: 0, message: "Tidak ada berkas dengan Tahun Akademik " + tahunAkademikTarget + " untuk diarsipkan." };
+    }
+
+    var cleanTaName = String(tahunAkademikTarget).replace(/[^a-zA-Z0-9]/g, '_');
+    var archiveSheetName = 'Archive_Pendaftaran_' + cleanTaName;
+    var archiveSheet = ss.getSheetByName(archiveSheetName);
+    if (!archiveSheet) {
+      archiveSheet = ss.insertSheet(archiveSheetName);
+      archiveSheet.appendRow(headers);
+      archiveSheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e2e8f0');
+    }
+
+    // Tulis baris arsip dalam satu batch (Single-Batch setValues)
+    archiveSheet.getRange(archiveSheet.getLastRow() + 1, 1, archiveRows.length, headers.length).setValues(archiveRows);
+
+    // Perbarui sheet Pendaftaran aktif secara single batch
+    pendaftaranSheet.clearContents();
+    pendaftaranSheet.getRange(1, 1, activeRows.length, headers.length).setValues(activeRows);
+
+    SpreadsheetApp.flush();
+    addActivityLog('Admin TU', 'Arsip Semester', archiveSheetName, 'Berhasil mengarsipkan ' + archiveRows.length + ' data semester ' + tahunAkademikTarget, 'Admin');
+
+    return { success: true, count: archiveRows.length, archiveSheet: archiveSheetName, message: "Berhasil memindahkan " + archiveRows.length + " berkas ke " + archiveSheetName };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}

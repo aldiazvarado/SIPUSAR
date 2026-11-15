@@ -1,0 +1,6 @@
+{
+  "name": "Sistem Pendaftaran Ujian FEB UIKA Bogor",
+  "description": "Sistem Pendaftaran Ujian Susulan & Remedial Fakultas Ekonomi dan Bisnis Universitas Ibn Khaldun Bogor berbasis Google Apps Script & Hostinger dengan fitur Cetak Kartu Ujian PDF dan Export Data.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
