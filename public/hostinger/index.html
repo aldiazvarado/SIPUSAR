@@ -48,6 +48,145 @@
 
     let GAS_API_URL = getGasApiUrl();
 
+    const EXPECTED_GAS_SCRIPT_VERSION = "2026.11.17-log-identity-v2";
+    let gasVersionCheckState = {
+      checked: false,
+      checking: false,
+      matches: null,
+      serverVersion: null,
+      supportsActorIdentity: null,
+      supportsArchiveSemester: null,
+      lastError: "",
+      checkedUrl: ""
+    };
+
+    function updateGasVersionBadgeFromInitialData(res) {
+      if (!res || res.isLocalFallback) return;
+      const meta = res.backendMeta || null;
+      gasVersionCheckState.checked = true;
+      gasVersionCheckState.checkedUrl = typeof getGasApiUrl === "function" ? getGasApiUrl() : "";
+      if (meta && meta.scriptVersion) {
+        gasVersionCheckState.serverVersion = String(meta.scriptVersion);
+        gasVersionCheckState.supportsActorIdentity = Boolean(meta.supportsActorIdentity);
+        gasVersionCheckState.supportsArchiveSemester = Boolean(meta.supportsArchiveSemester);
+        gasVersionCheckState.matches = (String(meta.scriptVersion).trim() === EXPECTED_GAS_SCRIPT_VERSION);
+        gasVersionCheckState.lastError = "";
+      } else {
+        gasVersionCheckState.serverVersion = "Versi Lama (Tanpa Metadata Versi)";
+        gasVersionCheckState.supportsActorIdentity = false;
+        gasVersionCheckState.supportsArchiveSemester = false;
+        gasVersionCheckState.matches = false;
+        gasVersionCheckState.lastError = "Endpoint Web App GAS aktif masih menjalankan Code.gs versi lama.";
+      }
+    }
+
+    async function checkGasBackendVersion(showModal = true) {
+      const targetUrl = (typeof getGasApiUrl === "function" ? getGasApiUrl() : GAS_API_URL || "").trim();
+      gasVersionCheckState.checking = true;
+      if (typeof renderMasterDataTable === "function") {
+        try { renderMasterDataTable(); } catch (e) {}
+      }
+
+      if (showModal && typeof Swal !== "undefined") {
+        Swal.fire({
+          title: "Memeriksa Versi Skrip GAS...",
+          html: "Menghubungi endpoint Web App Google Apps Script untuk mengecek versi Code.gs yang aktif.",
+          allowOutsideClick: false,
+          didOpen: () => { Swal.showLoading(); }
+        });
+      }
+
+      try {
+        let res = null;
+        if (typeof google !== "undefined" && google.script && google.script.run && !window.google.__isProxy) {
+          res = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getBackendVersionInfo();
+          });
+        } else if (targetUrl) {
+          const resp = await fetch(targetUrl, {
+            method: "POST",
+            headers: { "Content-Type": "text/plain;charset=utf-8" },
+            body: JSON.stringify({ action: "getBackendVersionInfo", args: [] })
+          });
+          if (!resp.ok) throw new Error("HTTP " + resp.status);
+          res = await resp.json();
+        } else {
+          throw new Error("URL Endpoint API GAS belum dikonfigurasi.");
+        }
+
+        gasVersionCheckState.checking = false;
+        gasVersionCheckState.checked = true;
+        gasVersionCheckState.checkedUrl = targetUrl;
+
+        if (res && res.success && res.scriptVersion) {
+          gasVersionCheckState.serverVersion = String(res.scriptVersion);
+          gasVersionCheckState.supportsActorIdentity = Boolean(res.supportsActorIdentity);
+          gasVersionCheckState.supportsArchiveSemester = Boolean(res.supportsArchiveSemester);
+          gasVersionCheckState.matches = (String(res.scriptVersion).trim() === EXPECTED_GAS_SCRIPT_VERSION);
+          gasVersionCheckState.lastError = gasVersionCheckState.matches ? "" : "Versi Code.gs di GAS (" + res.scriptVersion + ") berbeda dari versi web (" + EXPECTED_GAS_SCRIPT_VERSION + ").";
+        } else {
+          gasVersionCheckState.serverVersion = "Versi Lama";
+          gasVersionCheckState.supportsActorIdentity = false;
+          gasVersionCheckState.supportsArchiveSemester = false;
+          gasVersionCheckState.matches = false;
+          gasVersionCheckState.lastError = (res && res.message) ? res.message : "Fungsi pengecekan versi belum tersedia di Web App GAS aktif.";
+        }
+      } catch (err) {
+        gasVersionCheckState.checking = false;
+        gasVersionCheckState.checked = true;
+        gasVersionCheckState.checkedUrl = targetUrl;
+        gasVersionCheckState.matches = false;
+        gasVersionCheckState.serverVersion = "Tidak Terjangkau / Offline";
+        gasVersionCheckState.lastError = err?.message || String(err);
+      }
+
+      if (typeof renderMasterDataTable === "function") {
+        try { renderMasterDataTable(); } catch (e) {}
+      }
+
+      if (showModal && typeof Swal !== "undefined") {
+        if (gasVersionCheckState.matches) {
+          Swal.fire({
+            icon: "success",
+            title: "Versi Code.gs Sinkron!",
+            html: `<div class="text-left text-xs space-y-2">
+              <p>Web App Google Apps Script aktif sudah menjalankan <b>Code.gs versi terbaru</b> (<code>${gasVersionCheckState.serverVersion}</code>).</p>
+              <p class="text-slate-600">Seluruh aksi termasuk <b>Update Status Persetujuan</b> otomatis mencatat <b>Nama Lengkap</b> ke kolom <i>Pengguna</i> dan <b>Role</b> ke kolom terpisah.</p>
+            </div>`,
+            confirmButtonColor: "#059669"
+          });
+        } else {
+          const isMaster = typeof currentUser === "object" && currentUser && ["master admin", "master_admin"].includes(String(currentUser.role || "").toLowerCase());
+          Swal.fire({
+            icon: "warning",
+            title: "Web App GAS Masih Versi Lama",
+            html: `<div class="text-left text-xs space-y-2.5 leading-relaxed">
+              <p>Endpoint Web App GAS yang aktif di situs ini belum menjalankan <code>Code.gs</code> terbaru (<b>${gasVersionCheckState.lastError || "Versi tidak cocok"}</b>).</p>
+              <div class="p-2.5 bg-amber-50 border border-amber-200 rounded-lg text-amber-900">
+                <b>Penyebab paling umum:</b> Saat deploy di Google Apps Script Anda menekan <i>Deployment baru</i> (menghasilkan URL <code>/exec</code> baru) sehingga URL lama di situs ini masih memanggil versi skrip sebelumnya.
+              </div>
+              <ol class="list-decimal pl-4 space-y-1 text-slate-700">
+                <li>Salin seluruh skrip terbaru dari menu <b>Source Code &amp; Skrip</b> &rarr; <code>Code.gs</code> dan simpan di Apps Script.</li>
+                <li>Klik <b>Deploy &rarr; Kelola deployment &rarr; ikon pensil (Edit) &rarr; Versi: Versi baru &rarr; Deploy</b> agar URL yang sama ikut terbarui.</li>
+                <li>Atau jika membuat deployment baru, salin URL <code>/exec</code> barunya lalu tempel ke menu <b>Endpoint API GAS</b>.</li>
+              </ol>
+            </div>`,
+            showCancelButton: isMaster,
+            confirmButtonText: isMaster ? "Buka Endpoint API GAS" : "Mengerti",
+            cancelButtonText: "Tutup",
+            confirmButtonColor: "#1e3a8a"
+          }).then((r) => {
+            if (r.isConfirmed && isMaster && typeof openApiConfigModal === "function") {
+              openApiConfigModal();
+            }
+          });
+        }
+      }
+    }
+
     function openApiConfigModal() {
       const roleLower = (currentUser && currentUser.role ? currentUser.role : '').toString().toLowerCase().trim();
       const isMaster = roleLower === 'master admin' || roleLower === 'master_admin';
@@ -60,14 +199,20 @@
         return;
       }
 
+      const statusText = gasVersionCheckState.checked
+        ? (gasVersionCheckState.matches
+            ? `Status terakhir: Code.gs sinkron (${gasVersionCheckState.serverVersion}).`
+            : `Status terakhir: Versi GAS belum terbaru (${gasVersionCheckState.serverVersion || 'Versi lama'}). Pastikan deploy menggunakan Kelola Deployment -> Versi baru atau masukkan URL /exec terbaru.`)
+        : "Masukkan URL Web App Deployment Google Apps Script Anda (akhiran /exec):";
+
       Swal.fire({
         title: "Konfigurasi URL REST API GAS",
-        text: "Masukkan URL Web App Deployment Google Apps Script Anda (akhiran /exec):",
+        text: statusText,
         input: "url",
         inputValue: getGasApiUrl(),
         inputPlaceholder: "https://script.google.com/macros/s/AKfycb.../exec",
         showCancelButton: true,
-        confirmButtonText: "Simpan URL",
+        confirmButtonText: "Simpan & Cek Versi",
         cancelButtonText: "Batal",
         confirmButtonColor: "#1e3a8a"
       }).then((res) => {
@@ -103,6 +248,66 @@
       window.google.script.run = createProxyRunner(null, null);
     }
 
+    // Helper persisten lokal untuk mencatat Log Aktivitas dengan Nama Lengkap pada kolom 'Pengguna' & role di kolom terpisah 'Role'
+    function appendLocalActivityLog(actorVal, aksiVal, targetVal, ketVal, roleVal) {
+      try {
+        if (typeof appData !== 'object' || !appData) {
+          appData = { success: true, version: '1', master: {}, pendaftaran: [], jadwal: [] };
+        }
+        const roleOnlyRegex = /^(admin|admin\s*tu|admintu|master\s*admin|master_admin|mahasiswa|dosen|kaprodi|dekanat|dekan|wakil\s*dekan|sekprodi|staff|petugas|user|sistem|system|pengguna|pengguna\s*sistem)$/i;
+        let storedUser = null;
+        try {
+          const rawSession = (typeof localStorage !== 'undefined' && localStorage.getItem('sip_user')) ||
+                             (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('sip_user'));
+          if (rawSession) storedUser = JSON.parse(rawSession);
+        } catch (eParse) {}
+
+        const activeUserObj = (typeof currentUser === 'object' && currentUser) ? currentUser : storedUser;
+        const activeUserName = activeUserObj
+          ? String(activeUserObj.nama || activeUserObj.namaLengkap || activeUserObj['Nama Lengkap'] || activeUserObj['Nama Mahasiswa'] || activeUserObj.fullName || '').trim()
+          : '';
+        const candidateActor = String(actorVal || '').trim();
+        const safePreferred = (candidateActor && !roleOnlyRegex.test(candidateActor)) ? candidateActor : activeUserName;
+
+        let resolvedActor = (typeof getCurrentActorName === 'function')
+          ? getCurrentActorName(safePreferred, 'Pengguna Sistem')
+          : (safePreferred || (activeUserObj && activeUserObj.username) || 'Pengguna Sistem');
+
+        if (!resolvedActor || roleOnlyRegex.test(String(resolvedActor).trim())) {
+          resolvedActor = (activeUserName && !roleOnlyRegex.test(activeUserName))
+            ? activeUserName
+            : ((activeUserObj && (activeUserObj.username || activeUserObj.npm || activeUserObj.nim)) || 'Pengguna Sistem');
+        }
+
+        const candidateRole = String(roleVal || '').trim();
+        const resolvedRole = (typeof getCurrentActorRole === 'function')
+          ? getCurrentActorRole(candidateRole || (activeUserObj && activeUserObj.role) || 'User')
+          : (candidateRole || (activeUserObj && activeUserObj.role) || 'User');
+
+        const now = new Date();
+        const pad2 = n => String(n).padStart(2, '0');
+        const pad3 = n => String(n).padStart(3, '0');
+        const rand2 = String(Math.floor(Math.random() * 100)).padStart(2, '0');
+        const item = {
+          ID: 'LOG-' + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) + '-' + pad2(now.getHours()) + pad2(now.getMinutes()) + pad2(now.getSeconds()) + '-' + pad3(now.getMilliseconds()) + '-' + rand2,
+          Waktu: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`,
+          Pengguna: String(resolvedActor).trim(),
+          Role: String(resolvedRole).trim(),
+          Aksi: String(aksiVal || '').trim(),
+          Target: String(targetVal || '').trim(),
+          Keterangan: String(ketVal || '').trim()
+        };
+        appData.activityLogs = Array.isArray(appData.activityLogs) ? appData.activityLogs : [];
+        appData.activityLogs.unshift(item);
+        appData.master = appData.master || {};
+        appData.master.logs = appData.activityLogs;
+        if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        return item;
+      } catch (e) {
+        return null;
+      }
+    }
+
     // Helper fallback lokal ketika endpoint GAS offline atau terblokir CORS di peramban
     function handleLocalGasFallback(action, args, onSuccess, onFailure, err) {
       if (typeof appData !== 'object' || !appData) {
@@ -126,33 +331,6 @@
       if (action === "checkRealtimeSync") {
         if (onSuccess) onSuccess({ success: true, changed: false, updated: false, version: (appData && appData.version) || '1', data: appData });
         return;
-      }
-
-      // Helper fallback lokal untuk mencatat Log Aktivitas dengan nama lengkap & role asli
-      function appendLocalActivityLog(actorVal, aksiVal, targetVal, ketVal, roleVal) {
-        try {
-          const resolvedActor = (typeof getCurrentActorName === 'function')
-            ? getCurrentActorName(actorVal)
-            : (actorVal || (currentUser && (currentUser.nama || currentUser['Nama Lengkap'] || currentUser.username)) || 'Pengguna');
-          const resolvedRole = (typeof getCurrentActorRole === 'function')
-            ? getCurrentActorRole(roleVal)
-            : (roleVal || (currentUser && currentUser.role) || 'Admin TU');
-          const now = new Date();
-          const pad2 = n => String(n).padStart(2, '0');
-          const item = {
-            ID: 'LOG-' + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) + '-' + pad2(now.getHours()) + pad2(now.getMinutes()) + pad2(now.getSeconds()),
-            Waktu: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`,
-            Pengguna: String(resolvedActor).trim(),
-            Role: String(resolvedRole).trim(),
-            Aksi: String(aksiVal || '').trim(),
-            Target: String(targetVal || '').trim(),
-            Keterangan: String(ketVal || '').trim()
-          };
-          appData.activityLogs = Array.isArray(appData.activityLogs) ? appData.activityLogs : [];
-          appData.activityLogs.unshift(item);
-          appData.master = appData.master || {};
-          appData.master.logs = appData.activityLogs;
-        } catch (e) {}
       }
 
       // 3. Tambah / Update Pendaftaran
@@ -458,6 +636,149 @@
         appData.master.logs = [auditLog];
         if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         if (onSuccess) onSuccess({ success: true, logs: [auditLog], message: `Seluruh riwayat log aktivitas berhasil dibersihkan oleh Master Admin (${reqActor}).` });
+        return;
+      }
+
+      // 13. Update Status Persetujuan (Tunggal)
+      if (action === "updateStatusApproval") {
+        const id = args && args[0];
+        const statusPersetujuan = args && args[1];
+        const actName = args && args[2];
+        const actRole = args && args[3];
+        if (id && Array.isArray(appData.pendaftaran)) {
+          const item = appData.pendaftaran.find(d => String(d.ID || d.id).trim() === String(id).trim());
+          if (item) item['Status Persetujuan'] = statusPersetujuan;
+        }
+        appendLocalActivityLog(actName, 'Update Status Persetujuan', String(id || ''), `Status persetujuan diubah menjadi: ${statusPersetujuan} (lokal)`, actRole);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: `Status persetujuan ${id} berhasil diubah menjadi: ${statusPersetujuan}` });
+        return;
+      }
+
+      // 14. Persetujuan Massal
+      if (action === "bulkApproveRegistrations" || action === "bulkUpdateStatusApproval") {
+        const selectedIds = Array.isArray(args && args[0]) ? args[0] : [];
+        const isBulkApprove = action === "bulkApproveRegistrations";
+        const newStatus = isBulkApprove ? 'Disetujui' : (args && args[1]) || 'Disetujui';
+        const actRole = isBulkApprove ? (args && args[1]) : (args && args[2]);
+        const actName = isBulkApprove ? (args && args[2]) : (args && args[3]);
+        const idSet = new Set(selectedIds.map(v => String(v).trim()));
+        let count = 0;
+        if (Array.isArray(appData.pendaftaran)) {
+          appData.pendaftaran.forEach(item => {
+            if (idSet.has(String(item.ID || item.id).trim())) {
+              item['Status Persetujuan'] = newStatus;
+              count++;
+            }
+          });
+        }
+        appendLocalActivityLog(actName, 'Persetujuan Massal', `${count || selectedIds.length} Berkas Pendaftaran`, `Persetujuan massal diubah menjadi: ${newStatus} (lokal)`, actRole);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, count: count || selectedIds.length, message: `${count || selectedIds.length} pendaftaran berhasil diperbarui menjadi ${newStatus}.` });
+        return;
+      }
+
+      // 15. Update Status Pembayaran
+      if (action === "updateStatusPayment") {
+        const id = args && args[0];
+        const newStatus = args && args[1];
+        const catatan = args && args[2];
+        const actName = args && args[3];
+        const actRole = args && args[4];
+        if (id && Array.isArray(appData.pendaftaran)) {
+          const item = appData.pendaftaran.find(d => String(d.ID || d.id).trim() === String(id).trim());
+          if (item) {
+            if (newStatus) item['Status Pembayaran'] = newStatus;
+            if (catatan !== undefined) item.Catatan = catatan;
+          }
+        }
+        appendLocalActivityLog(actName, 'Update Status Pembayaran', String(id || ''), `Status pembayaran diubah menjadi: ${newStatus}${catatan ? ' (' + catatan + ')' : ''} (lokal)`, actRole);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: `Status pembayaran ${id} berhasil diubah menjadi: ${newStatus}` });
+        return;
+      }
+
+      // 16. Hapus Pendaftaran
+      if (action === "deletePendaftaran") {
+        const id = args && args[0];
+        const actName = args && args[1];
+        const actRole = args && args[2];
+        if (id && Array.isArray(appData.pendaftaran)) {
+          appData.pendaftaran = appData.pendaftaran.filter(d => String(d.ID || d.id).trim() !== String(id).trim());
+        }
+        appendLocalActivityLog(actName, 'Hapus Pendaftaran', String(id || ''), 'Penghapusan berkas pendaftaran dari sistem (lokal)', actRole);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: `Berkas ${id} berhasil dihapus.` });
+        return;
+      }
+
+      // 17. Tahun Akademik & Ruangan & Ubah Password
+      if (action === "addTahunAkademik" || action === "updateTahunAkademik") {
+        const payload = (args && args[0]) || {};
+        appData.master = appData.master || {};
+        appData.master.tahunAkademik = Array.isArray(appData.master.tahunAkademik) ? appData.master.tahunAkademik : [];
+        const targetId = String(payload.id || ('TA-' + String(appData.master.tahunAkademik.length + 1).padStart(3, '0'))).trim();
+        const taObj = {
+          ID: targetId,
+          'Tahun Akademik': payload.tahunAkademik || '2026/2027',
+          Semester: payload.semester || 'Ganjil',
+          Status: payload.status || 'Aktif',
+          Keterangan: payload.keterangan || ''
+        };
+        const idx = appData.master.tahunAkademik.findIndex(t => String(t.ID || t.id).trim() === targetId);
+        if (idx >= 0) appData.master.tahunAkademik[idx] = Object.assign({}, appData.master.tahunAkademik[idx], taObj);
+        else appData.master.tahunAkademik.unshift(taObj);
+        appendLocalActivityLog(payload.actor, action === 'updateTahunAkademik' ? 'Edit Tahun Akademik' : 'Tambah Tahun Akademik', `${taObj.ID} (${taObj['Tahun Akademik']})`, 'Pembaruan tahun akademik (lokal)', payload.role);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: 'Data tahun akademik berhasil disimpan (lokal).' });
+        return;
+      }
+
+      if (action === "deleteTahunAkademik") {
+        const id = args && args[0];
+        const actName = args && args[1];
+        const actRole = args && args[2];
+        if (appData.master && Array.isArray(appData.master.tahunAkademik)) {
+          appData.master.tahunAkademik = appData.master.tahunAkademik.filter(t => String(t.ID || t.id).trim() !== String(id).trim());
+        }
+        appendLocalActivityLog(actName, 'Hapus Tahun Akademik', String(id || ''), 'Menghapus tahun akademik dari sistem (lokal)', actRole);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: 'Tahun akademik berhasil dihapus (lokal).' });
+        return;
+      }
+
+      if (action === "addRuangan") {
+        const payload = (args && args[0]) || {};
+        appData.master = appData.master || {};
+        appData.master.ruangan = Array.isArray(appData.master.ruangan) ? appData.master.ruangan : (Array.isArray(appData.ruangan) ? appData.ruangan : []);
+        const rId = payload.id || ('RNG-' + String(appData.master.ruangan.length + 1).padStart(3, '0'));
+        const rObj = {
+          ID: rId,
+          'Kode Ruangan': payload.kodeRuangan || '',
+          'Nama Ruangan': payload.namaRuangan || '',
+          Kapasitas: payload.kapasitas || 30,
+          Gedung: payload.gedung || '',
+          Keterangan: payload.keterangan || ''
+        };
+        appData.master.ruangan.unshift(rObj);
+        appData.ruangan = appData.master.ruangan;
+        appendLocalActivityLog(payload.actor, 'Tambah Ruangan', `${rObj['Kode Ruangan']} (${rObj['Nama Ruangan']})`, 'Penambahan master ruangan (lokal)', payload.role);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: 'Ruangan berhasil disimpan (lokal).' });
+        return;
+      }
+
+      if (action === "deleteRuangan") {
+        const id = args && args[0];
+        const actName = args && args[1];
+        const actRole = args && args[2];
+        const filterFn = r => String(r.ID || r.id || r['Kode Ruangan'] || '').trim() !== String(id).trim();
+        if (appData.master && Array.isArray(appData.master.ruangan)) appData.master.ruangan = appData.master.ruangan.filter(filterFn);
+        if (Array.isArray(appData.ruangan)) appData.ruangan = appData.ruangan.filter(filterFn);
+        appendLocalActivityLog(actName, 'Hapus Ruangan', String(id || ''), 'Menghapus ruangan dari sistem (lokal)', actRole);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: 'Ruangan berhasil dihapus (lokal).' });
+        return;
+      }
+
+      if (action === "changePassword") {
+        const uname = args && args[0];
+        const actName = args && args[3];
+        const actRole = args && args[4];
+        appendLocalActivityLog(actName || uname, 'Ubah Password', String(uname || ''), 'Pembaruan kata sandi akun (lokal)', actRole);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: 'Password berhasil diperbarui (tersimpan di sesi aktif).' });
         return;
       }
 
@@ -2652,46 +2973,91 @@
   <script>
     let currentUser = null;
     function getCurrentActorName(preferredFallback, defaultFallback) {
-      const roleLikeSet = new Set(['admin', 'admin tu', 'admintu', 'master admin', 'master_admin', 'mahasiswa', 'dosen', 'user', 'sistem', 'system']);
-      const isRoleOnly = (val) => roleLikeSet.has(String(val || '').trim().toLowerCase());
-      if (currentUser && typeof currentUser === 'object') {
+      const roleLikeSet = new Set([
+        'admin', 'admin tu', 'admintu', 'master admin', 'master_admin',
+        'mahasiswa', 'dosen', 'kaprodi', 'dekanat', 'dekan', 'wakil dekan',
+        'sekprodi', 'staff', 'petugas', 'user', 'sistem', 'system', 'pengguna', 'pengguna sistem'
+      ]);
+      const isRoleOnly = (val) => {
+        const v = String(val || '').trim().toLowerCase();
+        return !v || roleLikeSet.has(v);
+      };
+
+      const lookupFullNameByKey = (keyStr) => {
+        const k = String(keyStr || '').trim().toLowerCase();
+        if (!k || isRoleOnly(k) || typeof appData !== 'object' || !appData) return '';
+        const staffList = [].concat(
+          Array.isArray(appData.users_staff) ? appData.users_staff : [],
+          (appData.master && Array.isArray(appData.master.user_staff)) ? appData.master.user_staff : []
+        );
+        const mhsList = [].concat(
+          Array.isArray(appData.users_mahasiswa) ? appData.users_mahasiswa : [],
+          (appData.master && Array.isArray(appData.master.user_mahasiswa)) ? appData.master.user_mahasiswa : []
+        );
+        const staffHit = staffList.find(s => [s.Username, s.username, s.NIK, s.nik, s.NIP, s.nip, s.Email, s.email].some(f => String(f || '').trim().toLowerCase() === k));
+        if (staffHit) {
+          const nm = String(staffHit['Nama Lengkap'] || staffHit.Nama || staffHit.nama || '').trim();
+          if (nm && !isRoleOnly(nm)) return nm;
+        }
+        const mhsHit = mhsList.find(m => [m.NPM, m.NIM, m.npm, m.nim, m.Username, m.username, m.Email, m.email].some(f => String(f || '').trim().toLowerCase() === k));
+        if (mhsHit) {
+          const nm = String(mhsHit['Nama Lengkap'] || mhsHit['Nama Mahasiswa'] || mhsHit.Nama || mhsHit.nama || '').trim();
+          if (nm && !isRoleOnly(nm)) return nm;
+        }
+        return '';
+      };
+
+      let activeUser = (typeof currentUser === 'object' && currentUser) ? currentUser : null;
+      if (!activeUser) {
+        try {
+          const rawSaved = (typeof localStorage !== 'undefined' && localStorage.getItem('sip_user')) ||
+                           (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('sip_user'));
+          if (rawSaved) activeUser = JSON.parse(rawSaved);
+        } catch (eSess) {}
+      }
+
+      if (activeUser && typeof activeUser === 'object') {
         const directName = String(
-          currentUser.nama ||
-          currentUser.namaLengkap ||
-          currentUser['Nama Lengkap'] ||
-          currentUser['Nama Mahasiswa'] ||
-          currentUser.fullName ||
+          activeUser.nama ||
+          activeUser.namaLengkap ||
+          activeUser['Nama Lengkap'] ||
+          activeUser['Nama Mahasiswa'] ||
+          activeUser.fullName ||
           ''
         ).trim();
         if (directName && !isRoleOnly(directName)) return directName;
-        const userIdKey = String(currentUser.username || currentUser.npm || currentUser.nim || '').trim().toLowerCase();
-        if (userIdKey && typeof appData === 'object' && appData && appData.master) {
-          const staffList = Array.isArray(appData.master.user_staff) ? appData.master.user_staff : [];
-          const mhsList = Array.isArray(appData.master.user_mahasiswa) ? appData.master.user_mahasiswa : [];
-          const staffHit = staffList.find(s => String(s.Username || s.username || s.NIK || s.NIP || '').trim().toLowerCase() === userIdKey);
-          if (staffHit) {
-            const nm = String(staffHit['Nama Lengkap'] || staffHit.Nama || staffHit.nama || '').trim();
-            if (nm) return nm;
-          }
-          const mhsHit = mhsList.find(m => String(m.NPM || m.NIM || m.npm || m.Username || '').trim().toLowerCase() === userIdKey);
-          if (mhsHit) {
-            const nm = String(mhsHit['Nama Lengkap'] || mhsHit['Nama Mahasiswa'] || mhsHit.Nama || mhsHit.nama || '').trim();
-            if (nm) return nm;
-          }
-        }
-        const idFallback = String(currentUser.username || currentUser.npm || currentUser.nim || '').trim();
-        if (idFallback && !isRoleOnly(idFallback)) return idFallback;
-        if (directName) return directName;
+
+        const userIdKey = String(activeUser.username || activeUser.npm || activeUser.nim || activeUser.nik || activeUser.email || '').trim();
+        const resolvedFromMaster = lookupFullNameByKey(userIdKey);
+        if (resolvedFromMaster) return resolvedFromMaster;
+
+        if (userIdKey && !isRoleOnly(userIdKey)) return userIdKey;
       }
+
       const pref = String(preferredFallback || '').trim();
-      if (pref) return pref;
-      return String(defaultFallback || 'Pengguna').trim();
+      if (pref && !isRoleOnly(pref)) {
+        const lookedUpPref = lookupFullNameByKey(pref);
+        return lookedUpPref || pref;
+      }
+
+      const def = String(defaultFallback || '').trim();
+      if (def && !isRoleOnly(def)) return def;
+
+      return 'Pengguna Sistem';
     }
     function getCurrentActorRole(fallbackRole) {
-      if (currentUser && currentUser.role) {
-        return String(currentUser.role).trim();
+      let activeUser = (typeof currentUser === 'object' && currentUser) ? currentUser : null;
+      if (!activeUser) {
+        try {
+          const rawSaved = (typeof localStorage !== 'undefined' && localStorage.getItem('sip_user')) ||
+                           (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('sip_user'));
+          if (rawSaved) activeUser = JSON.parse(rawSaved);
+        } catch (eSess) {}
       }
-      return String(fallbackRole || 'Admin TU').trim();
+      if (activeUser && activeUser.role) {
+        return String(activeUser.role).trim();
+      }
+      return String(fallbackRole || 'User').trim();
     }
     let appData = {
       success: true,
@@ -3698,6 +4064,10 @@
                 appData.pendaftaran.unshift(loc);
               }
             });
+          }
+
+          if (!isFallback) {
+            updateGasVersionBadgeFromInitialData(res);
           }
 
           saveAppDataCache(appData);
@@ -7618,6 +7988,30 @@
           return `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">${r}</span>`;
         };
 
+        const gasVersionBadgeHtml = gasVersionCheckState.checking
+          ? `<span class="text-xs font-bold bg-blue-50 text-blue-800 px-2.5 py-1 rounded-full border border-blue-200"><i class="fas fa-spinner fa-spin mr-1"></i>Cek Versi GAS...</span>`
+          : (gasVersionCheckState.checked
+              ? (gasVersionCheckState.matches
+                  ? `<span class="text-xs font-bold bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200"><i class="fas fa-check-circle mr-1"></i>GAS Sinkron</span>`
+                  : `<span class="text-xs font-bold bg-amber-50 text-amber-800 px-2.5 py-1 rounded-full border border-amber-200"><i class="fas fa-exclamation-triangle mr-1"></i>GAS Versi Lama</span>`)
+              : `<span class="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200">GAS Belum Dicek</span>`);
+
+        const gasMismatchBannerHtml = (gasVersionCheckState.checked && gasVersionCheckState.matches === false) ? `
+          <div class="px-4 py-3 bg-amber-50 border-b border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
+            <div class="flex items-start gap-2">
+              <i class="fas fa-triangle-exclamation text-amber-600 mt-0.5"></i>
+              <div>
+                <span class="font-bold">Web App Google Apps Script pada URL aktif masih menjalankan versi skrip lama.</span>
+                <span class="block text-[11px] text-amber-800 mt-0.5">Jika aksi seperti <i>Update Status Persetujuan</i> masih mencatat <b>Admin</b>, pastikan Anda deploy di Apps Script menggunakan <b>Kelola deployment &rarr; Edit &rarr; Versi baru</b> atau perbarui URL <code>/exec</code> baru di menu <b>Endpoint API GAS</b>.</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button onclick="checkGasBackendVersion(true)" class="bg-white hover:bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-lg font-bold text-[11px] transition">Cek Ulang</button>
+              ${isMaster ? `<button onclick="openApiConfigModal()" class="bg-amber-600 hover:bg-amber-700 text-white px-2.5 py-1 rounded-lg font-bold text-[11px] transition">Atur Endpoint GAS</button>` : ''}
+            </div>
+          </div>
+        ` : '';
+
         actLogContainer.innerHTML = `
           <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
             <div class="p-4 border-b border-slate-100 bg-slate-50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
@@ -7626,13 +8020,19 @@
                   <i class="fas fa-history text-blue-900"></i>
                   <span>Log Aktivitas Sistem (Penyimpanan Persisten Anti-Hilang)</span>
                 </h4>
-                <p class="text-[11px] text-slate-500 mt-0.5">Struktur kolom sinkron presisi dengan sheet Log_Aktivitas (mencatat pelaku & role asli untuk audit anti-fitnah).</p>
+                <p class="text-[11px] text-slate-500 mt-0.5">Struktur kolom sinkron presisi dengan sheet Log_Aktivitas (kolom Pengguna menyimpan Nama Lengkap &amp; kolom Role terpisah).</p>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
+                ${gasVersionBadgeHtml}
+                <button onclick="checkGasBackendVersion(true)" class="bg-white hover:bg-blue-50 text-blue-900 border border-blue-200 px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 transition">
+                  <i class="fas fa-code-branch text-blue-700"></i>
+                  <span>Cek Versi GAS</span>
+                </button>
                 <span class="text-xs font-bold bg-blue-50 text-blue-900 px-2.5 py-1 rounded-full border border-blue-200">${logs.length} Log Tersimpan</span>
                 ${clearBtnHtml}
               </div>
             </div>
+            ${gasMismatchBannerHtml}
             <div class="overflow-x-auto max-h-80">
               <table class="w-full text-left text-xs">
                 <thead class="bg-slate-100 text-slate-700 uppercase font-bold sticky top-0">

@@ -96,7 +96,8 @@ function handleApiRequest(action, args) {
     migrateBase64ToDrive: migrateBase64ToDrive,
     syncJadwalParticipantsToSheet: syncJadwalParticipantsToSheet,
     optimizeSpreadsheetStorage: optimizeSpreadsheetStorage,
-    archiveSemesterData: archiveSemesterData
+    archiveSemesterData: archiveSemesterData,
+    getBackendVersionInfo: getBackendVersionInfo
   };
   var fn = allowedFunctions[action];
   if (!fn) {
@@ -1092,6 +1093,44 @@ function changePassword(username, oldPassword, newPassword, actor, userRole) {
   }
 }
 
+var GAS_SCRIPT_VERSION = '2026.11.17-log-identity-v2';
+
+function getBackendVersionInfo() {
+  return {
+    success: true,
+    scriptVersion: GAS_SCRIPT_VERSION,
+    supportsActorIdentity: true,
+    supportsArchiveSemester: true
+  };
+}
+
+function isRoleOnlyLabel_(val) {
+  var v = String(val || '').trim().toLowerCase();
+  if (!v) return true;
+  var roleLabels = {
+    'admin': true,
+    'admin tu': true,
+    'admintu': true,
+    'master admin': true,
+    'master_admin': true,
+    'mahasiswa': true,
+    'dosen': true,
+    'kaprodi': true,
+    'dekanat': true,
+    'dekan': true,
+    'wakil dekan': true,
+    'sekprodi': true,
+    'staff': true,
+    'petugas': true,
+    'user': true,
+    'sistem': true,
+    'system': true,
+    'pengguna': true,
+    'pengguna sistem': true
+  };
+  return Boolean(roleLabels[v]);
+}
+
 var _actorIdentityLookupCache = null;
 function resolveActorIdentity_(ss, actorInput, roleInput) {
   var rawActor = String(actorInput || '').trim();
@@ -1099,7 +1138,10 @@ function resolveActorIdentity_(ss, actorInput, roleInput) {
   try {
     var targetSs = ss || getActiveSpreadsheetSafe();
     if (!targetSs) {
-      return { actor: rawActor || 'Sistem', role: rawRole || 'Sistem' };
+      return {
+        actor: !isRoleOnlyLabel_(rawActor) ? rawActor : 'Pengguna Sistem',
+        role: rawRole || 'Sistem'
+      };
     }
     if (!_actorIdentityLookupCache) {
       var byKey = {};
@@ -1111,13 +1153,13 @@ function resolveActorIdentity_(ss, actorInput, roleInput) {
           if (!u) continue;
           var fullName = String(u['Nama Lengkap'] || u['Nama Mahasiswa'] || u.Nama || '').trim();
           var uRole = String(u.Role || u.role || defaultRole || '').trim();
-          if (!fullName) continue;
+          if (!fullName || isRoleOnlyLabel_(fullName)) continue;
           var info = { actor: fullName, role: uRole };
           byName[fullName.toLowerCase()] = info;
           var keys = [u.Username, u.username, u.NPM, u.npm, u.NIM, u.nim, u.NIK, u.nik, u.Email, u.email];
           for (var k = 0; k < keys.length; k++) {
             var kv = String(keys[k] || '').trim().toLowerCase();
-            if (kv) byKey[kv] = info;
+            if (kv && !isRoleOnlyLabel_(kv)) byKey[kv] = info;
           }
         }
       };
@@ -1127,16 +1169,24 @@ function resolveActorIdentity_(ss, actorInput, roleInput) {
     }
     var lowerActor = rawActor.toLowerCase();
     var found = _actorIdentityLookupCache.byName[lowerActor] || _actorIdentityLookupCache.byKey[lowerActor];
+    if (!found && isRoleOnlyLabel_(rawActor)) {
+      try {
+        var sessionEmail = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase();
+        if (sessionEmail && _actorIdentityLookupCache.byKey[sessionEmail]) {
+          found = _actorIdentityLookupCache.byKey[sessionEmail];
+        }
+      } catch (eSess) {}
+    }
     if (found) {
       return {
-        actor: found.actor || rawActor || 'Sistem',
+        actor: found.actor || rawActor || 'Pengguna Sistem',
         role: rawRole && rawRole.toLowerCase() !== 'user' && rawRole.toLowerCase() !== 'sistem' ? rawRole : (found.role || rawRole || 'Sistem')
       };
     }
   } catch (e) {}
   return {
-    actor: rawActor || 'Sistem',
-    role: rawRole || 'Sistem'
+    actor: !isRoleOnlyLabel_(rawActor) ? rawActor : 'Pengguna Sistem',
+    role: rawRole || (!isRoleOnlyLabel_(rawActor) ? 'User' : (rawActor || 'Sistem'))
   };
 }
 
@@ -1358,7 +1408,12 @@ function getInitialData(userRole, username, userProdi) {
       users_staff: staffList,
       users_mahasiswa: mhsList,
       users: usersList,
-      activityLogs: activityLogs
+      activityLogs: activityLogs,
+      backendMeta: {
+        scriptVersion: GAS_SCRIPT_VERSION,
+        supportsActorIdentity: true,
+        supportsArchiveSemester: true
+      }
     };
   } catch (err) {
     return { success: false, message: err.message };
@@ -1389,10 +1444,11 @@ function updateStatusApproval(id, statusPersetujuan, actor, userRole) {
 
     sheet.getRange(rowIndex, colStatusApp).setValue(statusPersetujuan);
     SpreadsheetApp.flush();
-    var actorName = String(actor || 'Admin TU').trim();
+    var actorName = String(actor || '').trim();
     var actorRole = String(userRole || 'Admin TU').trim();
-    bumpSyncVersion(actorName, 'Status Persetujuan ' + id + ' -> ' + statusPersetujuan);
-    addActivityLog(actorName, 'Update Status Persetujuan', id, 'Status persetujuan diubah menjadi: ' + statusPersetujuan, actorRole);
+    var resolvedMeta = resolveActorIdentity_(ss, actorName, actorRole);
+    bumpSyncVersion(resolvedMeta.actor, 'Status Persetujuan ' + id + ' -> ' + statusPersetujuan);
+    addActivityLog(resolvedMeta.actor, 'Update Status Persetujuan', id, 'Status persetujuan diubah menjadi: ' + statusPersetujuan, resolvedMeta.role);
     return { success: true, message: 'Status persetujuan ' + id + ' berhasil diubah menjadi: ' + statusPersetujuan };
   } catch (err) {
     return { success: false, message: err.message };
@@ -1429,10 +1485,11 @@ function updateStatusPayment(id, statusPembayaran, catatan, updatedBy, userRole)
       sheet.getRange(rowIndex, colCatatan).setValue(catatan);
     }
     SpreadsheetApp.flush();
-    var operator = String(updatedBy || 'Admin TU').trim();
+    var operator = String(updatedBy || '').trim();
     var actorRole = String(userRole || 'Admin TU').trim();
-    bumpSyncVersion(operator, 'Status Pembayaran ' + id + ' -> ' + statusPembayaran);
-    addActivityLog(operator, 'Update Status Pembayaran', id, 'Status pembayaran diubah menjadi: ' + statusPembayaran + (catatan ? ' (' + catatan + ')' : ''), actorRole);
+    var resolvedMeta = resolveActorIdentity_(ss, operator, actorRole);
+    bumpSyncVersion(resolvedMeta.actor, 'Status Pembayaran ' + id + ' -> ' + statusPembayaran);
+    addActivityLog(resolvedMeta.actor, 'Update Status Pembayaran', id, 'Status pembayaran diubah menjadi: ' + statusPembayaran + (catatan ? ' (' + catatan + ')' : ''), resolvedMeta.role);
     return { success: true, message: 'Status pembayaran ' + id + ' berhasil diubah menjadi: ' + statusPembayaran };
   } catch (err) {
     return { success: false, message: err.message };
@@ -1489,10 +1546,11 @@ function bulkApproveRegistrations(selectedIds, userRole, actor) {
     if (updatedCount > 0) {
       sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
       SpreadsheetApp.flush();
-      var actorName = String(actor || userRole || 'Admin TU').trim();
+      var actorName = String(actor || '').trim();
       var actorRole = String(userRole || 'Admin TU').trim();
-      bumpSyncVersion(actorName, 'Persetujuan Massal ' + updatedCount + ' berkas -> Disetujui');
-      addActivityLog(actorName, 'Persetujuan Massal', updatedCount + ' Berkas Pendaftaran', 'Persetujuan pendaftaran massal disetujui serentak', actorRole);
+      var resolvedMeta = resolveActorIdentity_(ss, actorName, actorRole);
+      bumpSyncVersion(resolvedMeta.actor, 'Persetujuan Massal ' + updatedCount + ' berkas -> Disetujui');
+      addActivityLog(resolvedMeta.actor, 'Persetujuan Massal', updatedCount + ' Berkas Pendaftaran', 'Persetujuan pendaftaran massal disetujui serentak', resolvedMeta.role);
       try {
         CacheService.getScriptCache().remove("dashboard_trend_data");
       } catch (e) {}
@@ -1558,10 +1616,11 @@ function bulkUpdateStatusApproval(idList, statusPersetujuan, userRole, actor) {
     if (updatedCount > 0) {
       statusRange.setValues(statusValues);
       SpreadsheetApp.flush();
-      var actorName = String(actor || userRole || 'Admin TU').trim();
+      var actorName = String(actor || '').trim();
       var actorRole = String(userRole || 'Admin TU').trim();
-      bumpSyncVersion(actorName, updatedCount + ' data -> ' + statusPersetujuan);
-      addActivityLog(actorName, 'Persetujuan Massal', updatedCount + ' Berkas Pendaftaran', 'Persetujuan massal diubah menjadi: ' + statusPersetujuan, actorRole);
+      var resolvedMeta = resolveActorIdentity_(ss, actorName, actorRole);
+      bumpSyncVersion(resolvedMeta.actor, updatedCount + ' data -> ' + statusPersetujuan);
+      addActivityLog(resolvedMeta.actor, 'Persetujuan Massal', updatedCount + ' Berkas Pendaftaran', 'Persetujuan massal diubah menjadi: ' + statusPersetujuan, resolvedMeta.role);
       try {
         CacheService.getScriptCache().remove("dashboard_trend_data");
       } catch (e) {}
