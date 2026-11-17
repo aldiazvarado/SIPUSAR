@@ -128,6 +128,33 @@
         return;
       }
 
+      // Helper fallback lokal untuk mencatat Log Aktivitas dengan nama lengkap & role asli
+      function appendLocalActivityLog(actorVal, aksiVal, targetVal, ketVal, roleVal) {
+        try {
+          const resolvedActor = (typeof getCurrentActorName === 'function')
+            ? getCurrentActorName(actorVal)
+            : (actorVal || (currentUser && (currentUser.nama || currentUser['Nama Lengkap'] || currentUser.username)) || 'Pengguna');
+          const resolvedRole = (typeof getCurrentActorRole === 'function')
+            ? getCurrentActorRole(roleVal)
+            : (roleVal || (currentUser && currentUser.role) || 'Admin TU');
+          const now = new Date();
+          const pad2 = n => String(n).padStart(2, '0');
+          const item = {
+            ID: 'LOG-' + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) + '-' + pad2(now.getHours()) + pad2(now.getMinutes()) + pad2(now.getSeconds()),
+            Waktu: `${now.getFullYear()}-${pad2(now.getMonth() + 1)}-${pad2(now.getDate())} ${pad2(now.getHours())}:${pad2(now.getMinutes())}:${pad2(now.getSeconds())}`,
+            Pengguna: String(resolvedActor).trim(),
+            Role: String(resolvedRole).trim(),
+            Aksi: String(aksiVal || '').trim(),
+            Target: String(targetVal || '').trim(),
+            Keterangan: String(ketVal || '').trim()
+          };
+          appData.activityLogs = Array.isArray(appData.activityLogs) ? appData.activityLogs : [];
+          appData.activityLogs.unshift(item);
+          appData.master = appData.master || {};
+          appData.master.logs = appData.activityLogs;
+        } catch (e) {}
+      }
+
       // 3. Tambah / Update Pendaftaran
       if (action === "addPendaftaran" || action === "updatePendaftaran") {
         const payload = args && args[0];
@@ -159,6 +186,7 @@
               'Status Persetujuan': payload.statusPersetujuan || 'Disetujui'
             };
             appData.pendaftaran.unshift(newRec);
+            appendLocalActivityLog(payload.actor || payload.namaMahasiswa, 'Tambah Pendaftaran', `${newId} (${payload.namaMahasiswa || payload.nim || ''})`, 'Pengajuan pendaftaran baru (lokal)', payload.role || 'Mahasiswa');
           } else {
             const item = appData.pendaftaran.find(d => String(d.ID || d.id) === String(payload.id));
             if (item) {
@@ -170,6 +198,7 @@
               if (payload.statusJadwal) item['Status Jadwal'] = payload.statusJadwal;
               if (payload.alasan) item.Alasan = payload.alasan;
             }
+            appendLocalActivityLog(payload.actor, 'Edit Data Pendaftaran', `${payload.id} (${payload.namaMahasiswa || ''})`, 'Pembaruan data pendaftaran (lokal)', payload.role);
           }
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
@@ -179,13 +208,15 @@
 
       // 4. Tambah / Update Jadwal Ujian
       if (action === "addJadwal" || action === "updateJadwal") {
-        const payload = args && args[0];
+        const isPayloadObj = args && typeof args[0] === 'object' && args[0] !== null;
+        const payload = isPayloadObj ? args[0] : (args && args[1]);
         if (payload) {
           appData.jadwal = appData.jadwal || [];
           const baseNum = 1000 + (appData.jadwal.length + 1);
-          const baseId = payload.id || ('JDW-' + baseNum);
+          const editTargetId = !isPayloadObj ? (args && args[0]) : '';
+          const baseId = payload.id || editTargetId || ('JDW-' + baseNum);
 
-          if (Array.isArray(payload.items) && payload.items.length > 1 && !payload.id) {
+          if (Array.isArray(payload.items) && payload.items.length > 1 && !payload.id && !editTargetId) {
             payload.items.forEach((it, idx) => {
               const subId = `${baseId}-${idx + 1}`;
               const newJadwal = {
@@ -243,6 +274,13 @@
               p['Status Jadwal'] = 'Terjadwal';
             }
           }
+          appendLocalActivityLog(
+            payload.actor,
+            action === 'updateJadwal' ? 'Update Jadwal Ujian' : 'Tambah Jadwal Ujian',
+            `${baseId} (${payload.mataKuliah || ''})`,
+            `Penjadwalan ujian (lokal)`,
+            payload.role
+          );
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
         if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: 'Jadwal ujian berhasil disimpan di sistem lokal.' });
@@ -252,6 +290,8 @@
       // 5. Hapus Jadwal
       if (action === "deleteJadwal") {
         const id = args && args[0];
+        const delActor = args && args[1];
+        const delRole = args && args[2];
         if (id && Array.isArray(appData.jadwal)) {
           const removed = appData.jadwal.find(j => String(j.ID || j.id) === String(id));
           appData.jadwal = appData.jadwal.filter(j => String(j.ID || j.id) !== String(id));
@@ -263,6 +303,7 @@
               if (p) p['Status Jadwal'] = 'Tepat Waktu';
             }
           }
+          appendLocalActivityLog(delActor, 'Hapus Jadwal Ujian', id, 'Penghapusan data jadwal ujian dari sistem', delRole);
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
         if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: 'Jadwal ujian berhasil dihapus.' });
@@ -282,6 +323,7 @@
             if (statusPersetujuan) item['Status Persetujuan'] = statusPersetujuan;
             if (statusPembayaran) item['Status Pembayaran'] = statusPembayaran;
           }
+          appendLocalActivityLog(null, 'Update Status Pendaftaran', id, 'Pembaruan status pendaftaran (lokal)', null);
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
         if (onSuccess) onSuccess({ success: true, message: 'Status pendaftaran berhasil diperbarui.' });
@@ -291,16 +333,20 @@
       // 7. Tambah User Mahasiswa
       if (action === "addUserMahasiswa") {
         const payload = args && args[0];
+        const mhsActor = (args && args[1]) || (payload && payload.actor);
+        const mhsRole = (args && args[2]) || (payload && payload.role);
         if (payload && appData.master) {
           appData.master.user_mahasiswa = appData.master.user_mahasiswa || [];
           appData.master.user_mahasiswa.push({
             NPM: payload.npm,
-            'Nama Mahasiswa': payload.namaMahasiswa,
+            'Nama Lengkap': payload.nama || payload.namaMahasiswa,
+            'Nama Mahasiswa': payload.namaMahasiswa || payload.nama,
             'Kode Prodi': payload.kodeProdi,
             'Program Studi': payload.prodi,
             'Kata Sandi': payload.password,
             'Status Akun': 'Aktif'
           });
+          appendLocalActivityLog(mhsActor, 'Tambah User Mahasiswa', `${payload.npm || ''} (${payload.nama || payload.namaMahasiswa || ''})`, 'Pendaftaran akun mahasiswa (lokal)', mhsRole);
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
         if (onSuccess) onSuccess({ success: true, message: 'User mahasiswa berhasil ditambahkan.' });
@@ -309,6 +355,8 @@
 
       // 8. Migrasi Base64 ke Drive
       if (action === "migrateBase64ToDrive" || action === "convertAllBase64ToDrive") {
+        const migActor = args && args[0];
+        const migRole = args && args[1];
         let count = 0;
         if (Array.isArray(appData.pendaftaran)) {
           appData.pendaftaran.forEach((p, idx) => {
@@ -318,6 +366,7 @@
               count++;
             }
           });
+          appendLocalActivityLog(migActor, 'Migrasi Bukti Drive', `${count} berkas`, 'Konversi bukti pendaftaran base64 ke Google Drive (lokal)', migRole);
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
         if (onSuccess) onSuccess({ success: true, convertedCount: count, message: count + ' Bukti foto berhasil dikonversi ke link Google Drive.' });
@@ -328,8 +377,11 @@
       if (action === "batchSyncMasterData") {
         const sheetKey = args && args[0];
         const uploadedData = args && args[1];
+        const syncActor = args && args[2];
+        const syncRole = args && args[3];
         if (sheetKey && Array.isArray(uploadedData) && appData.master) {
           appData.master[sheetKey] = uploadedData;
+          appendLocalActivityLog(syncActor, 'Upload & Sync Data Master', sheetKey, `Sinkronisasi ${uploadedData.length} baris data (lokal)`, syncRole);
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
         if (onSuccess) onSuccess({ success: true, message: 'Sinkronisasi master data berhasil di memori lokal.' });
@@ -361,6 +413,7 @@
           } else {
             appData.master.periode.unshift(pObj);
           }
+          appendLocalActivityLog(payload.actor, action === 'updatePeriode' ? 'Edit Jadwal Periode' : 'Tambah Periode', `${pObj.ID} (${pObj['Jenis Layanan']})`, 'Pembaruan jadwal periode (lokal)', payload.role);
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
         if (onSuccess) onSuccess({ success: true, message: 'Jadwal periode berhasil disimpan di memori lokal.' });
@@ -370,8 +423,11 @@
       // 11. Hapus Periode Pendaftaran
       if (action === "deletePeriode") {
         const id = args && args[0];
+        const delActor = args && args[1];
+        const delRole = args && args[2];
         if (id && appData.master && Array.isArray(appData.master.periode)) {
           appData.master.periode = appData.master.periode.filter(p => String(p.ID || p.id).trim() !== String(id).trim());
+          appendLocalActivityLog(delActor, 'Hapus Jadwal Periode', id, 'Menghapus jadwal periode dari sistem (lokal)', delRole);
           if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
         }
         if (onSuccess) onSuccess({ success: true, message: 'Periode berhasil dihapus dari memori lokal.' });
@@ -381,7 +437,7 @@
       // 12. Hapus Log Aktivitas (Khusus Master Admin)
       if (action === "clearActivityLogs") {
         const reqRole = String((args && args[0]) || '').trim().toLowerCase();
-        const reqActor = String((args && args[1]) || 'Master Admin').trim();
+        const reqActor = (typeof getCurrentActorName === 'function') ? getCurrentActorName(args && args[1], 'Master Admin') : String((args && args[1]) || 'Master Admin').trim();
         if (reqRole !== 'master admin' && reqRole !== 'master_admin') {
           if (onSuccess) onSuccess({ success: false, message: 'Akses Ditolak: Hanya Master Admin yang berhak menghapus log aktivitas.' });
           return;
@@ -2595,6 +2651,48 @@
   <!-- JAVASCRIPT LENGKAP -->
   <script>
     let currentUser = null;
+    function getCurrentActorName(preferredFallback, defaultFallback) {
+      const roleLikeSet = new Set(['admin', 'admin tu', 'admintu', 'master admin', 'master_admin', 'mahasiswa', 'dosen', 'user', 'sistem', 'system']);
+      const isRoleOnly = (val) => roleLikeSet.has(String(val || '').trim().toLowerCase());
+      if (currentUser && typeof currentUser === 'object') {
+        const directName = String(
+          currentUser.nama ||
+          currentUser.namaLengkap ||
+          currentUser['Nama Lengkap'] ||
+          currentUser['Nama Mahasiswa'] ||
+          currentUser.fullName ||
+          ''
+        ).trim();
+        if (directName && !isRoleOnly(directName)) return directName;
+        const userIdKey = String(currentUser.username || currentUser.npm || currentUser.nim || '').trim().toLowerCase();
+        if (userIdKey && typeof appData === 'object' && appData && appData.master) {
+          const staffList = Array.isArray(appData.master.user_staff) ? appData.master.user_staff : [];
+          const mhsList = Array.isArray(appData.master.user_mahasiswa) ? appData.master.user_mahasiswa : [];
+          const staffHit = staffList.find(s => String(s.Username || s.username || s.NIK || s.NIP || '').trim().toLowerCase() === userIdKey);
+          if (staffHit) {
+            const nm = String(staffHit['Nama Lengkap'] || staffHit.Nama || staffHit.nama || '').trim();
+            if (nm) return nm;
+          }
+          const mhsHit = mhsList.find(m => String(m.NPM || m.NIM || m.npm || m.Username || '').trim().toLowerCase() === userIdKey);
+          if (mhsHit) {
+            const nm = String(mhsHit['Nama Lengkap'] || mhsHit['Nama Mahasiswa'] || mhsHit.Nama || mhsHit.nama || '').trim();
+            if (nm) return nm;
+          }
+        }
+        const idFallback = String(currentUser.username || currentUser.npm || currentUser.nim || '').trim();
+        if (idFallback && !isRoleOnly(idFallback)) return idFallback;
+        if (directName) return directName;
+      }
+      const pref = String(preferredFallback || '').trim();
+      if (pref) return pref;
+      return String(defaultFallback || 'Pengguna').trim();
+    }
+    function getCurrentActorRole(fallbackRole) {
+      if (currentUser && currentUser.role) {
+        return String(currentUser.role).trim();
+      }
+      return String(fallbackRole || 'Admin TU').trim();
+    }
     let appData = {
       success: true,
       version: '1',
@@ -5812,8 +5910,8 @@
         statusPembayaran: statusPembayaran,
         nominal: totalNominal,
         statusPersetujuan: statusPersetujuan,
-        actor: currentUser?.nama || document.getElementById('pendaftaranNama').value || 'Mahasiswa',
-        role: currentUser?.role || 'Mahasiswa'
+        actor: getCurrentActorName(document.getElementById('pendaftaranNama')?.value, 'Mahasiswa'),
+        role: getCurrentActorRole('Mahasiswa')
       };
 
       const btnSave = document.getElementById('btnSavePendaftaran');
@@ -6032,7 +6130,8 @@
         btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...';
       }
 
-      const actor = currentUser ? (currentUser.nama || currentUser.username || 'Admin TU') : 'Admin TU';
+      const actorName = getCurrentActorName();
+      const actorRole = getCurrentActorRole();
       const payload = {
         nama: nama,
         npm: npm,
@@ -6041,7 +6140,9 @@
         kelas: kelas,
         angkatan: angkatan,
         semester: semester,
-        password: password
+        password: password,
+        actor: actorName,
+        role: actorRole
       };
 
       const onSaveSuccess = function(res) {
@@ -6071,13 +6172,13 @@
         Swal.fire('Error Sistem', err?.message || String(err), 'error');
       };
 
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
+      if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
         google.script.run
           .withSuccessHandler(onSaveSuccess)
           .withFailureHandler(onSaveError)
-          .addUserMahasiswa(payload, actor);
+          .addUserMahasiswa(payload, actorName, actorRole);
       } else {
-        callGasApi('addUserMahasiswa', [payload, actor], onSaveSuccess, onSaveError);
+        callGasApi('addUserMahasiswa', [payload, actorName, actorRole], onSaveSuccess, onSaveError);
       }
     }
 
@@ -6721,7 +6822,8 @@
       semester: sem,
       kelas: kls,
       jenisUjian: jnsUjian,
-      actor: currentUser?.nama || 'Admin TU',
+      actor: getCurrentActorName(),
+      role: getCurrentActorRole(),
       items: items,
       // Fallback backward-compatible properties
       mataKuliah: items[0].mataKuliah,
@@ -6825,7 +6927,8 @@
               semester: sem,
               kelas: kls,
               jenisUjian: jnsUjian,
-              actor: currentUser?.nama || 'Admin TU',
+              actor: getCurrentActorName(),
+              role: getCurrentActorRole(),
               mataKuliah: singleIt.mataKuliah,
               dosenPengampu: singleIt.dosenPengampu,
               tanggalUjian: singleIt.tanggalUjian,
@@ -7118,9 +7221,9 @@
             Swal.fire('Error', err?.message || String(err), 'error');
           };
 
-          const delActor = currentUser?.nama || 'Admin TU';
-          const delRole = currentUser?.role || 'Admin TU';
-          if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.deleteJadwal) {
+          const delActor = getCurrentActorName();
+          const delRole = getCurrentActorRole();
+          if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy && google.script.run.deleteJadwal) {
             google.script.run
               .withSuccessHandler(onDeleteSuccess)
               .withFailureHandler(onDeleteError)
@@ -7460,7 +7563,8 @@
         pesan: document.getElementById('notifPesanInput').value,
         tipe: document.getElementById('notifTipeInput').value,
         targetRole: document.getElementById('notifTargetRoleInput').value,
-        actor: currentUser?.nama || 'Admin TU'
+        actor: getCurrentActorName(),
+        role: getCurrentActorRole()
       };
       google.script.run
         .withSuccessHandler(res => {
@@ -7656,8 +7760,8 @@
         confirmButtonColor: '#e11d48'
       }).then(r => {
         if (r.isConfirmed) {
-          const execRole = currentUser.role || 'Master Admin';
-          const execActor = currentUser.nama || currentUser.username || 'Master Admin';
+          const execRole = getCurrentActorRole('Master Admin');
+          const execActor = getCurrentActorName(null, 'Master Admin');
           const onClearSuccess = res => {
             if (res && res.success) {
               if (Array.isArray(res.logs)) {
@@ -7900,8 +8004,8 @@
         biayaKeterlambatan: Number(document.getElementById('periodeBiaya').value) || 0,
         biaya: Number(document.getElementById('periodeBiaya').value) || 0,
         status: document.getElementById('periodeStatus').value,
-        actor: currentUser?.nama || 'Admin TU',
-        role: currentUser?.role || 'Admin TU'
+        actor: getCurrentActorName(),
+        role: getCurrentActorRole()
       };
 
       const isEdit = (editId && editId.indexOf('PRD-') === 0);
@@ -8017,8 +8121,8 @@
           const onDelError = () => {
             Swal.fire('Terhapus', 'Periode dihapus dari memori lokal.', 'success');
           };
-          const delActor = currentUser?.nama || 'Admin TU';
-          const delRole = currentUser?.role || 'Admin TU';
+          const delActor = getCurrentActorName();
+          const delRole = getCurrentActorRole();
           if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
             google.script.run
               .withSuccessHandler(onDelSuccess)
@@ -8183,7 +8287,8 @@
         semester: document.getElementById('inputTahunAkademikSemester') ? document.getElementById('inputTahunAkademikSemester').value : 'Ganjil',
         status: document.getElementById('inputTahunAkademikStatus').value,
         keterangan: document.getElementById('inputTahunAkademikKeterangan').value.trim(),
-        actor: currentUser?.nama || 'Admin TU'
+        actor: getCurrentActorName(),
+        role: getCurrentActorRole()
       };
 
       const isEdit = Boolean(editId && editId.length > 0);
@@ -8219,16 +8324,13 @@
         Swal.fire('Error Sistem', err.message || String(err), 'error');
       };
 
-      if (isEdit) {
+      const fnTa = isEdit ? 'updateTahunAkademik' : 'addTahunAkademik';
+      if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
         google.script.run
           .withSuccessHandler(onResult)
-          .withFailureHandler(onError)
-          .updateTahunAkademik(payload);
+          .withFailureHandler(onError)[fnTa](payload);
       } else {
-        google.script.run
-          .withSuccessHandler(onResult)
-          .withFailureHandler(onError)
-          .addTahunAkademik(payload);
+        callGasApi(fnTa, [payload], onResult, onError);
       }
     }
 
@@ -8242,12 +8344,23 @@
         confirmButtonColor: '#e11d48'
       }).then(r => {
         if (r.isConfirmed) {
-          google.script.run
-            .withSuccessHandler(res => {
-              Swal.fire('Terhapus', res.message, 'success');
-              loadAppData();
-            })
-            .deleteTahunAkademik(id);
+          const delActor = getCurrentActorName();
+          const delRole = getCurrentActorRole();
+          const onDelSuccess = res => {
+            Swal.fire('Terhapus', (res && res.message) || 'Tahun akademik berhasil dihapus.', 'success');
+            loadAppData();
+          };
+          const onDelError = err => {
+            Swal.fire('Error', err?.message || String(err), 'error');
+          };
+          if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
+            google.script.run
+              .withSuccessHandler(onDelSuccess)
+              .withFailureHandler(onDelError)
+              .deleteTahunAkademik(id, delActor, delRole);
+          } else {
+            callGasApi('deleteTahunAkademik', [id, delActor, delRole], onDelSuccess, onDelError);
+          }
         }
       });
     }
@@ -8596,8 +8709,10 @@
 
           const mockups = getTenMockupDataItems();
 
+          const seedActor = getCurrentActorName(null, 'Master Admin');
+          const seedRole = getCurrentActorRole('Master Admin');
           // Cek apakah Google Apps Script runtime tersedia
-          const isGas = typeof google !== 'undefined' && google.script && google.script.run && typeof google.script.run.seedMockupData === 'function';
+          const isGas = typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy && typeof google.script.run.seedMockupData === 'function';
 
           if (isGas) {
             google.script.run
@@ -8610,7 +8725,7 @@
                 // Fallback client-side jika koneksi GAS offline
                 injectMockupDataClientSide(mockups);
               })
-              .seedMockupData(currentUser?.nama || 'Master Admin');
+              .seedMockupData(seedActor, seedRole);
           } else {
             // Mode Client / Hostinger / Standalone
             injectMockupDataClientSide(mockups);
@@ -8619,7 +8734,7 @@
               fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: 'seedMockupData', args: [] })
+                body: JSON.stringify({ action: 'seedMockupData', args: [seedActor, seedRole] })
               }).catch(e => console.warn('Sync to GAS API failed:', e));
             }
           }
@@ -8651,7 +8766,9 @@
         confirmButtonColor: '#e11d48'
       }).then(r => {
         if (r.isConfirmed) {
-          const isGas = typeof google !== 'undefined' && google.script && google.script.run && typeof google.script.run.clearAITestData === 'function';
+          const clrActor = getCurrentActorName(null, 'Master Admin');
+          const clrRole = getCurrentActorRole('Master Admin');
+          const isGas = typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy && typeof google.script.run.clearAITestData === 'function';
 
           if (isGas) {
             google.script.run
@@ -8663,7 +8780,7 @@
               .withFailureHandler(() => {
                 clearTestDataClientSide();
               })
-              .clearAITestData();
+              .clearAITestData(clrActor, clrRole);
           } else {
             clearTestDataClientSide();
             const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || 'https://script.google.com/macros/s/AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN/exec');
@@ -8671,7 +8788,7 @@
               fetch(apiUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: 'clearAITestData', args: [] })
+                body: JSON.stringify({ action: 'clearAITestData', args: [clrActor, clrRole] })
               }).catch(e => console.warn('Clear on GAS API failed:', e));
             }
           }
@@ -9560,8 +9677,8 @@
     }
 
     function handleSingleApproval(id, status) {
-      const actorName = currentUser?.nama || 'Admin TU';
-      const actorRole = currentUser?.role || 'Admin TU';
+      const actorName = getCurrentActorName();
+      const actorRole = getCurrentActorRole();
       google.script.run
         .withSuccessHandler(res => {
           Swal.fire('Berhasil', res.message, 'success');
@@ -9580,8 +9697,8 @@
         confirmButtonColor: '#e11d48'
       }).then(r => {
         if (r.isConfirmed) {
-          const actorName = currentUser?.nama || 'Admin TU';
-          const actorRole = currentUser?.role || 'Admin TU';
+          const actorName = getCurrentActorName();
+          const actorRole = getCurrentActorRole();
           if (Array.isArray(appData.pendaftaran)) {
             appData.pendaftaran = appData.pendaftaran.filter(p => String(p.ID || p.id).trim() !== String(id).trim());
             if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
@@ -9717,7 +9834,7 @@
             google.script.run
               .withSuccessHandler(onBulkSuccess)
               .withFailureHandler(onBulkError)
-              .bulkApproveRegistrations(selected, currentUser.role, currentUser.nama || currentUser.role);
+              .bulkApproveRegistrations(selected, getCurrentActorRole(), getCurrentActorName());
           } else {
             // Simulasi browser / offline testing
             setTimeout(() => {
@@ -9750,7 +9867,7 @@
               Swal.fire('Selesai', res.message, 'success');
               loadAppData();
             })
-            .bulkUpdateStatusApproval(selected, status, currentUser?.role || 'Admin TU', currentUser?.nama || 'Admin TU');
+            .bulkUpdateStatusApproval(selected, status, getCurrentActorRole(), getCurrentActorName());
         }
       });
     }
@@ -9839,7 +9956,7 @@
             closeSettingPembayaranModal();
             renderPendaftaranTable();
           })
-          .updateStatusPayment(id, newStatus, catatan, currentUser?.nama || 'Admin TU', currentUser?.role || 'Admin TU');
+          .updateStatusPayment(id, newStatus, catatan, getCurrentActorName(), getCurrentActorRole());
       } else {
         setTimeout(onComplete, 300);
       }
@@ -10407,7 +10524,8 @@
 
       const targetSheet = document.getElementById('excelTargetSheet')?.value || 'Master_Matkul';
       const btn = document.getElementById('btnExecuteExcelSync');
-      const actor = currentUser ? (currentUser.nama || currentUser.username || 'Admin TU') : 'Admin TU';
+      const actor = getCurrentActorName();
+      const actorRole = getCurrentActorRole();
 
       if (btn) {
         btn.disabled = true;
@@ -10441,13 +10559,13 @@
         Swal.fire('Error Sistem', err?.message || String(err), 'error');
       };
 
-      if (typeof google !== 'undefined' && google.script && google.script.run) {
+      if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
         google.script.run
           .withSuccessHandler(onSyncSuccess)
           .withFailureHandler(onSyncError)
-          .batchSyncMasterData(targetSheet, uploadedParsedData, actor);
+          .batchSyncMasterData(targetSheet, uploadedParsedData, actor, actorRole);
       } else {
-        callGasApi('batchSyncMasterData', [targetSheet, uploadedParsedData, actor], onSyncSuccess, onSyncError);
+        callGasApi('batchSyncMasterData', [targetSheet, uploadedParsedData, actor, actorRole], onSyncSuccess, onSyncError);
       }
     }
 
@@ -10553,13 +10671,15 @@
           Swal.fire('Error Migrasi', err?.message || String(err), 'error');
         };
 
-        if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.migrateBase64ToDrive) {
+        const migActor = getCurrentActorName();
+        const migRole = getCurrentActorRole();
+        if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy && google.script.run.migrateBase64ToDrive) {
           google.script.run
             .withSuccessHandler(onMigrateSuccess)
             .withFailureHandler(onMigrateError)
-            .migrateBase64ToDrive();
+            .migrateBase64ToDrive(migActor, migRole);
         } else {
-          callGasApi('migrateBase64ToDrive', [], onMigrateSuccess, onMigrateError);
+          callGasApi('migrateBase64ToDrive', [migActor, migRole], onMigrateSuccess, onMigrateError);
         }
       });
     }
@@ -10602,13 +10722,15 @@
         Swal.fire('Error Sinkronisasi', err?.message || String(err), 'error');
       };
 
-      if (typeof google !== 'undefined' && google.script && google.script.run && google.script.run.syncJadwalParticipantsToSheet) {
+      const syncActor = getCurrentActorName();
+      const syncRole = getCurrentActorRole();
+      if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy && google.script.run.syncJadwalParticipantsToSheet) {
         google.script.run
           .withSuccessHandler(onSyncSuccess)
           .withFailureHandler(onSyncError)
-          .syncJadwalParticipantsToSheet();
+          .syncJadwalParticipantsToSheet(syncActor, syncRole);
       } else {
-        callGasApi('syncJadwalParticipantsToSheet', [], onSyncSuccess, onSyncError);
+        callGasApi('syncJadwalParticipantsToSheet', [syncActor, syncRole], onSyncSuccess, onSyncError);
       }
     }
 
@@ -11649,23 +11771,31 @@
         kapasitas: Number(document.getElementById('ruanganKapasitasInput').value) || 30,
         gedung: document.getElementById('ruanganGedungInput').value.trim(),
         keterangan: document.getElementById('ruanganKeteranganInput').value.trim(),
-        actor: currentUser?.nama || 'Admin TU'
+        actor: getCurrentActorName(),
+        role: getCurrentActorRole()
       };
 
-      google.script.run
-        .withSuccessHandler(res => {
-          if (res && res.success) {
-            resetRuanganForm();
-            Swal.fire('Berhasil', res.message || 'Ruangan berhasil disimpan.', 'success');
-            loadAppData();
-          } else {
-            Swal.fire('Gagal', res ? res.message : 'Gagal menyimpan ruangan.', 'error');
-          }
-        })
-        .withFailureHandler(err => {
-          Swal.fire('Error', err.message || 'Gagal menghubungi server.', 'error');
-        })
-        .addRuangan(payload);
+      const onSaveRuanganSuccess = res => {
+        if (res && res.success) {
+          resetRuanganForm();
+          Swal.fire('Berhasil', res.message || 'Ruangan berhasil disimpan.', 'success');
+          loadAppData();
+        } else {
+          Swal.fire('Gagal', res ? res.message : 'Gagal menyimpan ruangan.', 'error');
+        }
+      };
+      const onSaveRuanganError = err => {
+        Swal.fire('Error', err?.message || 'Gagal menghubungi server.', 'error');
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
+        google.script.run
+          .withSuccessHandler(onSaveRuanganSuccess)
+          .withFailureHandler(onSaveRuanganError)
+          .addRuangan(payload);
+      } else {
+        callGasApi('addRuangan', [payload], onSaveRuanganSuccess, onSaveRuanganError);
+      }
     }
 
     function resetRuanganForm() {
@@ -11686,19 +11816,27 @@
         cancelButtonText: 'Batal'
       }).then(r => {
         if (r.isConfirmed) {
-          google.script.run
-            .withSuccessHandler(res => {
-              if (res && res.success) {
-                Swal.fire('Terhapus', res.message || 'Ruangan berhasil dihapus.', 'success');
-                loadAppData();
-              } else {
-                Swal.fire('Gagal', res ? res.message : 'Gagal menghapus ruangan.', 'error');
-              }
-            })
-            .withFailureHandler(err => {
-              Swal.fire('Error', err.message || 'Gagal menghubungi server.', 'error');
-            })
-            .deleteRuangan(targetIdentifier);
+          const delActor = getCurrentActorName();
+          const delRole = getCurrentActorRole();
+          const onDelSuccess = res => {
+            if (res && res.success) {
+              Swal.fire('Terhapus', res.message || 'Ruangan berhasil dihapus.', 'success');
+              loadAppData();
+            } else {
+              Swal.fire('Gagal', res ? res.message : 'Gagal menghapus ruangan.', 'error');
+            }
+          };
+          const onDelError = err => {
+            Swal.fire('Error', err?.message || 'Gagal menghubungi server.', 'error');
+          };
+          if (typeof google !== 'undefined' && google.script && google.script.run && !window.google.__isProxy) {
+            google.script.run
+              .withSuccessHandler(onDelSuccess)
+              .withFailureHandler(onDelError)
+              .deleteRuangan(targetIdentifier, delActor, delRole);
+          } else {
+            callGasApi('deleteRuangan', [targetIdentifier, delActor, delRole], onDelSuccess, onDelError);
+          }
         }
       });
     }
@@ -12149,6 +12287,8 @@
       }
 
       const username = currentUser ? (currentUser.username || currentUser.npm || 'admin') : 'admin';
+      const actorName = getCurrentActorName(username);
+      const actorRole = getCurrentActorRole('User');
 
       if (typeof google !== 'undefined' && google.script && google.script.run) {
         google.script.run
@@ -12185,7 +12325,7 @@
               text: err ? (err.message || String(err)) : 'Gagal menghubungi server GAS.'
             });
           })
-          .changePassword(username, oldPass, newPass);
+          .changePassword(username, oldPass, newPass, actorName, actorRole);
       } else {
         // Mode browser standalone / dev preview
         setTimeout(() => {

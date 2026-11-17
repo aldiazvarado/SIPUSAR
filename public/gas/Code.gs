@@ -94,7 +94,9 @@ function handleApiRequest(action, args) {
     seedMockupData: seedMockupData,
     uploadBuktiPendaftaranToDrive: uploadBuktiToDrive,
     migrateBase64ToDrive: migrateBase64ToDrive,
-    syncJadwalParticipantsToSheet: syncJadwalParticipantsToSheet
+    syncJadwalParticipantsToSheet: syncJadwalParticipantsToSheet,
+    optimizeSpreadsheetStorage: optimizeSpreadsheetStorage,
+    archiveSemesterData: archiveSemesterData
   };
   var fn = allowedFunctions[action];
   if (!fn) {
@@ -976,7 +978,7 @@ function loginUser(username, password) {
   }
 }
 
-function changePassword(username, oldPassword, newPassword) {
+function changePassword(username, oldPassword, newPassword, actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     try { lock.waitLock(10000); } catch(e) {}
@@ -994,11 +996,13 @@ function changePassword(username, oldPassword, newPassword) {
       return { success: false, message: 'Password baru wajib diisi.' };
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var targetSheet = null;
     var candidateSheets = ['User_Staff', 'User_Mahasiswa'];
     var colPass = -1;
     var targetRowIndex = -1;
+    var matchedNama = '';
+    var matchedRole = '';
 
     for (var sIdx = 0; sIdx < candidateSheets.length; sIdx++) {
       var sName = candidateSheets[sIdx];
@@ -1011,6 +1015,8 @@ function changePassword(username, oldPassword, newPassword) {
       var headers = displayValues[0].map(function(h) { return String(h || '').trim().toLowerCase(); });
       var cU = -1;
       var cP = -1;
+      var cNama = -1;
+      var cRole = -1;
 
       for (var h = 0; h < headers.length; h++) {
         var hClean = headers[h].replace(/[^a-z0-9]/g, '');
@@ -1019,6 +1025,12 @@ function changePassword(username, oldPassword, newPassword) {
         }
         if (hClean === 'password' || hClean.indexOf('pass') !== -1 || hClean.indexOf('sandi') !== -1) {
           if (cP === -1) cP = h;
+        }
+        if (hClean === 'namalengkap' || hClean === 'namamahasiswa' || hClean === 'nama') {
+          if (cNama === -1) cNama = h;
+        }
+        if (hClean === 'role' || hClean === 'jabatan') {
+          if (cRole === -1) cRole = h;
         }
       }
       if (cU === -1) cU = 1;
@@ -1047,6 +1059,8 @@ function changePassword(username, oldPassword, newPassword) {
           targetSheet = curSheet;
           colPass = cP;
           targetRowIndex = i + 1;
+          matchedNama = cNama !== -1 ? String(row[cNama] || '').trim() : '';
+          matchedRole = cRole !== -1 ? String(row[cRole] || '').trim() : (sName === 'User_Mahasiswa' ? 'Mahasiswa' : '');
           break;
         }
       }
@@ -1066,8 +1080,10 @@ function changePassword(username, oldPassword, newPassword) {
       cache.remove('SIP_MASTER_CACHE_V4_User_Mahasiswa');
     } catch(e) {}
 
-    bumpSyncVersion(username, 'Ganti password user ' + username);
-    addActivityLog(username, 'Ganti Password', 'Akun Pengguna: ' + username, 'Pembaruan kata sandi akun berhasil diverifikasi oleh sistem', 'User');
+    var actorName = String(matchedNama || actor || username || 'Pengguna').trim();
+    var actorRole = String(matchedRole || userRole || 'Mahasiswa').trim();
+    bumpSyncVersion(actorName, 'Ganti password user ' + actorName);
+    addActivityLog(actorName, 'Ganti Password', 'Akun Pengguna: ' + actorName + ' (' + username + ')', 'Pembaruan kata sandi akun berhasil diverifikasi oleh sistem', actorRole);
     return { success: true, message: 'Password Anda berhasil diperbarui!' };
   } catch (err) {
     return { success: false, message: 'Terjadi kesalahan sistem: ' + err.message };
@@ -1076,15 +1092,66 @@ function changePassword(username, oldPassword, newPassword) {
   }
 }
 
+var _actorIdentityLookupCache = null;
+function resolveActorIdentity_(ss, actorInput, roleInput) {
+  var rawActor = String(actorInput || '').trim();
+  var rawRole = String(roleInput || '').trim();
+  try {
+    var targetSs = ss || getActiveSpreadsheetSafe();
+    if (!targetSs) {
+      return { actor: rawActor || 'Sistem', role: rawRole || 'Sistem' };
+    }
+    if (!_actorIdentityLookupCache) {
+      var byKey = {};
+      var byName = {};
+      var registerRows = function(rows, defaultRole) {
+        if (!Array.isArray(rows)) return;
+        for (var i = 0; i < rows.length; i++) {
+          var u = rows[i];
+          if (!u) continue;
+          var fullName = String(u['Nama Lengkap'] || u['Nama Mahasiswa'] || u.Nama || '').trim();
+          var uRole = String(u.Role || u.role || defaultRole || '').trim();
+          if (!fullName) continue;
+          var info = { actor: fullName, role: uRole };
+          byName[fullName.toLowerCase()] = info;
+          var keys = [u.Username, u.username, u.NPM, u.npm, u.NIM, u.nim, u.NIK, u.nik, u.Email, u.email];
+          for (var k = 0; k < keys.length; k++) {
+            var kv = String(keys[k] || '').trim().toLowerCase();
+            if (kv) byKey[kv] = info;
+          }
+        }
+      };
+      registerRows(getSheetDataRaw(targetSs, 'User_Staff'), 'Admin TU');
+      registerRows(getSheetDataRaw(targetSs, 'User_Mahasiswa'), 'Mahasiswa');
+      _actorIdentityLookupCache = { byKey: byKey, byName: byName };
+    }
+    var lowerActor = rawActor.toLowerCase();
+    var found = _actorIdentityLookupCache.byName[lowerActor] || _actorIdentityLookupCache.byKey[lowerActor];
+    if (found) {
+      return {
+        actor: found.actor || rawActor || 'Sistem',
+        role: rawRole && rawRole.toLowerCase() !== 'user' && rawRole.toLowerCase() !== 'sistem' ? rawRole : (found.role || rawRole || 'Sistem')
+      };
+    }
+  } catch (e) {}
+  return {
+    actor: rawActor || 'Sistem',
+    role: rawRole || 'Sistem'
+  };
+}
+
 // [REVISI POIN 1]: Menambahkan ke sheet dan menyimpan cadangan di PropertiesService
 function addActivityLog(actor, aksi, target, keterangan, role) {
   try {
+    var ss = getActiveSpreadsheetSafe();
+    if (!ss) return null;
+    var resolved = resolveActorIdentity_(ss, actor, role);
     var now = new Date();
     var randSuffix = ('00' + Math.floor(Math.random() * 100)).slice(-2);
     var id = 'LOG-' + Utilities.formatDate(now, 'Asia/Jakarta', 'yyyyMMdd-HHmmss-SSS') + '-' + randSuffix;
     var waktu = Utilities.formatDate(now, 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
-    var cleanActor = String(actor || 'Sistem').trim();
-    var cleanRole = String(role || 'Sistem').trim();
+    var cleanActor = String(resolved.actor || 'Sistem').trim();
+    var cleanRole = String(resolved.role || 'Sistem').trim();
     var logItem = {
       ID: id,
       Waktu: waktu,
@@ -1095,8 +1162,6 @@ function addActivityLog(actor, aksi, target, keterangan, role) {
       Keterangan: String(keterangan || '').trim()
     };
 
-    var ss = getActiveSpreadsheetSafe();
-    if (!ss) return null;
     var sheet = ss.getSheetByName('Log_Aktivitas');
     if (!sheet) {
       sheet = ss.insertSheet('Log_Aktivitas');
@@ -1589,11 +1654,11 @@ function uploadBuktiToDrive(base64Data, fileName, mimeType, npm, regId) {
 // mengunggahnya otomatis ke folder Google Drive "Berkas Bukti Pendaftaran FEB UIKA",
 // dan menimpa sel spreadsheet dengan URL Drive resmi agar kuota spreadsheet aman.
 // ==========================================
-function migrateBase64ToDrive() {
+function migrateBase64ToDrive(actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(20000);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var sheet = ss.getSheetByName('Pendaftaran');
     if (!sheet) return { success: false, message: 'Sheet Pendaftaran tidak ditemukan.' };
 
@@ -1635,8 +1700,10 @@ function migrateBase64ToDrive() {
 
     SpreadsheetApp.flush();
     if (convertedCount > 0) {
-      bumpSyncVersion('Master Admin', 'Migrasi ' + convertedCount + ' berkas bukti ke Google Drive');
-      addActivityLog('Master Admin', 'Migrasi Bukti Drive', convertedCount + ' berkas', 'Konversi bukti pendaftaran base64 ke Google Drive', 'Master Admin');
+      var migActor = String(actor || 'Master Admin').trim();
+      var migRole = String(userRole || 'Master Admin').trim();
+      bumpSyncVersion(migActor, 'Migrasi ' + convertedCount + ' berkas bukti ke Google Drive');
+      addActivityLog(migActor, 'Migrasi Bukti Drive', convertedCount + ' berkas', 'Konversi bukti pendaftaran base64 ke Google Drive', migRole);
     }
 
     return {
@@ -2135,11 +2202,11 @@ function generateMockTestData(count) {
   }
 }
 
-function clearAITestData() {
+function clearAITestData(actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var pSheet = ss.getSheetByName('Pendaftaran');
     if (!pSheet) return { success: true, message: 'Lembar Pendaftaran tidak ditemukan.' };
     var lastRow = pSheet.getLastRow();
@@ -2175,8 +2242,10 @@ function clearAITestData() {
       pSheet.getRange(1, 1, cleanRows.length, cleanRows[0].length).setValues(cleanRows);
     }
     SpreadsheetApp.flush();
-    bumpSyncVersion('Admin', 'Bersihkan data uji coba & baris kosong');
-    addActivityLog('Admin TU', 'Bersihkan Data Uji AI', 'Pendaftaran', 'Menghapus ' + deletedCount + ' baris data uji/sampel/kosong dari sistem.', 'Admin TU');
+    var clrActor = String(actor || 'Admin TU').trim();
+    var clrRole = String(userRole || 'Admin TU').trim();
+    bumpSyncVersion(clrActor, 'Bersihkan data uji coba & baris kosong');
+    addActivityLog(clrActor, 'Bersihkan Data Uji AI', 'Pendaftaran', 'Menghapus ' + deletedCount + ' baris data uji/sampel/kosong dari sistem.', clrRole);
     return { success: true, message: deletedCount + ' baris data uji coba & sampel mockup berhasil dibersihkan dari spreadsheet.' };
   } catch (err) {
     return { success: false, message: err.message };
@@ -2188,11 +2257,11 @@ function clearAITestData() {
 // =========================================================================
 // [AI DIAGNOSTICS]: SUNTIK 10 MOCKUP CONTOH SAMPEL DATA LENGKAP PROPORSIONAL
 // =========================================================================
-function seedMockupData() {
+function seedMockupData(actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var pSheet = ss.getSheetByName('Pendaftaran');
     if (!pSheet) pSheet = getOrCreateSheet(ss, 'Pendaftaran');
 
@@ -2521,8 +2590,10 @@ function seedMockupData() {
     }
 
     SpreadsheetApp.flush();
-    addActivityLog('Admin TU', 'Suntik 10 Mockup Sampel', 'Pendaftaran', 'Menambahkan 10 data sampel pendaftaran proporsional (UTS, UAS, & Remedial Teaching) untuk pengujian sistem & dashboard.', 'Admin TU');
-    bumpSyncVersion('Admin', 'Seed 10 Mockup Data Presisi');
+    var seedActor = String(actor || 'Admin TU').trim();
+    var seedRole = String(userRole || 'Admin TU').trim();
+    addActivityLog(seedActor, 'Suntik 10 Mockup Sampel', 'Pendaftaran', 'Menambahkan 10 data sampel pendaftaran proporsional (UTS, UAS, & Remedial Teaching) untuk pengujian sistem & dashboard.', seedRole);
+    bumpSyncVersion(seedActor, 'Seed 10 Mockup Data Presisi');
     return { success: true, message: '10 data mockup contoh sampel (UTS, UAS, & Remedial Teaching) berhasil disuntikkan secara lengkap dan sinkron ke spreadsheet tanpa baris kosong!' };
   } catch(err) {
     return { success: false, message: 'Gagal suntik data mockup: ' + err.message };
@@ -2633,7 +2704,10 @@ function addTahunAkademik(payload) {
     sheet.appendRow(newRow);
     SpreadsheetApp.flush();
     invalidateCache('Master_Tahun_Akademik');
-    bumpSyncVersion(payload.actor || 'Admin', 'Tambah Tahun Akademik ' + tahun + ' (' + sem + ')');
+    var taActor = String(payload.actor || 'Admin TU').trim();
+    var taRole = String(payload.role || 'Admin TU').trim();
+    bumpSyncVersion(taActor, 'Tambah Tahun Akademik ' + tahun + ' (' + sem + ')');
+    addActivityLog(taActor, 'Tambah Tahun Akademik', newId + ' (' + tahun + ' ' + sem + ')', 'Menambahkan tahun akademik ' + tahun + ' semester ' + sem, taRole);
     return { success: true, message: 'Tahun Akademik ' + tahun + ' (' + sem + ') berhasil ditambahkan.' };
   } catch(err) {
     return { success: false, message: err.message };
@@ -2646,7 +2720,7 @@ function updateTahunAkademik(payload) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var sheet = ss.getSheetByName('Master_Tahun_Akademik');
     if (!sheet) throw new Error('Sheet Master_Tahun_Akademik tidak ditemukan.');
     ensureMasterTahunAkademikSchema(sheet);
@@ -2670,7 +2744,10 @@ function updateTahunAkademik(payload) {
     if (payload.keterangan !== undefined && colMap['keterangan']) sheet.getRange(rowIndex, colMap['keterangan']).setValue(payload.keterangan);
     SpreadsheetApp.flush();
     invalidateCache('Master_Tahun_Akademik');
-    bumpSyncVersion(payload.actor || 'Admin', 'Update Tahun Akademik ' + payload.id);
+    var updTaActor = String(payload.actor || 'Admin TU').trim();
+    var updTaRole = String(payload.role || 'Admin TU').trim();
+    bumpSyncVersion(updTaActor, 'Update Tahun Akademik ' + payload.id);
+    addActivityLog(updTaActor, 'Edit Tahun Akademik', payload.id + ' (' + (payload.tahun || '') + ')', 'Memperbarui data tahun akademik', updTaRole);
     return { success: true, message: 'Tahun Akademik ' + payload.id + ' berhasil diperbarui.' };
   } catch(err) {
     return { success: false, message: err.message };
@@ -2679,11 +2756,11 @@ function updateTahunAkademik(payload) {
   }
 }
 
-function deleteTahunAkademik(id) {
+function deleteTahunAkademik(id, actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var sheet = ss.getSheetByName('Master_Tahun_Akademik');
     if (!sheet) throw new Error('Sheet Master_Tahun_Akademik tidak ditemukan.');
     var values = sheet.getDataRange().getValues();
@@ -2702,7 +2779,10 @@ function deleteTahunAkademik(id) {
       SpreadsheetApp.flush();
     }
     invalidateCache('Master_Tahun_Akademik');
-    bumpSyncVersion('Admin', 'Hapus Tahun Akademik ' + id);
+    var delTaActor = String(actor || 'Admin TU').trim();
+    var delTaRole = String(userRole || 'Admin TU').trim();
+    bumpSyncVersion(delTaActor, 'Hapus Tahun Akademik ' + id);
+    addActivityLog(delTaActor, 'Hapus Tahun Akademik', id, 'Menghapus tahun akademik dari sistem', delTaRole);
     return { success: true, message: rowIndex !== -1 ? 'Tahun Akademik ' + id + ' berhasil dihapus secara permanen.' : 'Tahun Akademik ' + id + ' telah disinkronkan & dibersihkan dari memori.' };
   } catch(err) {
     return { success: false, message: err.message };
@@ -2715,7 +2795,7 @@ function addRuangan(payload) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var sheet = ss.getSheetByName('Master_Ruangan');
     var id = 'RNG-' + (new Date().getTime()).toString().slice(-4);
     var row = [
@@ -2729,7 +2809,10 @@ function addRuangan(payload) {
     sheet.appendRow(row);
     SpreadsheetApp.flush();
     invalidateCache('Master_Ruangan');
-    bumpSyncVersion(payload.actor || 'Admin', 'Tambah Ruangan ' + row[1]);
+    var rActor = String(payload.actor || 'Admin TU').trim();
+    var rRole = String(payload.role || 'Admin TU').trim();
+    bumpSyncVersion(rActor, 'Tambah Ruangan ' + row[1]);
+    addActivityLog(rActor, 'Tambah Ruangan', id + ' (' + row[1] + ')', 'Menambahkan master ruangan ' + (row[2] || row[1]), rRole);
     return { success: true, item: { ID: id, 'Kode Ruangan': row[1], 'Nama Ruangan': row[2], Kapasitas: row[3], Gedung: row[4], Keterangan: row[5] } };
   } catch (err) {
     return { success: false, message: err.message };
@@ -2742,7 +2825,7 @@ function updateRuangan(id, payload) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var sheet = ss.getSheetByName('Master_Ruangan');
     if (!sheet) throw new Error('Sheet Master_Ruangan tidak ditemukan.');
     var data = sheet.getDataRange().getValues();
@@ -2759,7 +2842,10 @@ function updateRuangan(id, payload) {
         sheet.getRange(i + 1, 1, 1, 6).setValues([data[i]]);
         SpreadsheetApp.flush();
         invalidateCache('Master_Ruangan');
-        bumpSyncVersion(payload.actor || 'Admin', 'Update Ruangan ' + id);
+        var urActor = String((payload && payload.actor) || 'Admin TU').trim();
+        var urRole = String((payload && payload.role) || 'Admin TU').trim();
+        bumpSyncVersion(urActor, 'Update Ruangan ' + id);
+        addActivityLog(urActor, 'Edit Ruangan', id, 'Memperbarui data master ruangan ' + id, urRole);
         return { success: true, message: 'Ruangan berhasil diperbarui.' };
       }
     }
@@ -2772,11 +2858,11 @@ function updateRuangan(id, payload) {
   }
 }
 
-function deleteRuangan(id) {
+function deleteRuangan(id, actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var sheet = ss.getSheetByName('Master_Ruangan');
     if (!sheet) throw new Error('Sheet Master_Ruangan tidak ditemukan.');
     var data = sheet.getDataRange().getValues();
@@ -2793,7 +2879,10 @@ function deleteRuangan(id) {
       }
     }
     invalidateCache('Master_Ruangan');
-    bumpSyncVersion('Admin', 'Hapus Ruangan ' + id);
+    var drActor = String(actor || 'Admin TU').trim();
+    var drRole = String(userRole || 'Admin TU').trim();
+    bumpSyncVersion(drActor, 'Hapus Ruangan ' + id);
+    addActivityLog(drActor, 'Hapus Ruangan', id, 'Menghapus master ruangan dari sistem', drRole);
     return { 
       success: true, 
       message: deleted ? ('Ruangan ' + id + ' berhasil dihapus secara permanen.') : ('Ruangan ' + id + ' telah dihapus & disinkronkan.') 
@@ -2809,7 +2898,7 @@ function deleteRuangan(id) {
 // [SMART SYNC DATA MASTER]: Master_Matkul, Master_Kelas, Master_Dosen, Master_Ruangan
 // Sinkronisasi Cerdas: Update data jika cocok, Tambah baris baru jika unik
 // =========================================================================
-function batchSyncMasterData(sheetName, rows, actor) {
+function batchSyncMasterData(sheetName, rows, actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
@@ -2998,8 +3087,10 @@ function batchSyncMasterData(sheetName, rows, actor) {
 
     SpreadsheetApp.flush();
     invalidateCache(sheetName);
-    bumpSyncVersion(actor || 'Admin', 'Sync ' + sheetName + ' (' + rows.length + ' data)');
-    addActivityLog(actor || 'Admin', 'Upload & Sync Data Master', sheetName, 'Berhasil menyinkronkan ' + rows.length + ' baris data (Diperbarui: ' + updatedCount + ', Baru: ' + insertedCount + ')', 'Admin');
+    var syncActor = String(actor || 'Admin TU').trim();
+    var syncRole = String(userRole || 'Admin TU').trim();
+    bumpSyncVersion(syncActor, 'Sync ' + sheetName + ' (' + rows.length + ' data)');
+    addActivityLog(syncActor, 'Upload & Sync Data Master', sheetName, 'Berhasil menyinkronkan ' + rows.length + ' baris data (Diperbarui: ' + updatedCount + ', Baru: ' + insertedCount + ')', syncRole);
 
     return {
       success: true,
@@ -3020,7 +3111,7 @@ function batchSyncMasterData(sheetName, rows, actor) {
 // [MANAJEMEN PENGGUNA]: Tambah / Registrasi Mahasiswa Tunggal dari Admin
 // Otomatis menghitung semester berjalan berdasarkan Angkatan dan Tahun Akademik
 // =========================================================================
-function addUserMahasiswa(payload, actor) {
+function addUserMahasiswa(payload, actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -3048,7 +3139,7 @@ function addUserMahasiswa(payload, actor) {
       'Semester': rawSemester
     };
 
-    var syncRes = batchSyncMasterData('User_Mahasiswa', [studentRow], actor || 'Admin TU');
+    var syncRes = batchSyncMasterData('User_Mahasiswa', [studentRow], actor || (payload && payload.actor) || 'Admin TU', userRole || (payload && payload.role) || 'Admin TU');
     if (syncRes && syncRes.success) {
       return {
         success: true,
@@ -3423,15 +3514,17 @@ function syncJadwalParticipantsInternal_(ss) {
   };
 }
 
-function syncJadwalParticipantsToSheet() {
+function syncJadwalParticipantsToSheet(actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     try { lock.waitLock(15000); } catch (e) {}
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe();
     var res = syncJadwalParticipantsInternal_(ss);
     if (res && res.success) {
-      bumpSyncVersion('Admin TU', 'Sinkron Peserta Jadwal_Ujian ke Spreadsheet');
-      addActivityLog('Admin TU', 'Sinkron Spreadsheet', 'Jadwal_Ujian', res.message, 'Admin');
+      var syncActor = String(actor || 'Admin TU').trim();
+      var syncRole = String(userRole || 'Admin TU').trim();
+      bumpSyncVersion(syncActor, 'Sinkron Peserta Jadwal_Ujian ke Spreadsheet');
+      addActivityLog(syncActor, 'Sinkron Spreadsheet', 'Jadwal_Ujian', res.message, syncRole);
     }
     return res;
   } catch (err) {
@@ -3657,8 +3750,10 @@ function updateJadwal(idOrPayload, maybePayload) {
     SpreadsheetApp.flush();
     try { syncJadwalParticipantsInternal_(ss); } catch (syncErr) { Logger.log('Auto-sync Jadwal_Ujian pasca update: ' + syncErr.message); }
 
-    bumpSyncVersion(payload.actor || 'Admin TU', 'Update Jadwal ' + id);
-    addActivityLog(payload.actor || 'Admin TU', 'Update Jadwal Ujian', id + ' (' + matkul + ')', 'Pembaruan jadwal ujian ruangan ' + ruang + ' tanggal ' + tgl, 'Admin');
+    var updJActor = String(payload.actor || 'Admin TU').trim();
+    var updJRole = String(payload.role || 'Admin TU').trim();
+    bumpSyncVersion(updJActor, 'Update Jadwal ' + id);
+    addActivityLog(updJActor, 'Update Jadwal Ujian', id + ' (' + matkul + ')', 'Pembaruan jadwal ujian ruangan ' + ruang + ' tanggal ' + tgl, updJRole);
     return { success: true, message: 'Jadwal ujian ' + id + ' berhasil diperbarui.' };
   } catch (err) {
     return { success: false, message: 'Gagal memperbarui jadwal: ' + err.message };
@@ -3667,10 +3762,13 @@ function updateJadwal(idOrPayload, maybePayload) {
   }
 }
 
-function deleteJadwal(id, actor, userRole) {
+function deleteJadwal(idOrPayload, actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
+    var id = (typeof idOrPayload === 'object' && idOrPayload !== null) ? (idOrPayload.id || idOrPayload.ID || '') : idOrPayload;
+    var reqActor = actor || (typeof idOrPayload === 'object' && idOrPayload !== null ? idOrPayload.actor : '');
+    var reqRole = userRole || (typeof idOrPayload === 'object' && idOrPayload !== null ? idOrPayload.role : '');
     var ss = getActiveSpreadsheetSafe();
     var sheet = ss.getSheetByName('Jadwal_Ujian');
     var data = sheet.getDataRange().getValues();
@@ -3703,8 +3801,8 @@ function deleteJadwal(id, actor, userRole) {
         sheet.deleteRow(i + 1);
         SpreadsheetApp.flush();
         try { syncJadwalParticipantsInternal_(ss); } catch (syncErr) { Logger.log('Auto-sync Jadwal_Ujian pasca delete: ' + syncErr.message); }
-        var actorName = String(actor || 'Admin TU').trim();
-        var actorRole = String(userRole || 'Admin TU').trim();
+        var actorName = String(reqActor || 'Admin TU').trim();
+        var actorRole = String(reqRole || 'Admin TU').trim();
         bumpSyncVersion(actorName, 'Hapus Jadwal ' + id);
         addActivityLog(actorName, 'Hapus Jadwal Ujian', id, 'Penghapusan data jadwal ujian dari sistem', actorRole);
         return { success: true, message: 'Jadwal ' + id + ' berhasil dihapus.' };
@@ -4146,7 +4244,7 @@ function renderKartuUjianDigital(pendaftaranIdOrNpm) {
 // [ARSITEKTUR & OPTIMASI PERFORMA]: 5. Pembersihan Baris & Kolom Kosong (Auto-Trim)
 // Menghapus baris/kolom kosong tak terpakai untuk mempercepat waktu I/O Google Sheets
 // =========================================================================
-function optimizeSpreadsheetStorage() {
+function optimizeSpreadsheetStorage(actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -4184,7 +4282,7 @@ function optimizeSpreadsheetStorage() {
       });
     });
 
-    addActivityLog('Sistem', 'Optimasi Database', 'Spreadsheet', 'Pembersihan baris & kolom kosong pada ' + sheets.length + ' sheet.', 'Admin');
+    addActivityLog(actor || 'Master Admin', 'Optimasi Database', 'Spreadsheet', 'Pembersihan baris & kolom kosong pada ' + sheets.length + ' sheet.', userRole || 'Master Admin');
     return { success: true, message: 'Spreadsheet berhasil dioptimalkan. I/O berlebih berhasil dipangkas.', report: report };
   } catch (err) {
     return { success: false, message: err.message };
@@ -4197,7 +4295,7 @@ function optimizeSpreadsheetStorage() {
 // [ARSITEKTUR & OPTIMASI PERFORMA]: 8. Struktur Auto-Archive
 // Memisahkan data semester berjalan dengan arsip semester lalu
 // =========================================================================
-function archiveSemesterData(tahunAkademikTarget) {
+function archiveSemesterData(tahunAkademikTarget, actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(15000);
@@ -4252,7 +4350,7 @@ function archiveSemesterData(tahunAkademikTarget) {
     pendaftaranSheet.getRange(1, 1, activeRows.length, headers.length).setValues(activeRows);
 
     SpreadsheetApp.flush();
-    addActivityLog('Admin TU', 'Arsip Semester', archiveSheetName, 'Berhasil mengarsipkan ' + archiveRows.length + ' data semester ' + tahunAkademikTarget, 'Admin');
+    addActivityLog(actor || 'Admin TU', 'Arsip Semester', archiveSheetName, 'Berhasil mengarsipkan ' + archiveRows.length + ' data semester ' + tahunAkademikTarget, userRole || 'Admin TU');
 
     return { success: true, count: archiveRows.length, archiveSheet: archiveSheetName, message: "Berhasil memindahkan " + archiveRows.length + " berkas ke " + archiveSheetName };
   } catch (err) {
