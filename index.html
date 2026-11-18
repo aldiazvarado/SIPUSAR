@@ -21,26 +21,33 @@
     // [REST API ENGINE UNTUK HOSTINGER & GITHUB PAGES STANDALONE]
     // Menghubungkan seluruh fungsi ke Google Apps Script Web App Endpoint via CORS Fetch
     // ==========================================
+    const DEFAULT_GAS_API_URL = "https://script.google.com/macros/s/AKfycbwT-PHfrjzIQeYiJiW-yXLtFCFQsyxmetroboeMkt_aEIi4qOG6mFrj_9luG6CK1CNe/exec";
+    const LEGACY_GAS_DEPLOYMENT_IDS = ["AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN", "0AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN"];
+
+    function normalizeAndMigrateGasUrl(rawUrl) {
+      let val = String(rawUrl || "").trim();
+      if (!val) return DEFAULT_GAS_API_URL;
+      if (LEGACY_GAS_DEPLOYMENT_IDS.some(id => val.includes(id))) {
+        return DEFAULT_GAS_API_URL;
+      }
+      return val;
+    }
+
     function getGasApiUrl() {
       let val = localStorage.getItem("SIP_GAS_API_URL") || localStorage.getItem("uika_gas_api_url") || "";
       if (val && typeof val === 'string' && val.trim()) {
-        val = val.trim();
-        // Bersihkan typo leading '0' jika pernah tersimpan di cache browser pengguna
-        if (val.includes("/0AKfycbxKE")) {
-          val = val.replace("/0AKfycbxKE", "/AKfycbxKE");
-          localStorage.setItem("SIP_GAS_API_URL", val);
-          localStorage.setItem("uika_gas_api_url", val);
+        const migrated = normalizeAndMigrateGasUrl(val);
+        if (migrated !== val.trim()) {
+          localStorage.setItem("SIP_GAS_API_URL", migrated);
+          localStorage.setItem("uika_gas_api_url", migrated);
         }
-        return val;
+        return migrated;
       }
-      return "https://script.google.com/macros/s/AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN/exec";
+      return DEFAULT_GAS_API_URL;
     }
 
     function setGasApiUrl(newUrl) {
-      let cleanUrl = (newUrl || '').trim();
-      if (cleanUrl.includes("/0AKfycbxKE")) {
-        cleanUrl = cleanUrl.replace("/0AKfycbxKE", "/AKfycbxKE");
-      }
+      const cleanUrl = normalizeAndMigrateGasUrl(newUrl);
       localStorage.setItem("SIP_GAS_API_URL", cleanUrl);
       localStorage.setItem("uika_gas_api_url", cleanUrl);
       GAS_API_URL = cleanUrl;
@@ -9129,7 +9136,7 @@
           } else {
             // Mode Client / Hostinger / Standalone
             injectMockupDataClientSide(mockups);
-            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || 'https://script.google.com/macros/s/AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN/exec');
+            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || DEFAULT_GAS_API_URL);
             if (apiUrl) {
               fetch(apiUrl, {
                 method: 'POST',
@@ -9183,7 +9190,7 @@
               .clearAITestData(clrActor, clrRole);
           } else {
             clearTestDataClientSide();
-            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || 'https://script.google.com/macros/s/AKfycbxKE-klcKo_Z_WVoCEASMtUN96pBMBT6A2dr6UywY5fy4SFfMLzF98DXyFptXDrbvkN/exec');
+            const apiUrl = typeof getGasApiUrl === 'function' ? getGasApiUrl() : (localStorage.getItem('SIP_GAS_API_URL') || DEFAULT_GAS_API_URL);
             if (apiUrl) {
               fetch(apiUrl, {
                 method: 'POST',
