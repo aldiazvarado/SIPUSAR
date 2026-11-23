@@ -1914,7 +1914,7 @@
           </div>
           <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Belum Bayar</p>
-            <h3 id="invBelumBayarCount" class="text-lg sm:text-xl font-black text-amber-600 tabular-nums mt-0.5 truncate">0</h3>
+            <h3 id="invBelumBayarCount" class="text-lg sm:text-xl font-black text-rose-600 tabular-nums mt-0.5 truncate">0</h3>
           </div>
           <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
             <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Total Nominal</p>
@@ -1934,12 +1934,11 @@
                 </button>
               </div>
 
-              <select id="filterInvoiceStatus" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Status Pembayaran" class="w-full lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
-                <option value="">Semua Status Bayar</option>
-                <option value="Lunas">Lunas</option>
-                <option value="Belum Bayar">Belum Bayar</option>
-                <option value="Menunggu">Menunggu</option>
-                <option value="Gratis (Tepat Waktu)">Gratis (Tepat Waktu)</option>
+              <select id="filterInvoiceStatus" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Status Pembayaran" class="w-full lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer transition">
+                <option value="" class="bg-white text-slate-700 font-medium">Semua Status Bayar</option>
+                <option value="Belum Bayar" class="bg-rose-50 text-rose-800 font-semibold">Belum Bayar</option>
+                <option value="Lunas" class="bg-emerald-50 text-emerald-800 font-semibold">Lunas</option>
+                <option value="Gratis (Tepat Waktu)" class="bg-blue-50 text-blue-800 font-semibold">Gratis (Tepat Waktu)</option>
               </select>
 
               <select id="filterInvoiceLayanan" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Jenis Layanan" class="w-full lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
@@ -13069,13 +13068,21 @@
       if (lower === 'lunas') {
         return 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100/70';
       }
-      if (lower === 'menunggu') {
-        return 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100/70';
+      if (lower.startsWith('gratis')) {
+        return 'bg-blue-50 text-blue-800 border-blue-300 hover:bg-blue-100/70';
+      }
+      return 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100/70';
+    }
+
+    function getInvoicePaymentBadgeStyle(status) {
+      const lower = String(status || '').trim().toLowerCase();
+      if (lower === 'lunas') {
+        return 'bg-emerald-50 text-emerald-800 border-emerald-300';
       }
       if (lower.startsWith('gratis')) {
-        return 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200/70';
+        return 'bg-blue-50 text-blue-800 border-blue-300';
       }
-      return 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100/70';
+      return 'bg-rose-50 text-rose-800 border-rose-300';
     }
 
     function parseInvoiceDateMs(rawDate) {
@@ -13167,6 +13174,16 @@
         btnReset.classList.toggle('inline-flex', isDirty);
       }
 
+      const elStatusFilter = document.getElementById('filterInvoiceStatus');
+      if (elStatusFilter) {
+        const baseFilterClasses = 'w-full lg:w-auto min-w-0 border rounded-xl px-2.5 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer transition';
+        if (invoiceToolbarState.status) {
+          elStatusFilter.className = `${baseFilterClasses} ${getInvoicePaymentSelectStyle(invoiceToolbarState.status)}`;
+        } else {
+          elStatusFilter.className = `${baseFilterClasses} border-slate-300 bg-white text-slate-700`;
+        }
+      }
+
       // Sinkronkan indikator ikon sortir pada header kolom tabel
       const s = invoiceToolbarState.sort;
       const setIcon = (id, ascKey, descKey) => {
@@ -13196,6 +13213,7 @@
         list = list.filter(p => {
           const st = String(p['Status Pembayaran'] || 'Belum Bayar').trim().toLowerCase();
           if (targetStatus === 'gratis (tepat waktu)') return st.startsWith('gratis');
+          if (targetStatus === 'belum bayar') return st.startsWith('belum bayar');
           return st === targetStatus;
         });
       }
@@ -13295,26 +13313,26 @@
       const idRaw = String(p.ID || '').trim();
       const idAttr = escapeHtml(idRaw).replace(/'/g, '&#39;');
       const statusBayar = String(p['Status Pembayaran'] || 'Belum Bayar').trim() || 'Belum Bayar';
-      const isLunas = statusBayar.toLowerCase() === 'lunas';
       const nominal = Number(p.Nominal) || 0;
       const canEdit = canEditInvoicePaymentStatus();
       const kodeProdi = String(p['Kode Prodi'] || '-').trim() || '-';
       const namaProdi = String(p['Program Studi'] || '-').trim() || '-';
       const layananStr = String(p['Jenis Layanan'] || p.Layanan || '-').trim() || '-';
 
-      const standardStatuses = ['Lunas', 'Belum Bayar', 'Menunggu', 'Gratis (Tepat Waktu)'];
+      const standardStatuses = ['Belum Bayar', 'Lunas', 'Gratis (Tepat Waktu)'];
       const hasExactMatch = standardStatuses.some(opt => opt.toLowerCase() === statusBayar.toLowerCase());
       const optionsHtml = [
         ...(hasExactMatch ? [] : [statusBayar]),
         ...standardStatuses
       ].map(opt => {
         const isSelected = opt.toLowerCase() === statusBayar.toLowerCase();
-        return `<option value="${escapeHtml(opt)}" ${isSelected ? 'selected' : ''}>${escapeHtml(opt)}</option>`;
+        const optStyleClass = getInvoicePaymentBadgeStyle(opt);
+        return `<option value="${escapeHtml(opt)}" class="${optStyleClass} font-semibold" ${isSelected ? 'selected' : ''}>${escapeHtml(opt)}</option>`;
       }).join('');
 
       const statusCellHtml = canEdit
         ? `<select aria-label="Status Pembayaran INV-${escapeHtml(idRaw)}" data-invoice-id="${escapeHtml(idRaw)}" onchange="handleInlineInvoiceStatusChange('${idAttr}', this.value, this)" class="w-full max-w-[126px] text-[10px] sm:text-[11px] font-bold rounded-lg px-1.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition truncate ${getInvoicePaymentSelectStyle(statusBayar)}">${optionsHtml}</select>`
-        : `<span class="inline-flex items-center justify-center px-2 py-1 rounded-lg text-[10px] uppercase font-bold border break-words ${isLunas ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'}">${escapeHtml(statusBayar)}</span>`;
+        : `<span class="inline-flex items-center justify-center px-2 py-1 rounded-lg text-[10px] uppercase font-bold border break-words ${getInvoicePaymentBadgeStyle(statusBayar)}">${escapeHtml(statusBayar)}</span>`;
 
       tr.innerHTML = `
         <td class="px-2.5 py-2.5 min-w-0">
