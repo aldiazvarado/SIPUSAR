@@ -959,7 +959,7 @@
     }
   </style>
 <script src="/_aistudio-iframe.js?v=1f94f900"></script><script src="/_aistudio-iframe.js?v=1f94f900"></script></head>
-<body class="bg-slate-100 font-sans text-slate-800 min-h-screen flex flex-col antialiased">
+<body class="bg-slate-100 font-sans text-slate-800 min-h-screen w-full flex flex-col antialiased overflow-x-hidden">
 
   <!-- LOGIN CONTAINER -->
   <div id="loginSection" class="flex-grow flex items-center justify-center p-4">
@@ -1004,7 +1004,7 @@
 
   <!-- MAIN APP CONTAINER -->
   <!-- MAIN APP CONTAINER (SIDEBAR NAVIGATION) -->
-  <div id="mainAppSection" class="hidden min-h-screen bg-slate-100 flex flex-row">
+  <div id="mainAppSection" class="hidden min-h-screen w-full max-w-full bg-slate-100 flex flex-row overflow-x-hidden">
     
     <!-- MOBILE BACKDROP -->
     <div id="sidebarBackdrop" onclick="toggleSidebar(false)" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-30 hidden md:hidden"></div>
@@ -1190,7 +1190,7 @@
       </header>
 
       <!-- CONTENT BODY (TABS) -->
-      <main class="flex-grow p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+      <main class="flex-grow min-w-0 p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto overflow-x-hidden">
         <!-- TAB: DASHBOARD EXECUTIVE -->
       <div id="tabContentExecutive" class="space-y-6">
         <div class="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -1902,31 +1902,31 @@
       </div>
 
       <!-- TAB: INVOICE & KWITANSI PEMBAYARAN (ASLI) -->
-      <div id="tabContentInvoice" class="hidden space-y-4">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Total Invoice</p>
-            <h3 id="invTotalCount" class="text-xl font-black text-slate-800 tabular-nums mt-0.5">0</h3>
+      <div id="tabContentInvoice" class="hidden w-full min-w-0 space-y-4">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Total Invoice</p>
+            <h3 id="invTotalCount" class="text-lg sm:text-xl font-black text-slate-800 tabular-nums mt-0.5 truncate">0</h3>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Status Lunas</p>
-            <h3 id="invLunasCount" class="text-xl font-black text-emerald-600 tabular-nums mt-0.5">0</h3>
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Status Lunas</p>
+            <h3 id="invLunasCount" class="text-lg sm:text-xl font-black text-emerald-600 tabular-nums mt-0.5 truncate">0</h3>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Belum Bayar</p>
-            <h3 id="invBelumBayarCount" class="text-xl font-black text-amber-600 tabular-nums mt-0.5">0</h3>
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Belum Bayar</p>
+            <h3 id="invBelumBayarCount" class="text-lg sm:text-xl font-black text-amber-600 tabular-nums mt-0.5 truncate">0</h3>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Total Nominal</p>
-            <h3 id="invTotalNominal" class="text-xl font-black text-purple-900 tabular-nums mt-0.5">Rp 0</h3>
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Total Nominal</p>
+            <h3 id="invTotalNominal" class="text-lg sm:text-xl font-black text-purple-900 tabular-nums mt-0.5 truncate">Rp 0</h3>
           </div>
         </div>
 
         <!-- Toolbar Pintar: Search, Filter (Status Bayar, Jenis Layanan, Prodi), & Sort -->
-        <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-          <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
-            <div class="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-              <div class="relative w-full sm:w-72 md:w-80">
+        <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3 min-w-0">
+          <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-2.5 min-w-0">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 flex-1 min-w-0">
+              <div class="relative sm:col-span-2 lg:w-64 xl:w-72 min-w-0">
                 <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" aria-hidden="true"></i>
                 <input type="text" id="searchInvoice" oninput="handleInvoiceToolbarChange(true)" onkeydown="if(event.key==='Escape'){clearInvoiceSearch();}" placeholder="Cari No. Invoice, Nama, NPM, Matkul, Prodi..." aria-label="Cari dokumen invoice dan kwitansi" class="border border-slate-300 rounded-xl pl-8 pr-8 py-2 text-xs w-full bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition">
                 <button type="button" id="btnClearSearchInvoice" onclick="clearInvoiceSearch()" title="Hapus pencarian" aria-label="Hapus kata kunci pencarian invoice" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-900 transition cursor-pointer">
@@ -1934,7 +1934,7 @@
                 </button>
               </div>
 
-              <select id="filterInvoiceStatus" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Status Pembayaran" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+              <select id="filterInvoiceStatus" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Status Pembayaran" class="w-full lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
                 <option value="">Semua Status Bayar</option>
                 <option value="Lunas">Lunas</option>
                 <option value="Belum Bayar">Belum Bayar</option>
@@ -1942,14 +1942,14 @@
                 <option value="Gratis (Tepat Waktu)">Gratis (Tepat Waktu)</option>
               </select>
 
-              <select id="filterInvoiceLayanan" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Jenis Layanan" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+              <select id="filterInvoiceLayanan" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Jenis Layanan" class="w-full lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
                 <option value="">Semua Jenis Layanan</option>
                 <option value="UTS Susulan">UTS Susulan</option>
                 <option value="UAS Susulan">UAS Susulan</option>
                 <option value="Remedial Teaching">Remedial Teaching</option>
               </select>
 
-              <select id="filterInvoiceProdi" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Program Studi" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+              <select id="filterInvoiceProdi" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Program Studi" class="w-full sm:col-span-2 lg:col-span-1 lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
                 <option value="">Semua Program Studi</option>
                 <option value="MNJ">Manajemen [MNJ]</option>
                 <option value="AKT">Akuntansi [AKT]</option>
@@ -1959,10 +1959,10 @@
               </select>
             </div>
 
-            <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 shrink-0">
-              <div class="flex items-center gap-1.5">
+            <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 shrink-0 min-w-0">
+              <div class="flex items-center gap-1.5 min-w-0">
                 <span class="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Urutkan:</span>
-                <select id="sortInvoice" onchange="handleInvoiceToolbarChange(true)" aria-label="Urutkan daftar invoice" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                <select id="sortInvoice" onchange="handleInvoiceToolbarChange(true)" aria-label="Urutkan daftar invoice" class="border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer max-w-full">
                   <option value="tanggal-desc" selected>Terbaru</option>
                   <option value="tanggal-asc">Terlama</option>
                   <option value="nominal-desc">Nominal Tertinggi</option>
@@ -1981,36 +1981,41 @@
 
           <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
             <span id="invoiceToolbarCountInfo" class="font-medium tabular-nums">Menampilkan 0 dari 0 dokumen</span>
-            <span class="text-slate-400">Ubah status pembayaran langsung pada dropdown di kolom Status Pembayaran · Gulir ke bawah untuk memuat baris berikutnya</span>
+            <span class="text-slate-400">Ubah status pembayaran langsung pada dropdown di kolom Status · Gulir ke bawah untuk memuat baris berikutnya</span>
           </div>
         </div>
 
-        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div id="invoiceTableScrollWrap" onscroll="handleInvoiceScrollCheck()" class="max-h-[62vh] min-h-[280px] overflow-y-auto overflow-x-auto relative">
-            <table class="w-full text-left text-xs text-slate-600 border-collapse">
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden w-full min-w-0">
+          <div id="invoiceTableScrollWrap" onscroll="handleInvoiceScrollCheck()" class="max-h-[62vh] min-h-[280px] w-full overflow-y-auto overflow-x-hidden relative">
+            <table class="w-full table-fixed text-left text-xs text-slate-600 border-collapse">
               <thead class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
                 <tr>
-                  <th onclick="toggleInvoiceColumnSort('invoice')" class="p-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition" title="Klik untuk mengurutkan berdasarkan No. Invoice">
-                    <span class="inline-flex items-center gap-1">No. Invoice / Reg <i id="sortIconInvId" class="fas fa-sort text-[10px] text-slate-400"></i></span>
+                  <th class="px-2.5 py-3 w-[27%] sm:w-[19%] lg:w-[15%] select-none">
+                    <div class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
+                      <button type="button" onclick="toggleInvoiceColumnSort('invoice')" class="inline-flex items-center gap-1 hover:text-blue-900 transition cursor-pointer uppercase font-bold" title="Urutkan berdasarkan No. Invoice">
+                        <span>No. Inv</span><i id="sortIconInvId" class="fas fa-sort text-[10px] text-slate-400"></i>
+                      </button>
+                      <span class="text-slate-300" aria-hidden="true">/</span>
+                      <button type="button" onclick="toggleInvoiceColumnSort('tanggal')" class="inline-flex items-center gap-1 hover:text-blue-900 transition cursor-pointer uppercase font-bold" title="Urutkan berdasarkan Tanggal">
+                        <span>Tgl</span><i id="sortIconInvTanggal" class="fas fa-sort-down text-[10px] text-blue-900"></i>
+                      </button>
+                    </div>
                   </th>
-                  <th onclick="toggleInvoiceColumnSort('tanggal')" class="p-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition" title="Klik untuk mengurutkan berdasarkan Tanggal">
-                    <span class="inline-flex items-center gap-1">Tanggal <i id="sortIconInvTanggal" class="fas fa-sort-down text-[10px] text-blue-900"></i></span>
+                  <th onclick="toggleInvoiceColumnSort('nama')" class="px-2.5 py-3 w-[29%] sm:w-[22%] lg:w-[19%] cursor-pointer select-none hover:bg-slate-200/70 transition text-[11px]" title="Klik untuk mengurutkan berdasarkan Nama Mahasiswa">
+                    <span class="inline-flex items-center gap-1">Mahasiswa <i id="sortIconInvNama" class="fas fa-sort text-[10px] text-slate-400"></i></span>
                   </th>
-                  <th onclick="toggleInvoiceColumnSort('nama')" class="p-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition" title="Klik untuk mengurutkan berdasarkan Nama Mahasiswa">
-                    <span class="inline-flex items-center gap-1">Mahasiswa (NPM) <i id="sortIconInvNama" class="fas fa-sort text-[10px] text-slate-400"></i></span>
+                  <th class="hidden lg:table-cell px-2.5 py-3 w-[13%] text-[11px]">Prodi</th>
+                  <th class="hidden sm:table-cell px-2.5 py-3 sm:w-[22%] lg:w-[20%] text-[11px]">Layanan &amp; Matkul</th>
+                  <th onclick="toggleInvoiceColumnSort('nominal')" class="px-2.5 py-3 w-[17%] sm:w-[13%] lg:w-[11%] text-right cursor-pointer select-none hover:bg-slate-200/70 transition text-[11px]" title="Klik untuk mengurutkan berdasarkan Nominal">
+                    <span class="inline-flex items-center justify-end gap-1">Nominal <i id="sortIconInvNominal" class="fas fa-sort text-[10px] text-slate-400"></i></span>
                   </th>
-                  <th class="p-3.5 whitespace-nowrap">Program Studi</th>
-                  <th class="p-3.5">Layanan &amp; Matkul</th>
-                  <th onclick="toggleInvoiceColumnSort('nominal')" class="p-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition" title="Klik untuk mengurutkan berdasarkan Nominal">
-                    <span class="inline-flex items-center gap-1">Nominal Retribusi <i id="sortIconInvNominal" class="fas fa-sort text-[10px] text-slate-400"></i></span>
-                  </th>
-                  <th class="p-3.5 text-center whitespace-nowrap">Status Pembayaran</th>
-                  <th class="p-3.5 text-center whitespace-nowrap">Aksi Dokumen</th>
+                  <th class="px-2 py-3 w-[17%] sm:w-[14%] lg:w-[13%] text-center text-[11px]">Status Bayar</th>
+                  <th class="px-2 py-3 w-[82px] sm:w-[88px] lg:w-[9%] text-center text-[11px]">Aksi</th>
                 </tr>
               </thead>
               <tbody id="tableInvoiceBody" class="divide-y divide-slate-100"></tbody>
             </table>
-            <div id="invoiceInfiniteSentinel" class="px-4 py-3 text-center text-[11px] text-slate-500 bg-slate-50/70 border-t border-slate-100 flex items-center justify-center gap-2"></div>
+            <div id="invoiceInfiniteSentinel" class="px-4 py-3 text-center text-[11px] text-slate-500 bg-slate-50/70 border-t border-slate-100 flex flex-wrap items-center justify-center gap-2"></div>
           </div>
         </div>
       </div>
@@ -13285,7 +13290,7 @@
 
     function buildInvoiceTableRow(p) {
       const tr = document.createElement('tr');
-      tr.className = 'hover:bg-slate-50/80 transition';
+      tr.className = 'hover:bg-slate-50/80 transition align-top';
 
       const idRaw = String(p.ID || '').trim();
       const idAttr = escapeHtml(idRaw).replace(/'/g, '&#39;');
@@ -13293,6 +13298,9 @@
       const isLunas = statusBayar.toLowerCase() === 'lunas';
       const nominal = Number(p.Nominal) || 0;
       const canEdit = canEditInvoicePaymentStatus();
+      const kodeProdi = String(p['Kode Prodi'] || '-').trim() || '-';
+      const namaProdi = String(p['Program Studi'] || '-').trim() || '-';
+      const layananStr = String(p['Jenis Layanan'] || p.Layanan || '-').trim() || '-';
 
       const standardStatuses = ['Lunas', 'Belum Bayar', 'Menunggu', 'Gratis (Tepat Waktu)'];
       const hasExactMatch = standardStatuses.some(opt => opt.toLowerCase() === statusBayar.toLowerCase());
@@ -13305,36 +13313,43 @@
       }).join('');
 
       const statusCellHtml = canEdit
-        ? `<select aria-label="Status Pembayaran INV-${escapeHtml(idRaw)}" data-invoice-id="${escapeHtml(idRaw)}" onchange="handleInlineInvoiceStatusChange('${idAttr}', this.value, this)" class="text-[11px] font-bold rounded-lg px-2.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition max-w-[165px] ${getInvoicePaymentSelectStyle(statusBayar)}">${optionsHtml}</select>`
-        : `<span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold border ${isLunas ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'}">${escapeHtml(statusBayar)}</span>`;
+        ? `<select aria-label="Status Pembayaran INV-${escapeHtml(idRaw)}" data-invoice-id="${escapeHtml(idRaw)}" onchange="handleInlineInvoiceStatusChange('${idAttr}', this.value, this)" class="w-full max-w-[126px] text-[10px] sm:text-[11px] font-bold rounded-lg px-1.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition truncate ${getInvoicePaymentSelectStyle(statusBayar)}">${optionsHtml}</select>`
+        : `<span class="inline-flex items-center justify-center px-2 py-1 rounded-lg text-[10px] uppercase font-bold border break-words ${isLunas ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'}">${escapeHtml(statusBayar)}</span>`;
 
       tr.innerHTML = `
-        <td class="p-3.5 font-mono font-bold text-blue-900 whitespace-nowrap tabular-nums">INV-${escapeHtml(idRaw)}</td>
-        <td class="p-3.5 font-mono text-slate-500 whitespace-nowrap text-xs tabular-nums">${escapeHtml(p.Tanggal || '-')}</td>
-        <td class="p-3.5">
-          <b class="text-slate-800 block text-xs">${escapeHtml(p['Nama Mahasiswa'] || p.Nama || '-')}</b>
-          <span class="font-mono text-slate-500 text-[11px] tabular-nums">${escapeHtml(p.NPM || p.NIM || '-')}</span>
+        <td class="px-2.5 py-2.5 min-w-0">
+          <div class="font-mono font-bold text-blue-900 text-[11px] leading-snug break-all tabular-nums">INV-${escapeHtml(idRaw)}</div>
+          <div class="font-mono text-slate-400 text-[10px] leading-snug tabular-nums mt-0.5">${escapeHtml(p.Tanggal || '-')}</div>
         </td>
-        <td class="p-3.5 whitespace-nowrap">
-          <span class="font-bold text-slate-700">[${escapeHtml(p['Kode Prodi'] || '-')}] ${escapeHtml(p['Program Studi'] || '-')}</span>
+        <td class="px-2.5 py-2.5 min-w-0">
+          <b class="text-slate-800 block text-xs leading-snug break-words">${escapeHtml(p['Nama Mahasiswa'] || p.Nama || '-')}</b>
+          <div class="font-mono text-slate-500 text-[10px] sm:text-[11px] leading-snug tabular-nums mt-0.5 break-all">
+            ${escapeHtml(p.NPM || p.NIM || '-')}
+            <span class="lg:hidden font-sans font-bold text-slate-600"> · [${escapeHtml(kodeProdi)}]</span>
+          </div>
+          <div class="sm:hidden text-[10px] text-slate-500 leading-snug mt-0.5 truncate">${escapeHtml(layananStr)}</div>
         </td>
-        <td class="p-3.5 max-w-[260px]">
-          <span class="font-semibold text-slate-800 block">${escapeHtml(p['Jenis Layanan'] || p.Layanan || '-')}</span>
-          <span class="text-slate-500 text-[11px] line-clamp-2">${escapeHtml(p['Mata Kuliah'] || '-')}</span>
+        <td class="hidden lg:table-cell px-2.5 py-2.5 min-w-0">
+          <span class="font-bold text-slate-700 block text-[11px] leading-snug">[${escapeHtml(kodeProdi)}]</span>
+          <span class="text-slate-500 text-[11px] leading-snug break-words block">${escapeHtml(namaProdi)}</span>
         </td>
-        <td class="p-3.5 font-mono font-bold text-emerald-700 whitespace-nowrap tabular-nums">
+        <td class="hidden sm:table-cell px-2.5 py-2.5 min-w-0">
+          <span class="font-semibold text-slate-800 block text-xs leading-snug">${escapeHtml(layananStr)}</span>
+          <span class="text-slate-500 text-[11px] leading-snug line-clamp-2 break-words mt-0.5">${escapeHtml(p['Mata Kuliah'] || '-')}</span>
+        </td>
+        <td class="px-2.5 py-2.5 text-right font-mono font-bold text-emerald-700 text-[11px] sm:text-xs tabular-nums whitespace-nowrap">
           Rp ${nominal.toLocaleString('id-ID')}
         </td>
-        <td class="p-3.5 text-center whitespace-nowrap">
+        <td class="px-2 py-2.5 text-center min-w-0">
           ${statusCellHtml}
         </td>
-        <td class="p-3.5 text-center whitespace-nowrap">
-          <div class="flex items-center justify-center gap-1.5">
-            <button onclick="openInvoiceModal('${idAttr}')" title="Cetak Kwitansi Bukti Pembayaran Resmi" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-receipt text-xs" aria-hidden="true"></i> <span>Kwitansi</span>
+        <td class="px-2 py-2.5 text-center">
+          <div class="flex flex-col gap-1 items-stretch max-w-[82px] mx-auto">
+            <button type="button" onclick="openInvoiceModal('${idAttr}')" title="Cetak Kwitansi Bukti Pembayaran Resmi" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-2 py-1 rounded-lg text-[10px] inline-flex items-center justify-center gap-1 shadow-xs transition whitespace-nowrap cursor-pointer">
+              <i class="fas fa-receipt text-[10px]" aria-hidden="true"></i> <span>Kwitansi</span>
             </button>
-            <button onclick="openLateInvoiceModal('${idAttr}')" title="Cetak Invoice Tagihan Resmi" class="bg-slate-700 hover:bg-slate-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-file-invoice text-xs" aria-hidden="true"></i> <span>Invoice</span>
+            <button type="button" onclick="openLateInvoiceModal('${idAttr}')" title="Cetak Invoice Tagihan Resmi" class="bg-slate-700 hover:bg-slate-800 text-white font-bold px-2 py-1 rounded-lg text-[10px] inline-flex items-center justify-center gap-1 shadow-xs transition whitespace-nowrap cursor-pointer">
+              <i class="fas fa-file-invoice text-[10px]" aria-hidden="true"></i> <span>Invoice</span>
             </button>
           </div>
         </td>
@@ -13498,7 +13513,7 @@
       const prevStatus = String(item['Status Pembayaran'] || 'Belum Bayar').trim() || 'Belum Bayar';
       if (prevStatus.toLowerCase() === String(newStatus || '').trim().toLowerCase()) return;
 
-      const baseSelectClasses = 'text-[11px] font-bold rounded-lg px-2.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition max-w-[165px]';
+      const baseSelectClasses = 'w-full max-w-[126px] text-[10px] sm:text-[11px] font-bold rounded-lg px-1.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition truncate';
       item['Status Pembayaran'] = newStatus;
       if (selectEl) {
         selectEl.disabled = true;
@@ -13588,9 +13603,9 @@
       if (filtered.length === 0) {
         updateInvoiceSentinelAndCounts(0, 0);
         if (allCount === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400 font-medium">Belum ada dokumen invoice atau kwitansi yang tercatat.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" class="p-8 text-center text-slate-400 font-medium">Belum ada dokumen invoice atau kwitansi yang tercatat.</td></tr>';
         } else {
-          tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-500">
+          tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-500">
             <div class="space-y-2">
               <p class="font-semibold text-slate-600">Tidak ada dokumen invoice atau kwitansi yang sesuai dengan pencarian atau filter.</p>
               <button type="button" onclick="resetInvoiceToolbar()" class="px-3.5 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs transition cursor-pointer">Reset Filter</button>
