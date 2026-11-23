@@ -8,7 +8,7 @@
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Marck+Script&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -17,6 +17,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script>
 
     // ==========================================
@@ -904,12 +905,11 @@
         box-shadow: none !important;
         border: none !important;
         margin: 0 auto !important;
-        padding: 0 !important;
         width: 100% !important;
         max-width: 100% !important;
       }
       .surat-f4-print-page {
-        min-height: 298mm !important;
+        min-height: 318mm !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: space-between !important;
@@ -1550,14 +1550,14 @@
         <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 no-print">
           <div>
             <h3 class="text-base font-bold text-slate-800">Surat Pengantar Dosen &amp; Formulir Daftar Hadir Ujian</h3>
-            <p class="text-xs text-slate-500 mt-0.5">Generator otomatis 2 halaman resmi FEB UIKA Bogor berukuran F4 (8.5 &times; 13 in) siap Simpan PDF, Word (.doc), dan Cetak/Print.</p>
+            <p class="text-xs text-slate-500 mt-0.5">Generator otomatis 2 halaman resmi FEB UIKA Bogor berukuran F4 (8.5 &times; 13 in) siap Simpan PDF, Word (.docx), dan Cetak/Print.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2 shrink-0">
             <button type="button" onclick="resetSuratDosenState()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-2 rounded-xl text-xs flex items-center space-x-1.5 border border-slate-200 transition whitespace-nowrap shrink-0 cursor-pointer">
               <i class="fas fa-rotate-left"></i> <span>Reset Filter</span>
             </button>
-            <button type="button" onclick="downloadSuratPengantarWord()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-file-word"></i> <span>Download Word (.doc)</span>
+            <button id="btnDownloadSuratWord" type="button" onclick="downloadSuratPengantarWord()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+              <i class="fas fa-file-word"></i> <span>Download Word (.docx)</span>
             </button>
             <button id="btnDownloadSuratPdf" type="button" onclick="downloadSuratPengantarPdf()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-md transition whitespace-nowrap shrink-0 cursor-pointer">
               <i class="fas fa-file-pdf"></i> <span>Simpan PDF (.pdf)</span>
@@ -1678,14 +1678,23 @@
                 <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">3. Metadata Surat &amp; Pejabat Penandatangan</h4>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div class="space-y-2.5">
                 <div>
                   <label class="block text-[11px] font-bold text-slate-600 mb-1">Nomor Surat</label>
-                  <input type="text" id="suratInputNomor" oninput="suratDosenState.nomorSurat = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-900">
+                  <div class="flex items-stretch w-full border border-slate-300 rounded-xl overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-900">
+                    <input type="text" id="suratInputNomorUrut" oninput="onSuratNomorPartChange('urut', this.value)" placeholder="xxx" aria-label="Nomor urut surat" class="w-20 sm:w-24 min-w-0 px-2.5 py-1.5 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                    <span id="suratNomorLockedMid" class="px-2 py-1.5 text-[11px] font-mono text-slate-600 bg-slate-100 border-x border-slate-200 flex items-center select-none whitespace-nowrap shrink-0">/K.7/MA/FEB-UIKA/</span>
+                    <input type="text" id="suratInputNomorTahun" oninput="onSuratNomorPartChange('tahun', this.value)" maxlength="4" placeholder="2026" aria-label="Tahun nomor surat" class="w-16 flex-1 min-w-0 px-2 py-1.5 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                  </div>
                 </div>
                 <div>
                   <label class="block text-[11px] font-bold text-slate-600 mb-1">Kode Arsip Pojok Kiri Bawah</label>
-                  <input type="text" id="suratInputKodeArsip" oninput="suratDosenState.kodeArsip = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-900">
+                  <div class="flex items-stretch w-full border border-slate-300 rounded-xl overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-900">
+                    <span id="suratKodeArsipLockedPrefix" class="px-2.5 py-1.5 text-[11px] font-mono text-slate-600 bg-slate-100 border-r border-slate-200 flex items-center select-none whitespace-nowrap shrink-0">TU/MA/</span>
+                    <input type="text" id="suratInputKodeArsipXX" oninput="onSuratKodeArsipPartChange('xx', this.value)" placeholder="XX" aria-label="Kode bulan atau arsip" class="w-20 flex-1 min-w-0 px-2.5 py-1.5 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                    <span class="px-1.5 py-1.5 text-[11px] font-mono text-slate-500 bg-slate-100 border-x border-slate-200 flex items-center select-none">/</span>
+                    <input type="text" id="suratInputKodeArsipTahun" oninput="onSuratKodeArsipPartChange('tahun', this.value)" maxlength="4" placeholder="2026" aria-label="Tahun kode arsip" class="w-20 px-2 py-1.5 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                  </div>
                 </div>
               </div>
 
@@ -13204,6 +13213,9 @@
       };
     }
 
+    const initialSuratTodayIso = getLocalIsoTodayForSurat();
+    const initialSuratYearStr = String(parseIsoDateLocalSurat(initialSuratTodayIso).getFullYear());
+
     const suratDosenState = {
       comboKey: '',
       layanan: 'UTS Susulan',
@@ -13212,11 +13224,15 @@
       mataKuliah: '',
       kelasSemester: '',
       statusFilter: 'ALL',
-      nomorSurat: 'xxx/K.7/MA/FEB-UIKA/2026',
-      kodeArsip: 'TU/MA/XX/2026',
+      nomorUrut: '',
+      nomorTahun: initialSuratYearStr,
+      kodeArsipXX: '',
+      kodeArsipTahun: initialSuratYearStr,
+      nomorSurat: `xxx/K.7/MA/FEB-UIKA/${initialSuratYearStr}`,
+      kodeArsip: `TU/MA/XX/${initialSuratYearStr}`,
       lampiran: '1 (satu) Berkas',
-      tanggalMasehi: getLocalIsoTodayForSurat(),
-      tanggalHijriah: formatTanggalHijriahSurat(getLocalIsoTodayForSurat()),
+      tanggalMasehi: initialSuratTodayIso,
+      tanggalHijriah: formatTanggalHijriahSurat(initialSuratTodayIso),
       semester: 'Ganjil',
       tahunAkademik: '2026/2027',
       kaprodiNama: SURAT_PRODI_OFFICIAL_META.MNJ.kaprodi,
@@ -13349,14 +13365,53 @@
       return Array.from(map.values()).sort((a, b) => a.dosen.localeCompare(b.dosen) || a.mataKuliah.localeCompare(b.mataKuliah));
     }
 
+    function getSuratDefaultYear() {
+      return String(parseIsoDateLocalSurat(suratDosenState.tanggalMasehi).getFullYear());
+    }
+
+    function composeSuratNomorSurat(kodeSurat) {
+      const prodiKode = String(kodeSurat || getSuratProdiMeta(suratDosenState.kodeProdi || 'MNJ').kodeSurat || 'MA').trim();
+      const urut = String(suratDosenState.nomorUrut || '').trim() || 'xxx';
+      const thn = String(suratDosenState.nomorTahun || '').trim() || getSuratDefaultYear();
+      return `${urut}/K.7/${prodiKode}/FEB-UIKA/${thn}`;
+    }
+
+    function composeSuratKodeArsip(kodeSurat) {
+      const prodiKode = String(kodeSurat || getSuratProdiMeta(suratDosenState.kodeProdi || 'MNJ').kodeSurat || 'MA').trim();
+      const xx = String(suratDosenState.kodeArsipXX || '').trim() || 'XX';
+      const thn = String(suratDosenState.kodeArsipTahun || '').trim() || getSuratDefaultYear();
+      return `TU/${prodiKode}/${xx}/${thn}`;
+    }
+
+    function refreshSuratComposedCodes() {
+      const meta = getSuratProdiMeta(suratDosenState.kodeProdi || 'MNJ');
+      suratDosenState.nomorSurat = composeSuratNomorSurat(meta.kodeSurat);
+      suratDosenState.kodeArsip = composeSuratKodeArsip(meta.kodeSurat);
+    }
+
+    function onSuratNomorPartChange(part, val) {
+      if (part === 'urut') suratDosenState.nomorUrut = String(val || '');
+      else if (part === 'tahun') suratDosenState.nomorTahun = String(val || '');
+      refreshSuratComposedCodes();
+      renderSuratDosenPreview();
+    }
+
+    function onSuratKodeArsipPartChange(part, val) {
+      if (part === 'xx') suratDosenState.kodeArsipXX = String(val || '');
+      else if (part === 'tahun') suratDosenState.kodeArsipTahun = String(val || '');
+      refreshSuratComposedCodes();
+      renderSuratDosenPreview();
+    }
+
     function syncSuratProdiDefaults(kodeProdi) {
       const meta = getSuratProdiMeta(kodeProdi);
-      const year = parseIsoDateLocalSurat(suratDosenState.tanggalMasehi).getFullYear();
+      const yearStr = getSuratDefaultYear();
       suratDosenState.kodeProdi = meta.kodeProdi;
       suratDosenState.kaprodiNama = meta.kaprodi;
       suratDosenState.kaprodiNikNidn = meta.nikNidn;
-      suratDosenState.nomorSurat = `xxx/K.7/${meta.kodeSurat}/FEB-UIKA/${year}`;
-      suratDosenState.kodeArsip = `TU/${meta.kodeSurat}/XX/${year}`;
+      if (!String(suratDosenState.nomorTahun || '').trim()) suratDosenState.nomorTahun = yearStr;
+      if (!String(suratDosenState.kodeArsipTahun || '').trim()) suratDosenState.kodeArsipTahun = yearStr;
+      refreshSuratComposedCodes();
     }
 
     function syncSuratInputsFromState() {
@@ -13364,6 +13419,12 @@
         const el = document.getElementById(id);
         if (el) el.value = val ?? '';
       };
+      const meta = getSuratProdiMeta(suratDosenState.kodeProdi || 'MNJ');
+      const lockedMidEl = document.getElementById('suratNomorLockedMid');
+      if (lockedMidEl) lockedMidEl.innerText = `/K.7/${meta.kodeSurat}/FEB-UIKA/`;
+      const lockedArsipEl = document.getElementById('suratKodeArsipLockedPrefix');
+      if (lockedArsipEl) lockedArsipEl.innerText = `TU/${meta.kodeSurat}/`;
+
       setVal('suratQuickCombo', suratDosenState.comboKey);
       setVal('suratFilterLayanan', suratDosenState.layanan);
       setVal('suratFilterProdi', suratDosenState.kodeProdi);
@@ -13373,8 +13434,10 @@
       setVal('suratInputMatkulManual', suratDosenState.mataKuliah);
       setVal('suratFilterKelas', suratDosenState.kelasSemester);
       setVal('suratFilterStatus', suratDosenState.statusFilter);
-      setVal('suratInputNomor', suratDosenState.nomorSurat);
-      setVal('suratInputKodeArsip', suratDosenState.kodeArsip);
+      setVal('suratInputNomorUrut', suratDosenState.nomorUrut);
+      setVal('suratInputNomorTahun', suratDosenState.nomorTahun);
+      setVal('suratInputKodeArsipXX', suratDosenState.kodeArsipXX);
+      setVal('suratInputKodeArsipTahun', suratDosenState.kodeArsipTahun);
       setVal('suratInputTanggalMasehi', suratDosenState.tanggalMasehi);
       setVal('suratInputTanggalHijriah', suratDosenState.tanggalHijriah);
       setVal('suratInputSemester', suratDosenState.semester);
@@ -13585,19 +13648,33 @@
     function onSuratDateChange(isoVal) {
       suratDosenState.tanggalMasehi = isoVal || getLocalIsoTodayForSurat();
       suratDosenState.tanggalHijriah = formatTanggalHijriahSurat(suratDosenState.tanggalMasehi);
+      const newYear = String(parseIsoDateLocalSurat(suratDosenState.tanggalMasehi).getFullYear());
+      suratDosenState.nomorTahun = newYear;
+      suratDosenState.kodeArsipTahun = newYear;
+      refreshSuratComposedCodes();
+
       const hijriInput = document.getElementById('suratInputTanggalHijriah');
       if (hijriInput) hijriInput.value = suratDosenState.tanggalHijriah;
+      const nomorTahunInput = document.getElementById('suratInputNomorTahun');
+      if (nomorTahunInput) nomorTahunInput.value = suratDosenState.nomorTahun;
+      const arsipTahunInput = document.getElementById('suratInputKodeArsipTahun');
+      if (arsipTahunInput) arsipTahunInput.value = suratDosenState.kodeArsipTahun;
       renderSuratDosenPreview();
     }
 
     function resetSuratDosenState() {
       const todayIso = getLocalIsoTodayForSurat();
+      const todayYear = String(parseIsoDateLocalSurat(todayIso).getFullYear());
       suratDosenState.comboKey = '';
       suratDosenState.layanan = 'UTS Susulan';
       suratDosenState.dosen = '';
       suratDosenState.mataKuliah = '';
       suratDosenState.kelasSemester = '';
       suratDosenState.statusFilter = 'ALL';
+      suratDosenState.nomorUrut = '';
+      suratDosenState.nomorTahun = todayYear;
+      suratDosenState.kodeArsipXX = '';
+      suratDosenState.kodeArsipTahun = todayYear;
       suratDosenState.tanggalMasehi = todayIso;
       suratDosenState.tanggalHijriah = formatTanggalHijriahSurat(todayIso);
       suratDosenState.padToMinRows = true;
@@ -13731,8 +13808,8 @@
       }
 
       return {
-        nomorSurat: suratDosenState.nomorSurat || `xxx/K.7/${prodiMeta.kodeSurat}/FEB-UIKA/2026`,
-        kodeArsip: suratDosenState.kodeArsip || `TU/${prodiMeta.kodeSurat}/XX/2026`,
+        nomorSurat: composeSuratNomorSurat(prodiMeta.kodeSurat),
+        kodeArsip: composeSuratKodeArsip(prodiMeta.kodeSurat),
         lampiran: suratDosenState.lampiran || '1 (satu) Berkas',
         perihalSingkat,
         layananDalamIsi,
@@ -13759,39 +13836,50 @@
       const forPdfCapture = Boolean(options && options.forPdfCapture);
       const forPrintPortal = Boolean(options && options.forPrintPortal);
 
+      const rowCount = m.rows.length;
+      const p1RowHeight = rowCount > 10 ? 20 : 24;
+      const p1RowPad = rowCount > 10 ? '2px 6px' : '3px 6px';
+      const p2RowHeight = rowCount > 11 ? 30 : (rowCount > 7 ? 40 : 58);
+
+      const cursiveStyle = "font-family: 'Monotype Corsiva', 'Marck Script', 'Apple Chancery', 'URW Chancery L', cursive, serif; font-style: italic; font-size: 14pt; line-height: 1.25;";
+      const bodyFontStyle = "font-family: 'Times New Roman', Times, serif; color: #000000;";
+
       let sheet1Style = "";
       let sheet2Style = "";
       if (forWord) {
-        sheet1Style = "background: #ffffff; color: #111827; font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.42; width: 100%;";
-        sheet2Style = "background: #ffffff; color: #111827; font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.45; width: 100%;";
+        sheet1Style = `${bodyFontStyle} background: #ffffff; font-size: 12pt; line-height: 1.28; width: 100%;`;
+        sheet2Style = `${bodyFontStyle} background: #ffffff; font-size: 11pt; line-height: 1.28; width: 100%;`;
       } else if (forPdfCapture) {
-        sheet1Style = "background: #ffffff; color: #111827; font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.44; width: 816px; min-height: 1248px; margin: 0; padding: 34px 50px 28px 50px; border: none; box-shadow: none; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;";
-        sheet2Style = "background: #ffffff; color: #111827; font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.45; width: 816px; min-height: 1248px; margin: 0; padding: 40px 50px 28px 50px; border: none; box-shadow: none; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;";
+        sheet1Style = `${bodyFontStyle} background: #ffffff; font-size: 12pt; line-height: 1.25; width: 816px; min-height: 1248px; margin: 0; padding: 4px 0 14px 0; border: none; box-shadow: none; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;`;
+        sheet2Style = `${bodyFontStyle} background: #ffffff; font-size: 11pt; line-height: 1.28; width: 816px; min-height: 1248px; margin: 0; padding: 44px 0 14px 0; border: none; box-shadow: none; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;`;
       } else if (forPrintPortal) {
-        sheet1Style = "background: #ffffff; color: #111827; font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.42; width: 100%; min-height: 298mm; margin: 0 auto; padding: 0; border: none; box-shadow: none; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;";
-        sheet2Style = "background: #ffffff; color: #111827; font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.45; width: 100%; min-height: 298mm; margin: 0 auto; padding: 0; border: none; box-shadow: none; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;";
+        sheet1Style = `${bodyFontStyle} background: #ffffff; font-size: 12pt; line-height: 1.25; width: 100%; min-height: 318mm; margin: 0 auto; padding: 0 0 2mm 0; border: none; box-shadow: none; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;`;
+        sheet2Style = `${bodyFontStyle} background: #ffffff; font-size: 11pt; line-height: 1.28; width: 100%; min-height: 318mm; margin: 0 auto; padding: 10mm 0 2mm 0; border: none; box-shadow: none; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;`;
       } else {
-        sheet1Style = "background: #ffffff; color: #111827; font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.42; width: 100%; max-width: 816px; min-height: 1180px; margin: 0 auto; padding: 30px 48px 24px 48px; border: 1px solid #cbd5e1; box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;";
-        sheet2Style = "background: #ffffff; color: #111827; font-family: 'Times New Roman', Times, serif; font-size: 13px; line-height: 1.45; width: 100%; max-width: 816px; min-height: 1180px; margin: 0 auto; padding: 36px 48px 26px 48px; border: 1px solid #cbd5e1; box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;";
+        sheet1Style = `${bodyFontStyle} background: #ffffff; font-size: 12pt; line-height: 1.25; width: 816px; min-height: 1248px; margin: 0 auto; padding: 4px 0 14px 0; border: 1px solid #cbd5e1; box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;`;
+        sheet2Style = `${bodyFontStyle} background: #ffffff; font-size: 11pt; line-height: 1.28; width: 816px; min-height: 1248px; margin: 0 auto; padding: 44px 0 14px 0; border: 1px solid #cbd5e1; box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08); display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box;`;
       }
 
+      const trStyleP1 = forWord ? ` style="height: ${Math.round(p1RowHeight * 0.75)}pt; mso-height-rule: exactly;"` : '';
+      const trStyleP2 = forWord ? ` style="height: ${Math.round(p2RowHeight * 0.75)}pt; mso-height-rule: exactly;"` : '';
+
       const rowsPage1 = m.rows.map((r, i) => `
-        <tr>
-          <td style="border: 1px solid #0f172a; padding: 5px 8px; text-align: center; width: 38px;">${i + 1}.</td>
-          <td style="border: 1px solid #0f172a; padding: 5px 8px; font-weight: ${r.nama ? '600' : '400'};">${escapeHtml(r.nama)}</td>
-          <td style="border: 1px solid #0f172a; padding: 5px 8px; text-align: center; font-family: 'Courier New', monospace; font-variant-numeric: tabular-nums;">${escapeHtml(r.npm)}</td>
-          <td style="border: 1px solid #0f172a; padding: 5px 8px; text-align: center;">${escapeHtml(r.semesterKelas)}</td>
+        <tr${trStyleP1}>
+          <td style="border: 1px solid #000000; padding: ${p1RowPad}; height: ${p1RowHeight}px; text-align: center; vertical-align: middle; width: 46px; color: #000000;">${i + 1}.</td>
+          <td style="border: 1px solid #000000; padding: ${p1RowPad}; height: ${p1RowHeight}px; vertical-align: middle; color: #000000;">${escapeHtml(r.nama)}</td>
+          <td style="border: 1px solid #000000; padding: ${p1RowPad}; height: ${p1RowHeight}px; text-align: center; vertical-align: middle; width: 124px; color: #000000;">${escapeHtml(r.npm)}</td>
+          <td style="border: 1px solid #000000; padding: ${p1RowPad}; height: ${p1RowHeight}px; text-align: center; vertical-align: middle; width: 120px; color: #000000;">${escapeHtml(r.semesterKelas)}</td>
         </tr>
       `).join('');
 
       const rowsPage2 = m.rows.map((r, i) => `
-        <tr>
-          <td style="border: 1px solid #0f172a; padding: 8px 6px; text-align: center; width: 34px; height: 34px;">${i + 1}.</td>
-          <td style="border: 1px solid #0f172a; padding: 8px 8px; font-weight: ${r.nama ? '600' : '400'};">${escapeHtml(r.nama)}</td>
-          <td style="border: 1px solid #0f172a; padding: 8px 6px; text-align: center; font-family: 'Courier New', monospace; font-variant-numeric: tabular-nums;">${escapeHtml(r.npm)}</td>
-          <td style="border: 1px solid #0f172a; padding: 8px 6px; text-align: center;">${escapeHtml(r.semesterKelas)}</td>
-          <td style="border: 1px solid #0f172a; padding: 8px 6px; text-align: center; width: 78px;"></td>
-          <td style="border: 1px solid #0f172a; padding: 8px 6px; text-align: center; width: 105px;"></td>
+        <tr${trStyleP2}>
+          <td style="border: 1px solid #000000; padding: 6px 4px; height: ${p2RowHeight}px; text-align: center; vertical-align: top; width: 38px; color: #000000;">${i + 1}.</td>
+          <td style="border: 1px solid #000000; padding: 6px 8px; height: ${p2RowHeight}px; vertical-align: top; color: #000000;">${escapeHtml(r.nama)}</td>
+          <td style="border: 1px solid #000000; padding: 6px 6px; height: ${p2RowHeight}px; text-align: center; vertical-align: top; width: 112px; color: #000000;">${escapeHtml(r.npm)}</td>
+          <td style="border: 1px solid #000000; padding: 6px 6px; height: ${p2RowHeight}px; text-align: center; vertical-align: top; width: 100px; color: #000000;">${escapeHtml(r.semesterKelas)}</td>
+          <td style="border: 1px solid #000000; padding: 6px 6px; height: ${p2RowHeight}px; text-align: center; vertical-align: top; width: 96px; color: #000000;"></td>
+          <td style="border: 1px solid #000000; padding: 6px 6px; height: ${p2RowHeight}px; text-align: center; vertical-align: top; width: 116px; color: #000000;"></td>
         </tr>
       `).join('');
 
@@ -13801,18 +13889,25 @@
 
       const tindakLanjutParagraf = `Bersama ini kami lampirkan ${escapeHtml(m.labelFormulir)}, dan nilai hasil ${m.isRemedial ? 'remedial' : 'ujian'} diharapkan dapat disampaikan kepada Tata Usaha Program Studi paling lambat ${escapeHtml(m.tenggatNilai)} setelah ${m.isRemedial ? 'Remedial Teaching' : 'Ujian Susulan'} dilaksanakan.`;
 
-      const renderOfficialFooterHtml = (marginTopPx) => `
-        <table style="width: 100%; border-collapse: collapse; margin-top: ${marginTopPx}px;">
-          <tr>
-            <td style="text-align: left; font-family: Arial, sans-serif; font-size: 9px; color: #475569; padding-bottom: 2px;">${escapeHtml(m.kodeArsip)}</td>
-          </tr>
-          <tr>
-            <td align="center" style="text-align: center;">
-              <img src="${KOP_FOOTER_FEB_BASE64}" alt="Footer Resmi FEB UIKA Bogor" ${forWord ? 'width="500" height="55"' : ''} style="${forWord ? 'width: 500px; height: 55px;' : 'width: 78%; max-width: 540px; height: auto;'} display: block; margin: 0 auto;" />
-            </td>
-          </tr>
-        </table>
-      `;
+      // Padding/margin horisontal sesuai F4 816px
+      const kopWrapStyle = forWord ? "margin-left: 0; margin-bottom: 4pt;" : "padding: 0 38px; margin-bottom: 2px;";
+      const p1BodyWrapStyle = forWord ? "margin-left: 1.24cm;" : "padding: 0 75px 0 95px;";
+      const p1IndentStyle = forWord ? "margin-left: 2.85cm;" : "margin-left: 108px;";
+      const p1KaprodiStyle = forWord ? "margin-left: 8.74cm; font-size: 12pt; line-height: 1.25;" : "margin-left: 330px; font-size: 12pt; line-height: 1.25;";
+      const p1TembusanStyle = forWord ? "margin-top: 4pt; font-size: 11pt; line-height: 1.25;" : "margin-top: 2px; font-size: 11pt; line-height: 1.25;";
+
+      const p2TopMetaStyle = forWord ? "margin-left: 0; margin-bottom: 24pt;" : "padding: 0 75px 0 28px; margin-bottom: 42px;";
+      const p2TitleWrapStyle = forWord ? "margin-left: 1.77cm; text-align: center; margin-bottom: 22pt;" : "padding: 0 75px 0 95px; text-align: center; margin-bottom: 32px;";
+      const p2MetaMKStyle = forWord ? "margin-left: 1.77cm; margin-bottom: 14pt;" : "padding: 0 75px 0 95px; margin-bottom: 18px;";
+      const p2TableWrapStyle = forWord ? "margin-left: 1.95cm; width: 17.2cm; margin-bottom: 22pt;" : "padding: 0 64px 0 102px; margin-bottom: 30px;";
+      const p2DosenSigStyle = forWord ? "margin-left: 10.65cm; margin-top: 20pt; font-size: 11pt; line-height: 1.28;" : "margin-left: 431px; margin-top: 34px; font-size: 11pt; line-height: 1.28;";
+
+      const kaprodiSpacerHtml = forWord
+        ? '<table style="border-collapse:collapse;"><tr><td style="height: 50pt; mso-height-rule: exactly; font-size: 1pt; line-height: 1pt;">&nbsp;</td></tr></table>'
+        : '<div style="height: 66px;"></div>';
+      const dosenSpacerHtml = forWord
+        ? '<table style="border-collapse:collapse;"><tr><td style="height: 73pt; mso-height-rule: exactly; font-size: 1pt; line-height: 1pt;">&nbsp;</td></tr></table>'
+        : '<div style="height: 98px;"></div>';
 
       const page1Class = forWord
         ? 'WordSectionPage1'
@@ -13821,182 +13916,199 @@
         ? 'WordSectionPage2'
         : `surat-f4-sheet surat-a4-sheet surat-pdf-page-2${forPrintPortal ? ' surat-f4-print-page' : ''}`;
 
+      const officialFooterBarHtml = `
+        <table style="width: 100%; border-collapse: collapse; margin-top: 12px;">
+          <tr>
+            <td style="width: 190px; box-sizing: border-box; padding-left: 95px; vertical-align: bottom; padding-bottom: 6px; font-family: Arial, 'Microsoft Sans Serif', sans-serif; font-size: 6.5pt; color: #000000; line-height: 1;">${escapeHtml(m.kodeArsip)}</td>
+            <td align="center" style="width: 436px; text-align: center; vertical-align: bottom;">
+              <img src="${KOP_FOOTER_FEB_BASE64}" alt="Footer Resmi FEB UIKA Bogor" style="width: 430px; max-width: 100%; height: auto; display: inline-block;" />
+            </td>
+            <td style="width: 190px; box-sizing: border-box;"></td>
+          </tr>
+        </table>
+      `;
+
+      const page1FooterHtml = forWord ? '' : officialFooterBarHtml;
+      const page2FooterHtml = forWord ? '' : officialFooterBarHtml;
+
       return `
         <!-- HALAMAN 1: SURAT PENGANTAR KE DOSEN -->
         <div class="${page1Class}" style="${sheet1Style}">
           <div>
-            <!-- KOP SURAT RESMI FEB UIKA BOGOR (HD DARI PDF) -->
-            <div style="margin-bottom: 12px;">
-              <img src="${KOP_HEADER_FEB_BASE64}" alt="Kop Surat Resmi FEB UIKA Bogor" ${forWord ? 'width="670" height="150"' : ''} style="${forWord ? 'width: 670px; height: 150px;' : 'width: 100%; height: auto;'} display: block;" />
+            <!-- KOP SURAT RESMI FEB UIKA BOGOR (HALAMAN 1 SAJA) -->
+            <div style="${kopWrapStyle}">
+              <img src="${KOP_HEADER_FEB_BASE64}" alt="Kop Surat Resmi FEB UIKA Bogor" ${forWord ? 'width="693" height="155"' : ''} style="${forWord ? 'width: 693px; height: 155px;' : 'width: 100%; height: auto;'} display: block;" />
             </div>
 
-            <!-- NOMOR, LAMPIRAN, PERIHAL & TANGGAL -->
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 13px;">
-              <tr>
-                <td style="width: 62%; vertical-align: top;">
-                  <table style="border-collapse: collapse; width: 100%;">
-                    <tr>
-                      <td style="width: 82px; vertical-align: top; padding: 1px 0;">Nomor</td>
-                      <td style="width: 12px; vertical-align: top; padding: 1px 0;">:</td>
-                      <td style="vertical-align: top; padding: 1px 0; font-weight: 600;">${escapeHtml(m.nomorSurat)}</td>
-                    </tr>
-                    <tr>
-                      <td style="vertical-align: top; padding: 1px 0;">Lampiran</td>
-                      <td style="vertical-align: top; padding: 1px 0;">:</td>
-                      <td style="vertical-align: top; padding: 1px 0;">${escapeHtml(m.lampiran)}</td>
-                    </tr>
-                    <tr>
-                      <td style="vertical-align: top; padding: 1px 0;">Perihal</td>
-                      <td style="vertical-align: top; padding: 1px 0;">:</td>
-                      <td style="vertical-align: top; padding: 1px 0;">
-                        <b>${escapeHtml(m.perihalSingkat)}</b><br/>
-                        Semester ${escapeHtml(m.semester)} TA. ${escapeHtml(m.tahunAkademik)}
-                      </td>
-                    </tr>
-                  </table>
-                </td>
-                <td style="width: 38%; vertical-align: top; text-align: left; padding-left: 16px;">
-                  <div>Bogor, ${escapeHtml(m.tanggalMasehiText)}</div>
-                  <div style="padding-left: 38px;">${escapeHtml(m.tanggalHijriahText)}</div>
-                </td>
-              </tr>
-            </table>
-
-            <!-- TUJUAN & SALAM -->
-            <div style="margin-left: 94px; margin-bottom: 12px;">
-              <div>Kepada Yth,</div>
-              <div style="font-weight: 700;">${escapeHtml(m.dosenNama)}</div>
-              <div>di</div>
-              <div>Tempat</div>
-            </div>
-
-            <div style="margin-left: 94px; margin-bottom: 12px; font-style: italic;">
-              <div>Bismillahirrahmanirrahim</div>
-              <div>Assalamualaikum Wr.Wb.</div>
-            </div>
-
-            <!-- ISI SURAT -->
-            <div style="margin-left: 94px;">
-              <p style="margin: 0 0 6px 0;">Dengan hormat,</p>
-              <p style="margin: 0 0 10px 0; text-align: justify;">
-                Kami mohon kesediaan untuk melaksanakan ${escapeHtml(m.layananDalamIsi)} Semester ${escapeHtml(m.semester)} Tahun Akademik ${escapeHtml(m.tahunAkademik)} pada mata kuliah &ldquo;<b>${escapeHtml(m.mataKuliah)}</b>&rdquo; bagi mahasiswa Program Studi ${escapeHtml(m.prodiNama)} berikut:
-              </p>
-
-              <!-- TABEL DAFTAR MAHASISWA -->
-              <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 12.5px;">
-                <thead>
-                  <tr style="background-color: #0f172a; color: #ffffff;">
-                    <th style="border: 1px solid #0f172a; padding: 6px 6px; text-align: center; width: 38px;">No</th>
-                    <th style="border: 1px solid #0f172a; padding: 6px 8px; text-align: center;">Nama Mahasiswa</th>
-                    <th style="border: 1px solid #0f172a; padding: 6px 8px; text-align: center; width: 130px;">NPM</th>
-                    <th style="border: 1px solid #0f172a; padding: 6px 8px; text-align: center; width: 145px;">Semester/Kelas</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rowsPage1}
-                </tbody>
+            <div style="${p1BodyWrapStyle}">
+              <!-- NOMOR, LAMPIRAN, PERIHAL & TANGGAL -->
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 12pt; line-height: 1.25;">
+                <tr>
+                  <td style="width: 64%; vertical-align: top;">
+                    <table style="border-collapse: collapse; width: 100%; font-size: 12pt;">
+                      <tr>
+                        <td style="width: 96px; vertical-align: top; padding: 1px 0;">Nomor</td>
+                        <td style="width: 12px; vertical-align: top; padding: 1px 0;">:</td>
+                        <td style="vertical-align: top; padding: 1px 0;">${escapeHtml(m.nomorSurat)}</td>
+                      </tr>
+                      <tr>
+                        <td style="vertical-align: top; padding: 1px 0;">Lampiran</td>
+                        <td style="vertical-align: top; padding: 1px 0;">:</td>
+                        <td style="vertical-align: top; padding: 1px 0;">${escapeHtml(m.lampiran)}</td>
+                      </tr>
+                      <tr>
+                        <td style="vertical-align: top; padding: 1px 0;">Perihal</td>
+                        <td style="vertical-align: top; padding: 1px 0;">:</td>
+                        <td style="vertical-align: top; padding: 1px 0;">
+                          ${escapeHtml(m.perihalSingkat)}<br/>
+                          Semester ${escapeHtml(m.semester)} TA. ${escapeHtml(m.tahunAkademik)}
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                  <td style="width: 36%; vertical-align: top; text-align: left; padding-left: 4px; font-size: 12pt; white-space: nowrap;">
+                    <div>Bogor, ${escapeHtml(m.tanggalMasehiText)}</div>
+                    <div style="padding-left: 44px;">${escapeHtml(m.tanggalHijriahText)}</div>
+                  </td>
+                </tr>
               </table>
 
-              <p style="margin: 0 0 8px 0; text-align: justify;">${alasanParagraf}</p>
-              <p style="margin: 0 0 8px 0; text-align: justify;">${tindakLanjutParagraf}</p>
-              <p style="margin: 0 0 10px 0;">Demikian, atas perhatian dan kerja sama yang baik, kami ucapkan terima kasih.</p>
+              <!-- TUJUAN & SALAM PEMBUKA -->
+              <div style="${p1IndentStyle} margin-bottom: 14px; font-size: 12pt; line-height: 1.25;">
+                <div>Kepada Yth,</div>
+                <div style="font-weight: 700;">${escapeHtml(m.dosenNama)}</div>
+                <div>di</div>
+                <div>Tempat</div>
+              </div>
 
-              <div style="font-style: italic; margin-bottom: 10px;">
-                <div>Billahit&rsquo;taufiq wal hidayah</div>
-                <div>Wassalamualaikum Wr.Wb.</div>
+              <div style="${p1IndentStyle} margin-bottom: 16px; ${cursiveStyle}">
+                <div>Bismillahirrahmanirrahim</div>
+                <div>Assalamualaikum Wr.Wb.</div>
+              </div>
+
+              <!-- ISI SURAT & TABEL MAHASISWA -->
+              <div style="${p1IndentStyle} font-size: 12pt; line-height: 1.28;">
+                <p style="margin: 0 0 2px 0;">Dengan hormat,</p>
+                <p style="margin: 0 0 12px 0; text-align: justify;">
+                  Kami mohon kesediaan untuk melaksanakan ${escapeHtml(m.layananDalamIsi)} Semester ${escapeHtml(m.semester)} Tahun Akademik ${escapeHtml(m.tahunAkademik)} pada mata kuliah <strong>&ldquo;${escapeHtml(m.mataKuliah)}&rdquo;</strong> bagi mahasiswa Program Studi ${escapeHtml(m.prodiNama)} berikut:
+                </p>
+
+                <!-- TABEL DAFTAR MAHASISWA -->
+                <table style="width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 12pt;">
+                  <thead>
+                    <tr bgcolor="#000000" style="background-color: #000000; color: #ffffff;">
+                      <th style="border: 1px solid #000000; padding: 4px 4px; text-align: center; font-weight: 700; width: 46px; white-space: nowrap;">No</th>
+                      <th style="border: 1px solid #000000; padding: 4px 6px; text-align: center; font-weight: 700;">Nama Mahasiswa</th>
+                      <th style="border: 1px solid #000000; padding: 4px 6px; text-align: center; font-weight: 700; width: 124px; white-space: nowrap;">NPM</th>
+                      <th style="border: 1px solid #000000; padding: 4px 6px; text-align: center; font-weight: 700; width: 120px; white-space: nowrap;">Semester/Kelas</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rowsPage1}
+                  </tbody>
+                </table>
+
+                <p style="margin: 0 0 12px 0; text-align: justify;">${alasanParagraf}</p>
+                <p style="margin: 0 0 12px 0; text-align: justify;">${tindakLanjutParagraf}</p>
+                <p style="margin: 0 0 12px 0;">Demikian, atas perhatian dan kerja sama yang baik, kami ucapkan terima kasih.</p>
+
+                <div style="margin-bottom: 10px; ${cursiveStyle}">
+                  <div>Billahit&rsquo;taufiq wal hidayah</div>
+                  <div>Wassalamualaikum Wr.Wb.</div>
+                </div>
+              </div>
+
+              <!-- TANDA TANGAN KAPRODI -->
+              <div style="${p1KaprodiStyle}">
+                <div>Ketua Program Studi ${escapeHtml(m.prodiNama)},</div>
+                ${kaprodiSpacerHtml}
+                <div style="font-weight: 700; text-decoration: underline;">${escapeHtml(m.kaprodiNama)}</div>
+                <div>NIK/NIDN: ${escapeHtml(m.kaprodiNikNidn)}</div>
+              </div>
+
+              <!-- TEMBUSAN (DI BAWAH TANDA TANGAN KAPRODI) -->
+              <div style="${p1TembusanStyle}">
+                <div>Tembusan Yth:</div>
+                <div>1.&nbsp;&nbsp;Arsip</div>
               </div>
             </div>
-
-            <!-- TANDA TANGAN KAPRODI & TEMBUSAN -->
-            <table style="width: 100%; border-collapse: collapse; margin-top: 6px;">
-              <tr>
-                <td style="width: 52%; vertical-align: bottom; font-size: 12px;">
-                  <div style="margin-bottom: 4px;">Tembusan Yth:</div>
-                  <div>1. Arsip</div>
-                </td>
-                <td style="width: 48%; vertical-align: top; text-align: left; font-size: 13px;">
-                  <div>Ketua Program Studi ${escapeHtml(m.prodiNama)},</div>
-                  <div style="height: 54px;"></div>
-                  <div style="font-weight: 700; text-decoration: underline;">${escapeHtml(m.kaprodiNama)}</div>
-                  <div>NIK/NIDN: ${escapeHtml(m.kaprodiNikNidn)}</div>
-                </td>
-              </tr>
-            </table>
           </div>
 
-          <!-- FOOTER RESMI HALAMAN 1 -->
-          <div>
-            ${renderOfficialFooterHtml(14)}
-          </div>
+          <!-- FOOTER HALAMAN 1: KODE ARSIP KIRI BAWAH -->
+          ${page1FooterHtml}
         </div>
 
         <!-- HALAMAN 2: LAMPIRAN DAFTAR HASIL & DAFTAR HADIR -->
         <div class="${page2Class}" style="${sheet2Style}">
           <div>
-            <table style="border-collapse: collapse; margin-bottom: 22px; font-size: 12.5px;">
-              <tr>
-                <td style="width: 145px; vertical-align: top; padding: 1px 0;">Lampiran Surat Nomor</td>
-                <td style="width: 12px; vertical-align: top; padding: 1px 0;">:</td>
-                <td style="vertical-align: top; padding: 1px 0; font-weight: 600;">${escapeHtml(m.nomorSurat)}</td>
-              </tr>
-              <tr>
-                <td style="vertical-align: top; padding: 1px 0;">Perihal</td>
-                <td style="vertical-align: top; padding: 1px 0;">:</td>
-                <td style="vertical-align: top; padding: 1px 0;">${escapeHtml(m.perihalSingkat)} Semester ${escapeHtml(m.semester)} TA. ${escapeHtml(m.tahunAkademik)}</td>
-              </tr>
-            </table>
-
-            <div style="text-align: center; margin-bottom: 24px;">
-              <div style="font-size: 16px; font-weight: 700;">Daftar Hasil ${escapeHtml(m.layananDalamIsi)} Semester ${escapeHtml(m.semester)}</div>
-              <div style="font-size: 15px; font-weight: 700;">Tahun Akademik ${escapeHtml(m.tahunAkademik)}</div>
+            <!-- HEADER LAMPIRAN -->
+            <div style="${p2TopMetaStyle}">
+              <table style="border-collapse: collapse; font-size: 11pt; line-height: 1.25;">
+                <tr>
+                  <td style="width: 150px; vertical-align: top; padding: 1px 0;">Lampiran Surat Nomor</td>
+                  <td style="width: 12px; vertical-align: top; padding: 1px 0;">:</td>
+                  <td style="vertical-align: top; padding: 1px 0;">${escapeHtml(m.nomorSurat)}</td>
+                </tr>
+                <tr>
+                  <td style="vertical-align: top; padding: 1px 0;">Perihal</td>
+                  <td style="vertical-align: top; padding: 1px 0;">:</td>
+                  <td style="vertical-align: top; padding: 1px 0;">${escapeHtml(m.perihalSingkat)} Semester ${escapeHtml(m.semester)} TA. ${escapeHtml(m.tahunAkademik)}</td>
+                </tr>
+              </table>
             </div>
 
-            <table style="border-collapse: collapse; margin-bottom: 14px; font-size: 13px;">
-              <tr>
-                <td style="width: 115px; padding: 2px 0;">Mata Kuliah</td>
-                <td style="width: 12px; padding: 2px 0;">:</td>
-                <td style="padding: 2px 0; font-weight: 700;">${escapeHtml(m.mataKuliah)}</td>
-              </tr>
-              <tr>
-                <td style="padding: 2px 0;">Dosen</td>
-                <td style="padding: 2px 0;">:</td>
-                <td style="padding: 2px 0; font-weight: 700;">${escapeHtml(m.dosenNama)}</td>
-              </tr>
-            </table>
+            <!-- JUDUL TENGAH HALAMAN 2 (REGULAR SERIF 14PT) -->
+            <div style="${p2TitleWrapStyle}">
+              <div style="font-size: 14pt; font-weight: 400; line-height: 1.25;">Daftar Hasil ${escapeHtml(m.layananDalamIsi)} Semester ${escapeHtml(m.semester)}</div>
+              <div style="font-size: 14pt; font-weight: 400; line-height: 1.25;">Tahun Akademik ${escapeHtml(m.tahunAkademik)}</div>
+            </div>
 
-            <table style="width: 100%; border-collapse: collapse; margin-bottom: 26px; font-size: 12.5px;">
-              <thead>
-                <tr style="background-color: #0f172a; color: #ffffff;">
-                  <th style="border: 1px solid #0f172a; padding: 7px 6px; text-align: center; width: 34px;">No</th>
-                  <th style="border: 1px solid #0f172a; padding: 7px 8px; text-align: center;">Nama Mahasiswa</th>
-                  <th style="border: 1px solid #0f172a; padding: 7px 6px; text-align: center; width: 115px;">NPM</th>
-                  <th style="border: 1px solid #0f172a; padding: 7px 6px; text-align: center; width: 115px;">Semester/<br/>Kelas</th>
-                  <th style="border: 1px solid #0f172a; padding: 7px 6px; text-align: center; width: 78px;">Nilai<br/>(Angka)</th>
-                  <th style="border: 1px solid #0f172a; padding: 7px 6px; text-align: center; width: 105px;">TTD<br/>Mahasiswa</th>
+            <!-- MATA KULIAH & DOSEN -->
+            <div style="${p2MetaMKStyle}">
+              <table style="border-collapse: collapse; font-size: 11pt; line-height: 1.55;">
+                <tr>
+                  <td style="width: 130px; padding: 2px 0;">Mata Kuliah</td>
+                  <td style="width: 12px; padding: 2px 0;">:</td>
+                  <td style="padding: 2px 0;">${escapeHtml(m.mataKuliah)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                ${rowsPage2}
-              </tbody>
-            </table>
+                <tr>
+                  <td style="padding: 2px 0;">Dosen</td>
+                  <td style="padding: 2px 0;">:</td>
+                  <td style="padding: 2px 0;">${escapeHtml(m.dosenNama)}</td>
+                </tr>
+              </table>
+            </div>
 
-            <table style="width: 100%; border-collapse: collapse; margin-top: 14px;">
-              <tr>
-                <td style="width: 54%;"></td>
-                <td style="width: 46%; vertical-align: top; text-align: left; font-size: 13px;">
-                  <div>Bogor, ................................................</div>
-                  <div>Dosen yang bersangkutan,</div>
-                  <div style="height: 64px;"></div>
-                  <div style="font-weight: 700;">${escapeHtml(m.dosenNama)}</div>
-                </td>
-              </tr>
-            </table>
+            <!-- TABEL DAFTAR HADIR & NILAI -->
+            <div style="${p2TableWrapStyle}">
+              <table style="width: 100%; border-collapse: collapse; font-size: 12pt;">
+                <thead>
+                  <tr bgcolor="#000000" style="background-color: #000000; color: #ffffff;">
+                    <th style="border: 1px solid #000000; padding: 5px 4px; text-align: center; font-weight: 700; width: 38px; white-space: nowrap;">No</th>
+                    <th style="border: 1px solid #000000; padding: 5px 8px; text-align: center; font-weight: 700;">Nama Mahasiswa</th>
+                    <th style="border: 1px solid #000000; padding: 5px 6px; text-align: center; font-weight: 700; width: 112px;">NPM</th>
+                    <th style="border: 1px solid #000000; padding: 5px 6px; text-align: center; font-weight: 700; width: 100px;">Semester/<br/>Kelas</th>
+                    <th style="border: 1px solid #000000; padding: 5px 6px; text-align: center; font-weight: 700; width: 96px;">Nilai<br/>(Angka)</th>
+                    <th style="border: 1px solid #000000; padding: 5px 6px; text-align: center; font-weight: 700; width: 116px;">TTD<br/>Mahasiswa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rowsPage2}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- TANDA TANGAN DOSEN -->
+            <div style="${p2DosenSigStyle}">
+              <div>Bogor, ................................................</div>
+              <div>Dosen yang bersangkutan,</div>
+              ${dosenSpacerHtml}
+              <div style="font-weight: 700;">${escapeHtml(m.dosenNama)}</div>
+            </div>
           </div>
 
-          <!-- FOOTER RESMI HALAMAN 2 -->
-          <div>
-            ${renderOfficialFooterHtml(36)}
-          </div>
+          <!-- FOOTER RESMI HALAMAN 2: KODE ARSIP + FOOTER AKREDITASI -->
+          ${page2FooterHtml}
         </div>
       `;
     }
@@ -14128,6 +14240,9 @@
         stage.innerHTML = buildSuratTwoPageInnerHtml(model, { forPdfCapture: true });
         document.body.appendChild(stage);
 
+        if (document.fonts && document.fonts.ready) {
+          await document.fonts.ready.catch(() => {});
+        }
         const imgs = Array.from(stage.querySelectorAll('img'));
         await Promise.all(imgs.map(img => {
           if (img.complete) {
@@ -14195,7 +14310,7 @@
         Swal.fire({
           icon: 'error',
           title: 'Gagal Membuat PDF',
-          text: (err && err.message) ? err.message : 'Silakan gunakan tombol Cetak / Print atau Download Word (.doc).'
+          text: (err && err.message) ? err.message : 'Silakan gunakan tombol Cetak / Print atau Download Word (.docx).'
         });
       } finally {
         if (stage && stage.parentNode) {
@@ -14225,7 +14340,7 @@
         pageStyle.id = 'dynamicSuratPrintPageStyle';
         document.head.appendChild(pageStyle);
       }
-      pageStyle.textContent = '@page { size: 8.5in 13in; margin: 10mm 14mm; }';
+      pageStyle.textContent = '@page { size: 8.5in 13in; margin: 2mm 4mm 4mm 4mm; }';
 
       const cleanup = () => {
         document.body.classList.remove('printing-surat-dosen');
@@ -14249,63 +14364,456 @@
       }
     }
 
-    function downloadSuratPengantarWord() {
+    function ensureDocxLibraryLoaded() {
+      if (typeof window.JSZip === 'function') return Promise.resolve();
+      const src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+      return new Promise((resolve, reject) => {
+        const existing = Array.from(document.querySelectorAll('script')).find(s => s.src === src);
+        if (existing) {
+          existing.addEventListener('load', () => resolve(), { once: true });
+          existing.addEventListener('error', () => reject(new Error('Gagal memuat library pembentuk .docx')), { once: true });
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('Gagal memuat library pembentuk .docx'));
+        document.head.appendChild(script);
+      }).then(() => {
+        if (typeof window.JSZip !== 'function') {
+          throw new Error('Library JSZip untuk file .docx belum tersedia.');
+        }
+      });
+    }
+
+    function escapeXmlSurat(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    }
+
+    function base64DataUriToUint8Array(dataUri) {
+      const raw = String(dataUri || '');
+      const commaIdx = raw.indexOf(',');
+      const b64 = commaIdx >= 0 ? raw.slice(commaIdx + 1) : raw;
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) {
+        bytes[i] = bin.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    function buildOoxmlRun(text, opts = {}) {
+      const sz = opts.sz || 24;
+      const font = opts.font || 'Times New Roman';
+      const color = opts.color || '000000';
+      const boldXml = opts.bold ? '<w:b/><w:bCs/>' : '';
+      const italicXml = opts.italic ? '<w:i/><w:iCs/>' : '';
+      const underlineXml = opts.underline ? '<w:u w:val="single"/>' : '';
+      return `<w:r><w:rPr><w:rFonts w:ascii="${font}" w:hAnsi="${font}" w:cs="${font}"/>${boldXml}${italicXml}${underlineXml}<w:color w:val="${color}"/><w:sz w:val="${sz}"/><w:szCs w:val="${sz}"/></w:rPr><w:t xml:space="preserve">${escapeXmlSurat(text)}</w:t></w:r>`;
+    }
+
+    function buildOoxmlParagraph(runsXml, opts = {}) {
+      const indLeft = opts.indLeft ? `<w:ind w:left="${opts.indLeft}"/>` : '';
+      const jc = opts.jc ? `<w:jc w:val="${opts.jc}"/>` : '';
+      const before = opts.before != null ? opts.before : 0;
+      const after = opts.after != null ? opts.after : 0;
+      const line = opts.line != null ? opts.line : 264;
+      const lineRule = opts.lineRule || 'auto';
+      return `<w:p><w:pPr><w:spacing w:before="${before}" w:after="${after}" w:line="${line}" w:lineRule="${lineRule}"/>${indLeft}${jc}</w:pPr>${runsXml}</w:p>`;
+    }
+
+    function buildOoxmlDrawingInline(rId, cx, cy, docPrId, name) {
+      return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"><wp:extent cx="${cx}" cy="${cy}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docPrId}" name="${escapeXmlSurat(name)}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:nvPicPr><pic:cNvPr id="${docPrId}" name="${escapeXmlSurat(name)}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${rId}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+    }
+
+    function buildOoxmlBordersXml(visible) {
+      if (!visible) {
+        return `<w:tblBorders><w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/></w:tblBorders>`;
+      }
+      return `<w:tblBorders><w:top w:val="single" w:sz="6" w:space="0" w:color="000000"/><w:left w:val="single" w:sz="6" w:space="0" w:color="000000"/><w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/><w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/><w:insideH w:val="single" w:sz="6" w:space="0" w:color="000000"/><w:insideV w:val="single" w:sz="6" w:space="0" w:color="000000"/></w:tblBorders>`;
+    }
+
+    function buildOoxmlCell(innerParagraphsXml, widthTwips, opts = {}) {
+      const spanXml = opts.gridSpan && opts.gridSpan > 1 ? `<w:gridSpan w:val="${opts.gridSpan}"/>` : '';
+      const shdXml = opts.fill ? `<w:shd w:val="clear" w:color="auto" w:fill="${opts.fill}"/>` : '';
+      const vAlignXml = opts.vAlign ? `<w:vAlign w:val="${opts.vAlign}"/>` : '<w:vAlign w:val="top"/>';
+      const padV = opts.padV != null ? opts.padV : 40;
+      const padH = opts.padH != null ? opts.padH : 70;
+      const marXml = `<w:tcMar><w:top w:w="${padV}" w:type="dxa"/><w:bottom w:w="${padV}" w:type="dxa"/><w:left w:w="${padH}" w:type="dxa"/><w:right w:w="${padH}" w:type="dxa"/></w:tcMar>`;
+      return `<w:tc><w:tcPr><w:tcW w:w="${widthTwips}" w:type="dxa"/>${spanXml}${shdXml}${marXml}${vAlignXml}</w:tcPr>${innerParagraphsXml}</w:tc>`;
+    }
+
+    function buildOoxmlFooterXml(kodeArsip, leftWidth, centerWidth, rightWidth, kodeIndent, docPrId) {
+      const totalWidth = leftWidth + centerWidth + rightWidth;
+      const leftCell = buildOoxmlCell(
+        buildOoxmlParagraph(buildOoxmlRun(kodeArsip, { sz: 11, font: 'Arial', color: '000000' }), { indLeft: kodeIndent, before: 0, after: 40, line: 220, lineRule: 'auto' }),
+        leftWidth,
+        { vAlign: 'bottom', padV: 0, padH: 0 }
+      );
+      const centerCell = buildOoxmlCell(
+        buildOoxmlParagraph(buildOoxmlDrawingInline('rIdImg2', 4000500, 439399, docPrId, 'Footer Resmi FEB UIKA Bogor'), { jc: 'center', before: 0, after: 0, line: 240, lineRule: 'auto' }),
+        centerWidth,
+        { vAlign: 'bottom', padV: 0, padH: 0 }
+      );
+      const rightCell = buildOoxmlCell(
+        buildOoxmlParagraph('', { before: 0, after: 0 }),
+        rightWidth,
+        { vAlign: 'bottom', padV: 0, padH: 0 }
+      );
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:tbl>
+    <w:tblPr><w:tblW w:w="${totalWidth}" w:type="dxa"/>${buildOoxmlBordersXml(false)}<w:tblLayout w:type="fixed"/></w:tblPr>
+    <w:tblGrid><w:gridCol w:w="${leftWidth}"/><w:gridCol w:w="${centerWidth}"/><w:gridCol w:w="${rightWidth}"/></w:tblGrid>
+    <w:tr><w:trPr><w:cantSplit/></w:trPr>${leftCell}${centerCell}${rightCell}</w:tr>
+  </w:tbl>
+  <w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>
+</w:ftr>`;
+    }
+
+    async function buildSuratDocxBlob(model) {
+      await ensureDocxLibraryLoaded();
+      const m = model || getSuratDocumentModel();
+      const zip = new window.JSZip();
+
+      const rowCount = m.rows.length;
+      const p1RowTwips = rowCount > 10 ? 300 : 350;
+      const p2RowTwips = rowCount > 11 ? 450 : (rowCount > 7 ? 600 : 870);
+      const cursiveFont = 'Monotype Corsiva';
+
+      // Page 1 top metadata table (indented 700 twips from left=720 => x=1420 twips = 71pt)
+      const p1TopRows = [
+        {
+          label: 'Nomor',
+          valRuns: buildOoxmlRun(m.nomorSurat, { sz: 24 }),
+          c4: buildOoxmlParagraph(buildOoxmlRun('Bogor,', { sz: 24 }), { after: 0 }),
+          c5: buildOoxmlParagraph(buildOoxmlRun(m.tanggalMasehiText, { sz: 24 }), { after: 0 })
+        },
+        {
+          label: 'Lampiran',
+          valRuns: buildOoxmlRun(m.lampiran, { sz: 24 }),
+          c4: buildOoxmlParagraph('', { after: 0 }),
+          c5: buildOoxmlParagraph(buildOoxmlRun(m.tanggalHijriahText, { sz: 24 }), { after: 0 })
+        },
+        {
+          label: 'Perihal',
+          valRuns: buildOoxmlParagraph(buildOoxmlRun(m.perihalSingkat, { sz: 24 }), { after: 0 }) +
+            buildOoxmlParagraph(buildOoxmlRun(`Semester ${m.semester} TA. ${m.tahunAkademik}`, { sz: 24 }), { after: 0 }),
+          isMultiParaVal: true,
+          c4: buildOoxmlParagraph('', { after: 0 }),
+          c5: buildOoxmlParagraph('', { after: 0 })
+        }
+      ].map(r => {
+        const valCellXml = r.isMultiParaVal ? r.valRuns : buildOoxmlParagraph(r.valRuns, { after: 0 });
+        return `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(r.label, { sz: 24 }), { after: 0 }), 1220, { padV: 15, padH: 20 }) +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(':', { sz: 24 }), { after: 0 }), 200, { padV: 15, padH: 10 }) +
+          buildOoxmlCell(valCellXml, 4420, { padV: 15, padH: 20 }) +
+          buildOoxmlCell(r.c4, 840, { padV: 15, padH: 20 }) +
+          buildOoxmlCell(r.c5, 3020, { padV: 15, padH: 20 }) +
+          `</w:tr>`;
+      }).join('');
+
+      const p1TopMetaTable = `<w:tbl><w:tblPr><w:tblW w:w="9700" w:type="dxa"/><w:tblInd w:w="700" w:type="dxa"/>${buildOoxmlBordersXml(false)}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="1220"/><w:gridCol w:w="200"/><w:gridCol w:w="4420"/><w:gridCol w:w="840"/><w:gridCol w:w="3020"/></w:tblGrid>${p1TopRows}</w:tbl>`;
+
+      // Page 1 Student Table (indented 2320 twips from left=720 => x=3040 twips = 152pt, total width 8080 twips)
+      const p1TableHeaderRow = `<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>` +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('No', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }), 660, { fill: '000000', vAlign: 'center', padV: 60, padH: 40 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('Nama Mahasiswa', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }), 3720, { fill: '000000', vAlign: 'center', padV: 60, padH: 70 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('NPM', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }), 1850, { fill: '000000', vAlign: 'center', padV: 60, padH: 60 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('Semester/Kelas', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }), 1850, { fill: '000000', vAlign: 'center', padV: 60, padH: 60 }) +
+        `</w:tr>`;
+
+      const p1StudentRows = m.rows.map((r, i) => `<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="${p1RowTwips}" w:hRule="atLeast"/></w:trPr>` +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(`${i + 1}.`, { sz: 24 }), { jc: 'center', after: 0 }), 660, { vAlign: 'center', padV: 30, padH: 40 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(r.nama, { sz: 24 }), { after: 0 }), 3720, { vAlign: 'center', padV: 30, padH: 70 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(r.npm, { sz: 24 }), { jc: 'center', after: 0 }), 1850, { vAlign: 'center', padV: 30, padH: 60 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(r.semesterKelas, { sz: 24 }), { jc: 'center', after: 0 }), 1850, { vAlign: 'center', padV: 30, padH: 60 }) +
+        `</w:tr>`).join('');
+
+      const p1StudentTable = `<w:tbl><w:tblPr><w:tblW w:w="8080" w:type="dxa"/><w:tblInd w:w="2320" w:type="dxa"/>${buildOoxmlBordersXml(true)}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="660"/><w:gridCol w:w="3720"/><w:gridCol w:w="1850"/><w:gridCol w:w="1850"/></w:tblGrid>${p1TableHeaderRow}${p1StudentRows}</w:tbl>`;
+
+      const alasanText = m.isRemedial
+        ? `${m.layananDalamIsi} ini dilaksanakan guna memberikan kesempatan perbaikan nilai bagi mahasiswa yang bersangkutan sesuai ketentuan akademik yang berlaku.`
+        : `${m.perihalSingkat} ini perlu dilaksanakan karena mahasiswa yang bersangkutan tidak dapat mengikuti ${m.namaUjianNormal} pada waktu yang telah ditentukan.`;
+      const tindakLanjutText = `Bersama ini kami lampirkan ${m.labelFormulir}, dan nilai hasil ${m.isRemedial ? 'remedial' : 'ujian'} diharapkan dapat disampaikan kepada Tata Usaha Program Studi paling lambat ${m.tenggatNilai} setelah ${m.isRemedial ? 'Remedial Teaching' : 'Ujian Susulan'} dilaksanakan.`;
+
+      // Section 1 body paragraphs
+      const page1BodyXml = [
+        p1TopMetaTable,
+        buildOoxmlParagraph('', { before: 0, after: 80, line: 120, lineRule: 'exact' }),
+        buildOoxmlParagraph(buildOoxmlRun('Kepada Yth,', { sz: 24 }), { indLeft: 2320, after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun(m.dosenNama, { sz: 24, bold: true }), { indLeft: 2320, after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun('di', { sz: 24 }), { indLeft: 2320, after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun('Tempat', { sz: 24 }), { indLeft: 2320, after: 200 }),
+        buildOoxmlParagraph(buildOoxmlRun('Bismillahirrahmanirrahim', { sz: 28, font: cursiveFont, italic: true }), { indLeft: 2320, after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun('Assalamualaikum Wr.Wb.', { sz: 28, font: cursiveFont, italic: true }), { indLeft: 2320, after: 240 }),
+        buildOoxmlParagraph(buildOoxmlRun('Dengan hormat,', { sz: 24 }), { indLeft: 2320, after: 20 }),
+        buildOoxmlParagraph(
+          buildOoxmlRun(`Kami mohon kesediaan untuk melaksanakan ${m.layananDalamIsi} Semester ${m.semester} Tahun Akademik ${m.tahunAkademik} pada mata kuliah `, { sz: 24 }) +
+          buildOoxmlRun(`“${m.mataKuliah}”`, { sz: 24, bold: true }) +
+          buildOoxmlRun(` bagi mahasiswa Program Studi ${m.prodiNama} berikut:`, { sz: 24 }),
+          { indLeft: 2320, jc: 'both', after: 180 }
+        ),
+        p1StudentTable,
+        buildOoxmlParagraph('', { before: 0, after: 160, line: 140, lineRule: 'exact' }),
+        buildOoxmlParagraph(buildOoxmlRun(alasanText, { sz: 24 }), { indLeft: 2320, jc: 'both', after: 180 }),
+        buildOoxmlParagraph(buildOoxmlRun(tindakLanjutText, { sz: 24 }), { indLeft: 2320, jc: 'both', after: 180 }),
+        buildOoxmlParagraph(buildOoxmlRun('Demikian, atas perhatian dan kerja sama yang baik, kami ucapkan terima kasih.', { sz: 24 }), { indLeft: 2320, after: 180 }),
+        buildOoxmlParagraph(buildOoxmlRun('Billahit’taufiq wal hidayah', { sz: 28, font: cursiveFont, italic: true }), { indLeft: 2320, after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun('Wassalamualaikum Wr.Wb.', { sz: 28, font: cursiveFont, italic: true }), { indLeft: 2320, after: 180 }),
+        buildOoxmlParagraph(buildOoxmlRun(`Ketua Program Studi ${m.prodiNama},`, { sz: 24 }), { indLeft: 5660, after: 900 }),
+        buildOoxmlParagraph(buildOoxmlRun(m.kaprodiNama, { sz: 24, bold: true, underline: true }), { indLeft: 5660, after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun(`NIK/NIDN: ${m.kaprodiNikNidn}`, { sz: 24 }), { indLeft: 5660, after: 40 }),
+        buildOoxmlParagraph(buildOoxmlRun('Tembusan Yth:', { sz: 22 }), { indLeft: 700, after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun('1.  Arsip', { sz: 22 }), { indLeft: 700, after: 0 }),
+        `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:sectPr><w:type w:val="nextPage"/><w:headerReference w:type="default" r:id="rIdHdr1"/><w:footerReference w:type="default" r:id="rIdFtr1"/><w:pgSz w:w="12240" w:h="18720"/><w:pgMar w:top="2440" w:right="1120" w:bottom="1120" w:left="720" w:header="60" w:footer="260" w:gutter="0"/></w:sectPr></w:pPr></w:p>`
+      ].join('');
+
+      // Page 2 top metadata table (left=420 => 21pt)
+      const p2TopMetaRows = [
+        `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('Lampiran Surat Nomor', { sz: 22 }), { after: 0 }), 2380, { padV: 15, padH: 20 }) +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(':', { sz: 22 }), { after: 0 }), 200, { padV: 15, padH: 10 }) +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(m.nomorSurat, { sz: 22 }), { after: 0 }), 7400, { padV: 15, padH: 20 }) +
+        `</w:tr>`,
+        `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('Perihal', { sz: 22 }), { after: 0 }), 2380, { padV: 15, padH: 20 }) +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(':', { sz: 22 }), { after: 0 }), 200, { padV: 15, padH: 10 }) +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(`${m.perihalSingkat} Semester ${m.semester} TA. ${m.tahunAkademik}`, { sz: 22 }), { after: 0 }), 7400, { padV: 15, padH: 20 }) +
+        `</w:tr>`
+      ].join('');
+
+      const p2TopMetaTable = `<w:tbl><w:tblPr><w:tblW w:w="9980" w:type="dxa"/><w:tblInd w:w="0" w:type="dxa"/>${buildOoxmlBordersXml(false)}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="2380"/><w:gridCol w:w="200"/><w:gridCol w:w="7400"/></w:tblGrid>${p2TopMetaRows}</w:tbl>`;
+
+      // Page 2 Mata Kuliah & Dosen table (indented 1000 twips from left=420 => x=1420 twips = 71pt)
+      const p2MkRows = [
+        `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('Mata Kuliah', { sz: 22 }), { after: 0 }), 1900, { padV: 30, padH: 20 }) +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(':', { sz: 22 }), { after: 0 }), 200, { padV: 30, padH: 10 }) +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(m.mataKuliah, { sz: 22 }), { after: 0 }), 7600, { padV: 30, padH: 20 }) +
+        `</w:tr>`,
+        `<w:tr><w:trPr><w:cantSplit/></w:trPr>` +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('Dosen', { sz: 22 }), { after: 0 }), 1900, { padV: 30, padH: 20 }) +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(':', { sz: 22 }), { after: 0 }), 200, { padV: 30, padH: 10 }) +
+          buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(m.dosenNama, { sz: 22 }), { after: 0 }), 7600, { padV: 30, padH: 20 }) +
+        `</w:tr>`
+      ].join('');
+
+      const p2MkTable = `<w:tbl><w:tblPr><w:tblW w:w="9700" w:type="dxa"/><w:tblInd w:w="1000" w:type="dxa"/>${buildOoxmlBordersXml(false)}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="1900"/><w:gridCol w:w="200"/><w:gridCol w:w="7600"/></w:tblGrid>${p2MkRows}</w:tbl>`;
+
+      // Page 2 Attendance & Grade Table (indented 1000 twips from left=420 => x=71pt, width 9700 twips)
+      const p2TableHeaderRow = `<w:tr><w:trPr><w:cantSplit/><w:tblHeader/></w:trPr>` +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('No', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }), 560, { fill: '000000', vAlign: 'center', padV: 60, padH: 40 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('Nama Mahasiswa', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }), 2800, { fill: '000000', vAlign: 'center', padV: 60, padH: 70 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun('NPM', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }), 1660, { fill: '000000', vAlign: 'center', padV: 60, padH: 60 }) +
+        buildOoxmlCell(
+          buildOoxmlParagraph(buildOoxmlRun('Semester/', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }) +
+          buildOoxmlParagraph(buildOoxmlRun('Kelas', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }),
+          1500,
+          { fill: '000000', vAlign: 'center', padV: 60, padH: 50 }
+        ) +
+        buildOoxmlCell(
+          buildOoxmlParagraph(buildOoxmlRun('Nilai', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }) +
+          buildOoxmlParagraph(buildOoxmlRun('(Angka)', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }),
+          1440,
+          { fill: '000000', vAlign: 'center', padV: 60, padH: 50 }
+        ) +
+        buildOoxmlCell(
+          buildOoxmlParagraph(buildOoxmlRun('TTD', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }) +
+          buildOoxmlParagraph(buildOoxmlRun('Mahasiswa', { sz: 24, bold: true, color: 'FFFFFF' }), { jc: 'center', after: 0 }),
+          1740,
+          { fill: '000000', vAlign: 'center', padV: 60, padH: 50 }
+        ) +
+        `</w:tr>`;
+
+      const p2AttendanceRows = m.rows.map((r, i) => `<w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="${p2RowTwips}" w:hRule="exact"/></w:trPr>` +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(`${i + 1}.`, { sz: 24 }), { jc: 'center', after: 0 }), 560, { vAlign: 'top', padV: 70, padH: 40 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(r.nama, { sz: 24 }), { after: 0 }), 2800, { vAlign: 'top', padV: 70, padH: 70 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(r.npm, { sz: 24 }), { jc: 'center', after: 0 }), 1660, { vAlign: 'top', padV: 70, padH: 60 }) +
+        buildOoxmlCell(buildOoxmlParagraph(buildOoxmlRun(r.semesterKelas, { sz: 24 }), { jc: 'center', after: 0 }), 1500, { vAlign: 'top', padV: 70, padH: 50 }) +
+        buildOoxmlCell(buildOoxmlParagraph('', { after: 0 }), 1440, { vAlign: 'top', padV: 70, padH: 50 }) +
+        buildOoxmlCell(buildOoxmlParagraph('', { after: 0 }), 1740, { vAlign: 'top', padV: 70, padH: 50 }) +
+        `</w:tr>`).join('');
+
+      const p2AttendanceTable = `<w:tbl><w:tblPr><w:tblW w:w="9700" w:type="dxa"/><w:tblInd w:w="1000" w:type="dxa"/>${buildOoxmlBordersXml(true)}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="560"/><w:gridCol w:w="2800"/><w:gridCol w:w="1660"/><w:gridCol w:w="1500"/><w:gridCol w:w="1440"/><w:gridCol w:w="1740"/></w:tblGrid>${p2TableHeaderRow}${p2AttendanceRows}</w:tbl>`;
+
+      const page2BodyXml = [
+        p2TopMetaTable,
+        buildOoxmlParagraph('', { before: 0, after: 480, line: 240, lineRule: 'auto' }),
+        buildOoxmlParagraph(buildOoxmlRun(`Daftar Hasil ${m.layananDalamIsi} Semester ${m.semester}`, { sz: 28 }), { indLeft: 660, jc: 'center', after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun(`Tahun Akademik ${m.tahunAkademik}`, { sz: 28 }), { indLeft: 660, jc: 'center', after: 440 }),
+        p2MkTable,
+        buildOoxmlParagraph('', { before: 0, after: 200, line: 160, lineRule: 'exact' }),
+        p2AttendanceTable,
+        buildOoxmlParagraph('', { before: 0, after: 520, line: 240, lineRule: 'auto' }),
+        buildOoxmlParagraph(buildOoxmlRun('Bogor, ................................................', { sz: 22 }), { indLeft: 6040, after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun('Dosen yang bersangkutan,', { sz: 22 }), { indLeft: 6040, after: 1200 }),
+        buildOoxmlParagraph(buildOoxmlRun(m.dosenNama, { sz: 22, bold: true }), { indLeft: 6040, after: 0 })
+      ].join('');
+
+      const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+  <w:body>
+    ${page1BodyXml}
+    ${page2BodyXml}
+    <w:sectPr>
+      <w:headerReference w:type="default" r:id="rIdHdr2"/>
+      <w:footerReference w:type="default" r:id="rIdFtr2"/>
+      <w:pgSz w:w="12240" w:h="18720"/>
+      <w:pgMar w:top="740" w:right="1080" w:bottom="1120" w:left="420" w:header="180" w:footer="260" w:gutter="0"/>
+    </w:sectPr>
+  </w:body>
+</w:document>`;
+
+      const header1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  ${buildOoxmlParagraph(buildOoxmlDrawingInline('rIdImg1', 6760000, 1511611, 1, 'Kop Surat Resmi FEB UIKA Bogor'), { jc: 'center', before: 0, after: 0, line: 240, lineRule: 'auto' })}
+</w:hdr>`;
+
+      const header2Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/></w:pPr></w:p>
+</w:hdr>`;
+
+      const footer1Xml = buildOoxmlFooterXml(m.kodeArsip, 2500, 5800, 2100, 700, 2);
+      const footer2Xml = buildOoxmlFooterXml(m.kodeArsip, 2800, 5800, 2140, 1000, 3);
+
+      const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>
+        <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
+        <w:color w:val="000000"/>
+        <w:sz w:val="24"/>
+        <w:szCs w:val="24"/>
+      </w:rPr>
+    </w:rPrDefault>
+    <w:pPrDefault>
+      <w:pPr>
+        <w:spacing w:before="0" w:after="0" w:line="264" w:lineRule="auto"/>
+      </w:pPr>
+    </w:pPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:qFormat/>
+  </w:style>
+</w:styles>`;
+
+      const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+  <Override PartName="/word/header2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+  <Override PartName="/word/footer1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
+  <Override PartName="/word/footer2.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>
+</Types>`;
+
+      const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+
+      const docRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rIdHdr1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
+  <Relationship Id="rIdHdr2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/>
+  <Relationship Id="rIdFtr1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>
+  <Relationship Id="rIdFtr2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer2.xml"/>
+</Relationships>`;
+
+      const header1RelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdImg1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>`;
+
+      const footerRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdImg2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image2.png"/>
+</Relationships>`;
+
+      zip.file('[Content_Types].xml', contentTypesXml);
+      zip.file('_rels/.rels', rootRelsXml);
+      zip.file('word/document.xml', documentXml);
+      zip.file('word/styles.xml', stylesXml);
+      zip.file('word/header1.xml', header1Xml);
+      zip.file('word/header2.xml', header2Xml);
+      zip.file('word/footer1.xml', footer1Xml);
+      zip.file('word/footer2.xml', footer2Xml);
+      zip.file('word/_rels/document.xml.rels', docRelsXml);
+      zip.file('word/_rels/header1.xml.rels', header1RelsXml);
+      zip.file('word/_rels/footer1.xml.rels', footerRelsXml);
+      zip.file('word/_rels/footer2.xml.rels', footerRelsXml);
+      zip.file('word/media/image1.png', base64DataUriToUint8Array(KOP_HEADER_FEB_BASE64));
+      zip.file('word/media/image2.png', base64DataUriToUint8Array(KOP_FOOTER_FEB_BASE64));
+
+      return zip.generateAsync({
+        type: 'blob',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        compression: 'DEFLATE'
+      });
+    }
+
+    async function downloadSuratPengantarWord() {
       const model = getSuratDocumentModel();
-      const innerHtml = buildSuratTwoPageInnerHtml(model, { forWord: true })
-        .replace('<!-- HALAMAN 2: LAMPIRAN DAFTAR HASIL & DAFTAR HADIR -->', '<br clear="all" style="page-break-before:always; mso-break-type:section-break;" />');
-
-      const docHtml = `<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-<meta charset="utf-8" />
-<title>Surat Pengantar ${escapeHtml(model.mataKuliah)}</title>
-<!--[if gte mso 9]>
-<xml>
-  <w:WordDocument>
-    <w:View>Print</w:View>
-    <w:Zoom>100</w:Zoom>
-    <w:DoNotOptimizeForBrowser/>
-  </w:WordDocument>
-</xml>
-<![endif]-->
-<style>
-  @page Section1 {
-    size: 21.59cm 33.02cm;
-    margin: 1.1cm 1.4cm 1.1cm 1.4cm;
-    mso-header-margin: 0.7cm;
-    mso-footer-margin: 0.7cm;
-  }
-  div.Section1 { page: Section1; }
-  body { font-family: 'Times New Roman', Times, serif; color: #111827; margin: 0; padding: 0; }
-  table { border-collapse: collapse; }
-</style>
-</head>
-<body>
-  <div class="Section1">
-    ${innerHtml}
-  </div>
-</body>
-</html>`;
-
-      const fileName = buildSuratSafeFileName(model, 'doc');
-
-      const blob = new Blob(['\ufeff', docHtml], { type: 'application/msword;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      const fileName = buildSuratSafeFileName(model, 'docx');
+      const btn = document.getElementById('btnDownloadSuratWord');
+      const origHtml = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> <span>Membuat Word...</span>';
+      }
 
       Swal.fire({
-        icon: 'success',
-        title: 'File Word (.doc) Siap!',
-        text: `Dokumen "${fileName}" berukuran F4 (8.5 x 13 in) berhasil diunduh (2 halaman).`,
-        timer: 2600,
-        showConfirmButton: false
+        title: 'Membuat File Word (.docx)...',
+        text: 'Menyusun 2 halaman F4 (8.5 x 13 in) kompatibel MS Word & Google Docs.',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
       });
+
+      try {
+        const blob = await buildSuratDocxBlob(model);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+
+        Swal.fire({
+          icon: 'success',
+          title: 'File Word (.docx) Siap!',
+          text: `Dokumen "${fileName}" berukuran F4 (8.5 x 13 in) berhasil diunduh (2 halaman identik).`,
+          timer: 2600,
+          showConfirmButton: false
+        });
+      } catch (err) {
+        Swal.fire({
+          icon: 'error',
+          title: 'Gagal Membuat File Word (.docx)',
+          text: (err && err.message) ? err.message : 'Silakan gunakan tombol Simpan PDF (.pdf) atau Cetak / Print.'
+        });
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml;
+        }
+      }
     }
   </script>
 </body>
