@@ -1093,7 +1093,7 @@ function changePassword(username, oldPassword, newPassword, actor, userRole) {
   }
 }
 
-var GAS_SCRIPT_VERSION = '2026.11.17-log-identity-v2';
+var GAS_SCRIPT_VERSION = '2026.11.23-dedup-pendaftaran-v1';
 
 function getBackendVersionInfo() {
   return {
@@ -1781,6 +1781,164 @@ function migrateBase64ToDrive(actor, userRole) {
   }
 }
 
+function normalizeTahunAkademikKeyGas(val) {
+  var raw = String(val || '').trim();
+  var m = raw.match(/(\d{4}\s*\/\s*\d{4})/);
+  if (m) return m[1].replace(/\s+/g, '').toLowerCase();
+  return raw.replace(/\s+/g, ' ').toLowerCase();
+}
+
+function normalizeSemesterParityGas(val, fallbackTa) {
+  var combined = (String(val || '') + ' ' + String(fallbackTa || '')).toLowerCase();
+  if (combined.indexOf('genap') !== -1) return 'genap';
+  if (combined.indexOf('ganjil') !== -1) return 'ganjil';
+  var numMatch = String(val || '').match(/\d+/);
+  if (numMatch) {
+    var num = parseInt(numMatch[0], 10);
+    if (!isNaN(num) && num > 0) return (num % 2 === 0) ? 'genap' : 'ganjil';
+  }
+  return 'ganjil';
+}
+
+function normalizeLayananKeyGas(val) {
+  var lower = String(val || '').trim().toLowerCase();
+  if (!lower) return '';
+  if (lower.indexOf('remedial') !== -1) return 'remedial teaching';
+  if (lower.indexOf('uas') !== -1) return 'uas susulan';
+  if (lower.indexOf('uts') !== -1) return 'uts susulan';
+  return lower.replace(/\s+/g, ' ');
+}
+
+function cleanCourseLabelGas(raw) {
+  return String(raw || '')
+    .replace(/^\d+\.\s*/, '')
+    .replace(/\[(?:Nilai|Nilai Asal)\s*:\s*[^\]]+\]/gi, '')
+    .replace(/\(\s*\d+\s*SKS\s*\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanDosenLabelGas(raw) {
+  var cleaned = String(raw || '')
+    .replace(/^\d+\.\s*/, '')
+    .replace(/\((?:Dosen Lalu|Dosen Kelas Lalu|Dosen Saat Mengambil)\s*:[^)]+\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned === '-' ? '' : cleaned;
+}
+
+function parsePendaftaranPairsGas(rawMatkul, rawDosen, matkulList) {
+  var pairs = [];
+  if (Object.prototype.toString.call(matkulList) === '[object Array]' && matkulList.length > 0) {
+    for (var i = 0; i < matkulList.length; i++) {
+      var item = matkulList[i];
+      var mk = cleanCourseLabelGas(item && typeof item === 'object' ? (item.nama || item.mataKuliah) : item);
+      var dsn = cleanDosenLabelGas(item && typeof item === 'object' ? (item.dosenPengampu || item.dosen) : '');
+      if (mk || dsn) {
+        pairs.push({ mataKuliah: mk, dosenPengampu: dsn });
+      }
+    }
+    if (pairs.length > 0) return pairs;
+  }
+
+  var mkLines = String(rawMatkul || '').split(/\n|\|/).map(cleanCourseLabelGas).filter(function(x) { return !!x; });
+  var dsnLines = String(rawDosen || '').split(/\n|\|/).map(cleanDosenLabelGas).filter(function(x) { return !!x; });
+  var maxLen = Math.max(mkLines.length, dsnLines.length);
+  for (var j = 0; j < maxLen; j++) {
+    var mkName = mkLines[j] || '';
+    var dsnName = dsnLines[j] || (dsnLines.length === 1 ? dsnLines[0] : '');
+    if (mkName || dsnName) {
+      pairs.push({ mataKuliah: mkName, dosenPengampu: dsnName });
+    }
+  }
+  return pairs;
+}
+
+function validateNoDuplicatePendaftaranServer(sheet, payload, excludeId) {
+  if (!sheet || !payload) return { ok: true };
+  var incomingPairs = parsePendaftaranPairsGas(payload.mataKuliah, payload.dosenPengampu, payload.mataKuliahList);
+  if (!incomingPairs.length) return { ok: true };
+
+  // Cek duplikasi internal di dalam form yang sama
+  var seenIntra = {};
+  for (var s = 0; s < incomingPairs.length; s++) {
+    var sMk = incomingPairs[s].mataKuliah.toLowerCase();
+    if (!sMk) continue;
+    if (seenIntra[sMk]) {
+      return {
+        ok: false,
+        message: 'Duplikasi dalam formulir: Mata kuliah "' + incomingPairs[s].mataKuliah + '" dipilih lebih dari satu kali.'
+      };
+    }
+    seenIntra[sMk] = true;
+  }
+
+  var values = sheet.getDataRange().getValues();
+  if (!values || values.length <= 1) return { ok: true };
+
+  var headerMap = getHeaderIndexMap(sheet);
+  function colVal(row, name, fallbackIdx) {
+    if (headerMap[name]) return row[headerMap[name] - 1];
+    return (fallbackIdx >= 0 && fallbackIdx < row.length) ? row[fallbackIdx] : '';
+  }
+
+  var targetId = String(excludeId || '').trim();
+  var targetNpm = String(payload.npm || payload.nim || payload.NPM || payload.NIM || '').trim().toLowerCase();
+  var targetNama = String(payload.namaMahasiswa || payload['Nama Mahasiswa'] || '').trim().toLowerCase();
+  var targetTa = normalizeTahunAkademikKeyGas(payload.tahunAkademik || '2026/2027');
+  var targetSemParity = normalizeSemesterParityGas(payload.semesterPeriode || payload.semester || 'Ganjil', payload.tahunAkademik);
+  var targetLayanan = normalizeLayananKeyGas(payload.jenisLayanan);
+
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    var rowId = String(colVal(row, 'ID', 0) || '').trim();
+    var rowNpm = String(colVal(row, 'NPM', 4) || colVal(row, 'NIM', -1) || '').trim().toLowerCase();
+    var rowNama = String(colVal(row, 'Nama Mahasiswa', 5) || '').trim().toLowerCase();
+    if (!rowId && !rowNpm && !rowNama) continue;
+    if (targetId && rowId === targetId) continue;
+
+    var rowStatus = String(colVal(row, 'Status Persetujuan', 18) || 'Pending').trim();
+    if (rowStatus.toLowerCase() === 'ditolak') continue;
+
+    // Cek identitas mahasiswa
+    var sameStudent = (targetNpm && rowNpm)
+      ? (targetNpm === rowNpm)
+      : (targetNama && rowNama && targetNama === rowNama);
+    if (!sameStudent) continue;
+
+    // Cek periode (Tahun Akademik + Semester) dan Jenis Layanan
+    var rowTaRaw = colVal(row, 'Tahun Akademik', 2) || '2026/2027';
+    var rowSemRaw = colVal(row, 'Semester Type', -1) || colVal(row, 'Semester', 3) || 'Ganjil';
+    var rowLayananRaw = colVal(row, 'Jenis Layanan', 12) || '';
+
+    if (normalizeTahunAkademikKeyGas(rowTaRaw) !== targetTa) continue;
+    if (normalizeSemesterParityGas(rowSemRaw, rowTaRaw) !== targetSemParity) continue;
+    if (normalizeLayananKeyGas(rowLayananRaw) !== targetLayanan) continue;
+
+    var rowMatkul = colVal(row, 'Mata Kuliah', 10);
+    var rowDosen = colVal(row, 'Dosen Pengampu', 11);
+    var existingPairs = parsePendaftaranPairsGas(rowMatkul, rowDosen, null);
+
+    for (var i = 0; i < incomingPairs.length; i++) {
+      var inMk = incomingPairs[i].mataKuliah.toLowerCase();
+      var inDsn = incomingPairs[i].dosenPengampu.toLowerCase();
+      if (!inMk) continue;
+      for (var k = 0; k < existingPairs.length; k++) {
+        var exMk = existingPairs[k].mataKuliah.toLowerCase();
+        var exDsn = existingPairs[k].dosenPengampu.toLowerCase();
+        if (inMk === exMk && inDsn === exDsn) {
+          return {
+            ok: false,
+            message: 'Pendaftaran ganda ditolak: Mata kuliah "' + incomingPairs[i].mataKuliah + '" dengan dosen "' + (incomingPairs[i].dosenPengampu || '-') + '" sudah terdaftar pada pengajuan ' + (rowId || '-') + ' (Status: ' + rowStatus + ') untuk periode dan layanan yang sama.'
+          };
+        }
+      }
+    }
+  }
+
+  return { ok: true };
+}
+
 function addPendaftaran(payload) {
   if (!payload || typeof payload !== 'object') {
     return { success: false, message: 'Payload pendaftaran kosong atau tidak valid.' };
@@ -1797,6 +1955,12 @@ function addPendaftaran(payload) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Pendaftaran');
     if (!sheet) sheet = getOrCreateSheet(ss, 'Pendaftaran');
+
+    var dupCheck = validateNoDuplicatePendaftaranServer(sheet, payload, '');
+    if (!dupCheck.ok) {
+      return { success: false, code: 'DUPLICATE_REGISTRATION', message: dupCheck.message };
+    }
+
     var headerMap = getHeaderIndexMap(sheet);
 
     if (!headerMap['Bukti Foto']) {
@@ -1861,7 +2025,7 @@ function addPendaftaran(payload) {
     if (headerMap['Tanggal']) rowData[headerMap['Tanggal'] - 1] = nowStr;
     if (headerMap['Tahun Akademik']) rowData[headerMap['Tahun Akademik'] - 1] = payload.tahunAkademik || '2026/2027';
     if (headerMap['Semester']) rowData[headerMap['Semester'] - 1] = payload.semester || 'Ganjil';
-    if (headerMap['Semester Type']) rowData[headerMap['Semester Type'] - 1] = payload.semester || 'Ganjil';
+    if (headerMap['Semester Type']) rowData[headerMap['Semester Type'] - 1] = payload.semesterPeriode || payload.semester || 'Ganjil';
     if (headerMap['NPM']) rowData[headerMap['NPM'] - 1] = mhsNpm;
     if (headerMap['NIM']) rowData[headerMap['NIM'] - 1] = mhsNpm;
     if (headerMap['Nama Mahasiswa']) rowData[headerMap['Nama Mahasiswa'] - 1] = payload.namaMahasiswa;
@@ -1916,6 +2080,34 @@ function updatePendaftaran(payload) {
     var rowRange = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn());
     var rowValues = rowRange.getValues()[0];
 
+    function existingColVal(name, fallbackIdx) {
+      if (headerMap[name]) return rowValues[headerMap[name] - 1];
+      return (fallbackIdx >= 0 && fallbackIdx < rowValues.length) ? rowValues[fallbackIdx] : '';
+    }
+
+    var mergedPayload = {
+      id: payload.id,
+      npm: payload.npm !== undefined ? payload.npm : (payload.nim !== undefined ? payload.nim : existingColVal('NPM', 4)),
+      nim: payload.nim !== undefined ? payload.nim : (payload.npm !== undefined ? payload.npm : existingColVal('NIM', -1)),
+      namaMahasiswa: payload.namaMahasiswa !== undefined ? payload.namaMahasiswa : existingColVal('Nama Mahasiswa', 5),
+      tahunAkademik: payload.tahunAkademik !== undefined ? payload.tahunAkademik : existingColVal('Tahun Akademik', 2),
+      semester: payload.semester !== undefined ? payload.semester : existingColVal('Semester', 3),
+      semesterPeriode: payload.semesterPeriode !== undefined ? payload.semesterPeriode : existingColVal('Semester Type', -1),
+      jenisLayanan: payload.jenisLayanan !== undefined ? payload.jenisLayanan : existingColVal('Jenis Layanan', 12),
+      mataKuliah: payload.mataKuliah !== undefined ? payload.mataKuliah : existingColVal('Mata Kuliah', 10),
+      dosenPengampu: payload.dosenPengampu !== undefined ? payload.dosenPengampu : existingColVal('Dosen Pengampu', 11),
+      mataKuliahList: payload.mataKuliahList,
+      statusPersetujuan: payload.statusPersetujuan !== undefined ? payload.statusPersetujuan : existingColVal('Status Persetujuan', 18)
+    };
+
+    // Jika status tetap/diubah ke Ditolak, tidak perlu memblokir diri sendiri; jika aktif, validasi duplikat lintas formulir
+    if (String(mergedPayload.statusPersetujuan || '').trim().toLowerCase() !== 'ditolak') {
+      var updDupCheck = validateNoDuplicatePendaftaranServer(sheet, mergedPayload, payload.id);
+      if (!updDupCheck.ok) {
+        return { success: false, code: 'DUPLICATE_REGISTRATION', message: updDupCheck.message };
+      }
+    }
+
     function setCol(name, val) {
       if (headerMap[name] && val !== undefined) {
         rowValues[headerMap[name] - 1] = val;
@@ -1934,6 +2126,7 @@ function updatePendaftaran(payload) {
     setCol('Kelas', cleanUpKelas);
     setCol('Kategori Kelas', cleanUpKategori);
     setCol('Semester', payload.semester);
+    if (payload.semesterPeriode !== undefined) setCol('Semester Type', payload.semesterPeriode);
     setCol('Tahun Akademik', payload.tahunAkademik || '2026/2027');
     setCol('Mata Kuliah', payload.mataKuliah);
     setCol('Dosen Pengampu', payload.dosenPengampu);

@@ -58,7 +58,7 @@
 
     let GAS_API_URL = getGasApiUrl();
 
-    const EXPECTED_GAS_SCRIPT_VERSION = "2026.11.17-log-identity-v2";
+    const EXPECTED_GAS_SCRIPT_VERSION = "2026.11.23-dedup-pendaftaran-v1";
     let gasVersionCheckState = {
       checked: false,
       checking: false,
@@ -348,13 +348,29 @@
         const payload = args && args[0];
         if (payload) {
           appData.pendaftaran = appData.pendaftaran || [];
+          const isAllowedDupBypass = payload.statusPersetujuan && String(payload.statusPersetujuan).trim().toLowerCase() === 'ditolak';
+          if (!isAllowedDupBypass && typeof findCrossFormPendaftaranDuplicatesClient === 'function') {
+            const conflicts = findCrossFormPendaftaranDuplicatesClient(payload, appData.pendaftaran, payload.id || '');
+            if (conflicts.length > 0) {
+              const firstC = conflicts[0];
+              if (onSuccess) {
+                onSuccess({
+                  success: false,
+                  code: 'DUPLICATE_REGISTRATION',
+                  message: `Pendaftaran ganda ditolak: Mata kuliah "${firstC.mataKuliah}" dengan dosen "${firstC.dosenPengampu || '-'}" sudah terdaftar pada pengajuan ${firstC.existingId} (Status: ${firstC.existingStatus}) untuk periode dan layanan yang sama.`
+                });
+              }
+              return;
+            }
+          }
           if (!payload.id) {
             const newId = 'REG-' + (1000 + (appData.pendaftaran.length + 1));
             const newRec = {
               ID: newId,
               Tanggal: new Date().toLocaleDateString('id-ID'),
-              'Tahun Akademik': payload.tahunAkademik || '2026/2027 Ganjil',
+              'Tahun Akademik': payload.tahunAkademik || '2026/2027',
               Semester: payload.semester || 'Semester 1',
+              'Semester Type': payload.semesterPeriode || payload.semester || 'Ganjil',
               NPM: payload.nim,
               NIM: payload.nim,
               'Nama Mahasiswa': payload.namaMahasiswa,
@@ -378,6 +394,10 @@
           } else {
             const item = appData.pendaftaran.find(d => String(d.ID || d.id) === String(payload.id));
             if (item) {
+              if (payload.tahunAkademik) item['Tahun Akademik'] = payload.tahunAkademik;
+              if (payload.semester) item.Semester = payload.semester;
+              if (payload.semesterPeriode) item['Semester Type'] = payload.semesterPeriode;
+              if (payload.jenisLayanan) item['Jenis Layanan'] = payload.jenisLayanan;
               if (payload.mataKuliah) item['Mata Kuliah'] = payload.mataKuliah;
               if (payload.dosenPengampu) item['Dosen Pengampu'] = payload.dosenPengampu;
               if (payload.mataKuliahList) item.mataKuliahList = payload.mataKuliahList;
@@ -2371,7 +2391,7 @@
           </div>
           <div>
             <label class="block font-bold text-slate-600 mb-1">Nama Mahasiswa <span id="badgeNamaLock" class="text-[10px] text-blue-800 font-bold"></span></label>
-            <input type="text" id="pendaftaranNama" required class="w-full border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-900">
+            <input type="text" id="pendaftaranNama" required oninput="if (typeof refreshDynamicMatkulDuplicateWarnings === 'function') refreshDynamicMatkulDuplicateWarnings();" class="w-full border border-slate-300 rounded-xl px-3 py-2 focus:ring-2 focus:ring-blue-900">
           </div>
         </div>
 
@@ -5185,6 +5205,7 @@
             </div>
           </div>
           ` : ''}
+          <div id="dupWarningRow_${i}" class="hidden text-[11px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-start gap-2"></div>
         `;
 
         container.appendChild(rowCard);
@@ -5430,6 +5451,16 @@
             fbDText.innerText = rowData.dosenPengampu;
           }
         }
+        if (inputM) {
+          inputM.addEventListener('input', () => {
+            if (typeof refreshDynamicMatkulDuplicateWarnings === 'function') refreshDynamicMatkulDuplicateWarnings();
+          });
+        }
+        if (inputD) {
+          inputD.addEventListener('input', () => {
+            if (typeof refreshDynamicMatkulDuplicateWarnings === 'function') refreshDynamicMatkulDuplicateWarnings();
+          });
+        }
       }
 
       syncMatkulLegacyFields();
@@ -5501,6 +5532,9 @@
           const laluStr = isRemedial && d.dosenLalu ? ` (Dosen Lalu: ${d.dosenLalu})` : '';
           return `${i + 1}. ${d.dosenPengampu || '-'}${laluStr}`;
         }).join('\n');
+      }
+      if (typeof refreshDynamicMatkulDuplicateWarnings === 'function') {
+        refreshDynamicMatkulDuplicateWarnings();
       }
     }
 
@@ -6093,7 +6127,10 @@
     }
 
     function onPendaftaranNimInput(val) {
-      if (!val) return;
+      if (!val) {
+        if (typeof refreshDynamicMatkulDuplicateWarnings === 'function') refreshDynamicMatkulDuplicateWarnings();
+        return;
+      }
       const clean = String(val).trim();
       const mhsList = (appData && appData.users_mahasiswa) || [];
       const found = mhsList.find(m => String(m.NPM || m.Username || m.ID || '').toLowerCase() === clean.toLowerCase());
@@ -6142,6 +6179,9 @@
             }
           }
         }
+      }
+      if (typeof refreshDynamicMatkulDuplicateWarnings === 'function') {
+        refreshDynamicMatkulDuplicateWarnings();
       }
     }
 
@@ -6427,6 +6467,9 @@
       if (typeof updateRegistrationSummary === 'function') {
         updateRegistrationSummary();
       }
+      if (typeof refreshDynamicMatkulDuplicateWarnings === 'function') {
+        refreshDynamicMatkulDuplicateWarnings();
+      }
       modal.classList.remove('hidden');
       modal.classList.add('flex');
     }
@@ -6434,6 +6477,179 @@
     function closePendaftaranModal() {
       document.getElementById('modalPendaftaran').classList.add('hidden');
       document.getElementById('modalPendaftaran').classList.remove('flex');
+    }
+
+    function normalizeTahunAkademikKeyClient(val) {
+      const raw = String(val || '').trim();
+      const m = raw.match(/(\d{4}\s*\/\s*\d{4})/);
+      if (m) return m[1].replace(/\s+/g, '').toLowerCase();
+      return raw.replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    function normalizeSemesterParityClient(val, fallbackTa) {
+      const combined = `${String(val || '')} ${String(fallbackTa || '')}`.toLowerCase();
+      if (combined.includes('genap')) return 'genap';
+      if (combined.includes('ganjil')) return 'ganjil';
+      const numMatch = String(val || '').match(/\d+/);
+      if (numMatch) {
+        const num = parseInt(numMatch[0], 10);
+        if (!isNaN(num) && num > 0) return (num % 2 === 0) ? 'genap' : 'ganjil';
+      }
+      return 'ganjil';
+    }
+
+    function cleanCourseLabelForDedup(raw) {
+      return String(raw || '')
+        .replace(/^\d+\.\s*/, '')
+        .replace(/\[(?:Nilai|Nilai Asal)\s*:\s*[^\]]+\]/gi, '')
+        .replace(/\(\s*\d+\s*SKS\s*\)/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function cleanDosenLabelForDedup(raw) {
+      const cleaned = String(raw || '')
+        .replace(/^\d+\.\s*/, '')
+        .replace(/\((?:Dosen Lalu|Dosen Kelas Lalu|Dosen Saat Mengambil)\s*:[^)]+\)/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return cleaned === '-' ? '' : cleaned;
+    }
+
+    function parsePendaftaranCoursePairsClient(rawMatkul, rawDosen, matkulList) {
+      const pairs = [];
+      if (Array.isArray(matkulList) && matkulList.length > 0) {
+        matkulList.forEach(item => {
+          const mk = cleanCourseLabelForDedup(item && typeof item === 'object' ? (item.nama || item.mataKuliah) : item);
+          const dsn = cleanDosenLabelForDedup(item && typeof item === 'object' ? (item.dosenPengampu || item.dosen) : '');
+          if (mk || dsn) pairs.push({ mataKuliah: mk, dosenPengampu: dsn });
+        });
+        if (pairs.length > 0) return pairs;
+      }
+
+      const mkLines = String(rawMatkul || '').split(/\n|\|/).map(cleanCourseLabelForDedup).filter(Boolean);
+      const dsnLines = String(rawDosen || '').split(/\n|\|/).map(cleanDosenLabelForDedup).filter(Boolean);
+      const maxLen = Math.max(mkLines.length, dsnLines.length);
+      for (let i = 0; i < maxLen; i++) {
+        const mkName = mkLines[i] || '';
+        const dsnName = dsnLines[i] || (dsnLines.length === 1 ? dsnLines[0] : '');
+        if (mkName || dsnName) pairs.push({ mataKuliah: mkName, dosenPengampu: dsnName });
+      }
+      return pairs;
+    }
+
+    function findCrossFormPendaftaranDuplicatesClient(candidatePayload, existingList, excludeId = '') {
+      if (!candidatePayload || !Array.isArray(existingList) || existingList.length === 0) return [];
+      const incomingPairs = parsePendaftaranCoursePairsClient(
+        candidatePayload.mataKuliah,
+        candidatePayload.dosenPengampu,
+        candidatePayload.mataKuliahList
+      );
+      if (incomingPairs.length === 0) return [];
+
+      const targetId = String(excludeId || candidatePayload.id || '').trim();
+      const targetNpm = String(candidatePayload.npm || candidatePayload.nim || '').trim().toLowerCase();
+      const targetNama = String(candidatePayload.namaMahasiswa || '').trim().toLowerCase();
+      const targetTa = normalizeTahunAkademikKeyClient(candidatePayload.tahunAkademik || '2026/2027');
+      const targetSemParity = normalizeSemesterParityClient(
+        candidatePayload.semesterPeriode || candidatePayload.semester || 'Ganjil',
+        candidatePayload.tahunAkademik
+      );
+      const targetLayanan = normalizeJenisLayananName(candidatePayload.jenisLayanan || '').toLowerCase();
+      if ((!targetNpm && !targetNama) || !targetLayanan) return [];
+
+      const conflicts = [];
+      existingList.forEach(rec => {
+        if (!rec || typeof rec !== 'object') return;
+        const recId = String(rec.ID || rec.id || '').trim();
+        if (targetId && recId === targetId) return;
+
+        const recStatus = String(rec['Status Persetujuan'] || 'Pending').trim();
+        if (recStatus.toLowerCase() === 'ditolak') return;
+
+        const recNpm = String(rec.NPM || rec.NIM || '').trim().toLowerCase();
+        const recNama = String(rec['Nama Mahasiswa'] || rec.namaMahasiswa || '').trim().toLowerCase();
+        const sameStudent = (targetNpm && recNpm)
+          ? (targetNpm === recNpm)
+          : (targetNama && recNama && targetNama === recNama);
+        if (!sameStudent) return;
+
+        const recTaRaw = rec['Tahun Akademik'] || '2026/2027';
+        const recSemRaw = rec['Semester Type'] || rec.semesterPeriode || rec.Semester || 'Ganjil';
+        const recLayananRaw = rec['Jenis Layanan'] || rec.jenisLayanan || '';
+
+        if (normalizeTahunAkademikKeyClient(recTaRaw) !== targetTa) return;
+        if (normalizeSemesterParityClient(recSemRaw, recTaRaw) !== targetSemParity) return;
+        if (normalizeJenisLayananName(recLayananRaw).toLowerCase() !== targetLayanan) return;
+
+        const existingPairs = parsePendaftaranCoursePairsClient(
+          rec['Mata Kuliah'] || rec.mataKuliah,
+          rec['Dosen Pengampu'] || rec.dosenPengampu,
+          rec.mataKuliahList
+        );
+
+        incomingPairs.forEach((inPair, rowIdx) => {
+          const inMk = inPair.mataKuliah.toLowerCase();
+          const inDsn = inPair.dosenPengampu.toLowerCase();
+          if (!inMk || !inDsn) return;
+          const matchedExisting = existingPairs.find(ex =>
+            ex.mataKuliah.toLowerCase() === inMk && ex.dosenPengampu.toLowerCase() === inDsn
+          );
+          if (matchedExisting) {
+            conflicts.push({
+              rowIdx,
+              mataKuliah: inPair.mataKuliah,
+              dosenPengampu: inPair.dosenPengampu,
+              existingId: recId || '-',
+              existingStatus: recStatus || 'Pending'
+            });
+          }
+        });
+      });
+
+      return conflicts;
+    }
+
+    function refreshDynamicMatkulDuplicateWarnings() {
+      const container = document.getElementById('dynamicMatkulContainer');
+      if (!container) return;
+      const rows = collectCurrentMatkulFormData();
+      const editId = (document.getElementById('pendaftaranId')?.value || '').trim();
+      const npmVal = (document.getElementById('pendaftaranNim')?.value || '').trim();
+      const namaVal = (document.getElementById('pendaftaranNama')?.value || '').trim();
+      const taVal = (document.getElementById('pendaftaranTahunAkademik')?.value || '2026/2027').trim();
+      const semPeriodeVal = (document.getElementById('pendaftaranSemester')?.value || 'Ganjil').trim();
+      const layananVal = (document.getElementById('pendaftaranLayanan')?.value || '').trim();
+
+      const candidate = {
+        id: editId,
+        npm: npmVal,
+        namaMahasiswa: namaVal,
+        tahunAkademik: taVal,
+        semesterPeriode: semPeriodeVal,
+        semester: semPeriodeVal,
+        jenisLayanan: layananVal,
+        mataKuliahList: rows
+      };
+
+      const conflicts = findCrossFormPendaftaranDuplicatesClient(candidate, (appData && appData.pendaftaran) || [], editId);
+      const conflictByRow = new Map();
+      conflicts.forEach(c => {
+        if (!conflictByRow.has(c.rowIdx)) conflictByRow.set(c.rowIdx, c);
+      });
+
+      rows.forEach((row, idx) => {
+        const warnEl = document.getElementById(`dupWarningRow_${idx}`);
+        if (!warnEl) return;
+        const hit = conflictByRow.get(idx);
+        if (hit) {
+          warnEl.innerHTML = `<i class="fas fa-triangle-exclamation mt-0.5 shrink-0"></i><span>Sudah terdaftar pada pengajuan <b>${escapeHtml(hit.existingId)}</b> (Status: <b>${escapeHtml(hit.existingStatus)}</b>) untuk periode &amp; layanan ini. Hanya bisa daftar ulang jika status sebelumnya <b>Ditolak</b>.</span>`;
+          warnEl.classList.remove('hidden');
+        } else {
+          warnEl.innerHTML = '';
+          warnEl.classList.add('hidden');
+        }
+      });
     }
 
     function handleSavePendaftaran(e) {
@@ -6471,6 +6687,7 @@
       const kodeProdi = prodiSel.value;
       const namaProdi = prodiSel.options[prodiSel.selectedIndex]?.getAttribute('data-nama') || kodeProdi;
       const semCalculated = document.getElementById('pendaftaranSemesterKalkulasi')?.value || document.getElementById('pendaftaranSemester')?.value || 'Semester 1';
+      const semPeriodeVal = document.getElementById('pendaftaranSemester')?.value || 'Ganjil';
       const angkatanVal = document.getElementById('pendaftaranAngkatan')?.value || '';
       const rawKelas = document.getElementById('pendaftaranKelas')?.value || 'Reguler A';
       const cleanKelas = normalizeClassNameClient(rawKelas);
@@ -6513,7 +6730,7 @@
         }
       }
 
-      // Validasi duplikasi antar baris
+      // Validasi duplikasi antar baris dalam 1 formulir
       const seenNames = new Set();
       for (let i = 0; i < matkulRows.length; i++) {
         const nameLower = matkulRows[i].mataKuliah.trim().toLowerCase();
@@ -6522,6 +6739,45 @@
           return;
         }
         seenNames.add(nameLower);
+      }
+
+      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      const statusPersetujuan = !isMhs && document.getElementById('pendaftaranStatusPersetujuan') 
+        ? document.getElementById('pendaftaranStatusPersetujuan').value 
+        : 'Pending';
+
+      // Validasi duplikasi antar formulir (Mata Kuliah & Dosen Pengampu sama untuk 1 mahasiswa di periode/layanan sama; kecuali pengajuan lama Ditolak)
+      if (String(statusPersetujuan || '').trim().toLowerCase() !== 'ditolak') {
+        const dupCandidate = {
+          id: editRecordId,
+          npm: document.getElementById('pendaftaranNim')?.value || '',
+          namaMahasiswa: document.getElementById('pendaftaranNama')?.value || '',
+          tahunAkademik: document.getElementById('pendaftaranTahunAkademik')?.value || '2026/2027',
+          semester: semCalculated,
+          semesterPeriode: semPeriodeVal,
+          jenisLayanan: layananVal,
+          mataKuliahList: matkulRows
+        };
+        const crossConflicts = findCrossFormPendaftaranDuplicatesClient(dupCandidate, (appData && appData.pendaftaran) || [], editRecordId);
+        if (crossConflicts.length > 0) {
+          refreshDynamicMatkulDuplicateWarnings();
+          const listHtml = crossConflicts.map(c =>
+            `<li class="text-left"><b>${escapeHtml(c.mataKuliah)}</b> — Dosen: <b>${escapeHtml(c.dosenPengampu)}</b> (Kode: <code>${escapeHtml(c.existingId)}</code>, Status: <b>${escapeHtml(c.existingStatus)}</b>)</li>`
+          ).join('');
+          Swal.fire({
+            icon: 'warning',
+            title: 'Pendaftaran Ganda Terdeteksi',
+            html: `<div class="text-left text-xs space-y-2 leading-relaxed">
+              <p>Mahasiswa ini sudah memiliki pengajuan aktif untuk kombinasi <b>Mata Kuliah &amp; Dosen</b> yang sama pada periode dan layanan <b>${escapeHtml(layananVal)}</b>:</p>
+              <ul class="list-disc pl-4 space-y-1 text-rose-800">${listHtml}</ul>
+              <p class="text-slate-600">Mahasiswa hanya dapat mendaftar ulang mata kuliah &amp; dosen yang sama apabila pengajuan sebelumnya berstatus <b>Ditolak</b>.</p>
+            </div>`,
+            confirmButtonText: 'Saya Mengerti',
+            confirmButtonColor: '#1e3a8a'
+          });
+          document.getElementById(`pendaftaranMatkul_${crossConflicts[0].rowIdx}`)?.focus();
+          return;
+        }
       }
 
       // Validasi wajib isi: Alasan / Keterangan
@@ -6574,11 +6830,6 @@
       const statusPembayaran = document.getElementById('pendaftaranStatusPembayaran')?.value || (totalNominal > 0 ? 'Belum Bayar' : 'Gratis (Tepat Waktu)');
       const totalSksVal = Number(document.getElementById('pendaftaranTotalSks')?.value || 0);
 
-      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
-      const statusPersetujuan = !isMhs && document.getElementById('pendaftaranStatusPersetujuan') 
-        ? document.getElementById('pendaftaranStatusPersetujuan').value 
-        : 'Pending';
-
       const fileNameVal = document.getElementById('pendaftaranBuktiFileName')?.value || '';
       const mimeTypeVal = document.getElementById('pendaftaranBuktiMimeType')?.value || '';
 
@@ -6592,6 +6843,7 @@
         kategoriKelas: cleanKategori,
         tahunAkademik: document.getElementById('pendaftaranTahunAkademik').value,
         semester: semCalculated,
+        semesterPeriode: semPeriodeVal,
         angkatan: angkatanVal,
         mataKuliah: formattedMatkul,
         dosenPengampu: formattedDosen,
@@ -6619,8 +6871,9 @@
 
       const fn = payload.id ? 'updatePendaftaran' : 'addPendaftaran';
 
-      // [OPTIMISTIC UI UPDATE]: Tampilkan seketika di tabel riwayat pendaftaran
+      // [OPTIMISTIC UI UPDATE]: Simpan snapshot untuk rollback aman bila ditolak server
       let optimisticRecord = null;
+      let prevEditSnapshot = null;
       if (!payload.id) {
         const newId = 'REG-' + (1000 + ((appData.pendaftaran || []).length + 1));
         optimisticRecord = {
@@ -6628,6 +6881,7 @@
           Tanggal: new Date().toLocaleDateString('id-ID'),
           'Tahun Akademik': payload.tahunAkademik,
           Semester: payload.semester,
+          'Semester Type': payload.semesterPeriode || 'Ganjil',
           NPM: payload.nim || (currentUser && currentUser.npm) || '',
           NIM: payload.nim || (currentUser && currentUser.npm) || '',
           'Nama Mahasiswa': payload.namaMahasiswa || (currentUser && currentUser.nama) || '',
@@ -6653,6 +6907,7 @@
       } else {
         const item = (appData.pendaftaran || []).find(d => String(d.ID) === String(payload.id));
         if (item) {
+          prevEditSnapshot = { ...item };
           item['Mata Kuliah'] = payload.mataKuliah;
           item['Dosen Pengampu'] = payload.dosenPengampu;
           item.mataKuliahList = payload.mataKuliahList;
@@ -6685,6 +6940,15 @@
           renderPendaftaranTable();
           loadAppData(true);
         } else {
+          if (optimisticRecord) {
+            appData.pendaftaran = (appData.pendaftaran || []).filter(r => r !== optimisticRecord);
+          } else if (prevEditSnapshot) {
+            const idx = (appData.pendaftaran || []).findIndex(d => String(d.ID) === String(payload.id));
+            if (idx !== -1) appData.pendaftaran[idx] = prevEditSnapshot;
+          }
+          saveAppDataCache(appData);
+          renderPendaftaranTable();
+          refreshDynamicMatkulDuplicateWarnings();
           Swal.fire('Gagal', (res && res.message) || 'Terjadi kesalahan sistem saat menyimpan pendaftaran.', 'error');
         }
       };
