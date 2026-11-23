@@ -717,7 +717,7 @@
           const item = appData.pendaftaran.find(d => String(d.ID || d.id).trim() === String(id).trim());
           if (item) {
             if (newStatus) item['Status Pembayaran'] = newStatus;
-            if (catatan !== undefined) item.Catatan = catatan;
+            if (catatan) item.Catatan = catatan;
           }
         }
         appendLocalActivityLog(actName, 'Update Status Pembayaran', String(id || ''), `Status pembayaran diubah menjadi: ${newStatus}${catatan ? ' (' + catatan + ')' : ''} (lokal)`, actRole);
@@ -1903,42 +1903,114 @@
 
       <!-- TAB: INVOICE & KWITANSI PEMBAYARAN (ASLI) -->
       <div id="tabContentInvoice" class="hidden space-y-4">
-        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-            <p class="text-[10px] font-bold text-slate-400 uppercase">Total Invoice</p>
-            <h3 id="invTotalCount" class="text-xl font-black text-slate-800">0</h3>
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Total Invoice</p>
+            <h3 id="invTotalCount" class="text-xl font-black text-slate-800 tabular-nums mt-0.5">0</h3>
           </div>
           <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-            <p class="text-[10px] font-bold text-slate-400 uppercase">Status Lunas</p>
-            <h3 id="invLunasCount" class="text-xl font-black text-emerald-600">0</h3>
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Status Lunas</p>
+            <h3 id="invLunasCount" class="text-xl font-black text-emerald-600 tabular-nums mt-0.5">0</h3>
           </div>
           <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-            <p class="text-[10px] font-bold text-slate-400 uppercase">Belum Bayar</p>
-            <h3 id="invBelumBayarCount" class="text-xl font-black text-amber-600">0</h3>
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Belum Bayar</p>
+            <h3 id="invBelumBayarCount" class="text-xl font-black text-amber-600 tabular-nums mt-0.5">0</h3>
           </div>
           <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm">
-            <p class="text-[10px] font-bold text-slate-400 uppercase">Total Nominal</p>
-            <h3 id="invTotalNominal" class="text-xl font-black text-purple-900">Rp 0</h3>
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Total Nominal</p>
+            <h3 id="invTotalNominal" class="text-xl font-black text-purple-900 tabular-nums mt-0.5">Rp 0</h3>
+          </div>
+        </div>
+
+        <!-- Toolbar Pintar: Search, Filter (Status Bayar, Jenis Layanan, Prodi), & Sort -->
+        <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+          <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
+            <div class="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+              <div class="relative w-full sm:w-72 md:w-80">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" aria-hidden="true"></i>
+                <input type="text" id="searchInvoice" oninput="handleInvoiceToolbarChange(true)" onkeydown="if(event.key==='Escape'){clearInvoiceSearch();}" placeholder="Cari No. Invoice, Nama, NPM, Matkul, Prodi..." aria-label="Cari dokumen invoice dan kwitansi" class="border border-slate-300 rounded-xl pl-8 pr-8 py-2 text-xs w-full bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition">
+                <button type="button" id="btnClearSearchInvoice" onclick="clearInvoiceSearch()" title="Hapus pencarian" aria-label="Hapus kata kunci pencarian invoice" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-900 transition cursor-pointer">
+                  <i class="fas fa-times text-xs" aria-hidden="true"></i>
+                </button>
+              </div>
+
+              <select id="filterInvoiceStatus" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Status Pembayaran" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                <option value="">Semua Status Bayar</option>
+                <option value="Lunas">Lunas</option>
+                <option value="Belum Bayar">Belum Bayar</option>
+                <option value="Menunggu">Menunggu</option>
+                <option value="Gratis (Tepat Waktu)">Gratis (Tepat Waktu)</option>
+              </select>
+
+              <select id="filterInvoiceLayanan" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Jenis Layanan" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                <option value="">Semua Jenis Layanan</option>
+                <option value="UTS Susulan">UTS Susulan</option>
+                <option value="UAS Susulan">UAS Susulan</option>
+                <option value="Remedial Teaching">Remedial Teaching</option>
+              </select>
+
+              <select id="filterInvoiceProdi" onchange="handleInvoiceToolbarChange(true)" aria-label="Filter Program Studi" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                <option value="">Semua Program Studi</option>
+                <option value="MNJ">Manajemen [MNJ]</option>
+                <option value="AKT">Akuntansi [AKT]</option>
+                <option value="BD">Bisnis Digital [BD]</option>
+                <option value="PI">Perdagangan Int [PI]</option>
+                <option value="PKD">Perbankan Keu Dig [PKD]</option>
+              </select>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 shrink-0">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Urutkan:</span>
+                <select id="sortInvoice" onchange="handleInvoiceToolbarChange(true)" aria-label="Urutkan daftar invoice" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                  <option value="tanggal-desc" selected>Terbaru</option>
+                  <option value="tanggal-asc">Terlama</option>
+                  <option value="nominal-desc">Nominal Tertinggi</option>
+                  <option value="nominal-asc">Nominal Terendah</option>
+                  <option value="nama-asc">Nama A–Z</option>
+                  <option value="nama-desc">Nama Z–A</option>
+                  <option value="invoice-asc">No. Invoice A–Z</option>
+                </select>
+              </div>
+              <button type="button" id="btnResetInvoiceToolbar" onclick="resetInvoiceToolbar()" class="hidden px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs items-center gap-1.5 transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-rotate-left text-[11px]" aria-hidden="true"></i>
+                <span>Reset</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+            <span id="invoiceToolbarCountInfo" class="font-medium tabular-nums">Menampilkan 0 dari 0 dokumen</span>
+            <span class="text-slate-400">Ubah status pembayaran langsung pada dropdown di kolom Status Pembayaran · Gulir ke bawah untuk memuat baris berikutnya</span>
           </div>
         </div>
 
         <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs text-slate-600">
-              <thead class="bg-slate-100/80 text-slate-700 uppercase font-bold border-b border-slate-200">
+          <div id="invoiceTableScrollWrap" onscroll="handleInvoiceScrollCheck()" class="max-h-[62vh] min-h-[280px] overflow-y-auto overflow-x-auto relative">
+            <table class="w-full text-left text-xs text-slate-600 border-collapse">
+              <thead class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
                 <tr>
-                  <th class="p-3.5">No. Invoice / Reg</th>
-                  <th class="p-3.5">Tanggal</th>
-                  <th class="p-3.5">Mahasiswa (NPM)</th>
-                  <th class="p-3.5">Program Studi</th>
-                  <th class="p-3.5">Layanan & Matkul</th>
-                  <th class="p-3.5">Nominal Retribusi</th>
-                  <th class="p-3.5 text-center">Status Pembayaran</th>
-                  <th class="p-3.5 text-center">Aksi Dokumen</th>
+                  <th onclick="toggleInvoiceColumnSort('invoice')" class="p-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition" title="Klik untuk mengurutkan berdasarkan No. Invoice">
+                    <span class="inline-flex items-center gap-1">No. Invoice / Reg <i id="sortIconInvId" class="fas fa-sort text-[10px] text-slate-400"></i></span>
+                  </th>
+                  <th onclick="toggleInvoiceColumnSort('tanggal')" class="p-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition" title="Klik untuk mengurutkan berdasarkan Tanggal">
+                    <span class="inline-flex items-center gap-1">Tanggal <i id="sortIconInvTanggal" class="fas fa-sort-down text-[10px] text-blue-900"></i></span>
+                  </th>
+                  <th onclick="toggleInvoiceColumnSort('nama')" class="p-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition" title="Klik untuk mengurutkan berdasarkan Nama Mahasiswa">
+                    <span class="inline-flex items-center gap-1">Mahasiswa (NPM) <i id="sortIconInvNama" class="fas fa-sort text-[10px] text-slate-400"></i></span>
+                  </th>
+                  <th class="p-3.5 whitespace-nowrap">Program Studi</th>
+                  <th class="p-3.5">Layanan &amp; Matkul</th>
+                  <th onclick="toggleInvoiceColumnSort('nominal')" class="p-3.5 whitespace-nowrap cursor-pointer select-none hover:bg-slate-200/70 transition" title="Klik untuk mengurutkan berdasarkan Nominal">
+                    <span class="inline-flex items-center gap-1">Nominal Retribusi <i id="sortIconInvNominal" class="fas fa-sort text-[10px] text-slate-400"></i></span>
+                  </th>
+                  <th class="p-3.5 text-center whitespace-nowrap">Status Pembayaran</th>
+                  <th class="p-3.5 text-center whitespace-nowrap">Aksi Dokumen</th>
                 </tr>
               </thead>
               <tbody id="tableInvoiceBody" class="divide-y divide-slate-100"></tbody>
             </table>
+            <div id="invoiceInfiniteSentinel" class="px-4 py-3 text-center text-[11px] text-slate-500 bg-slate-50/70 border-t border-slate-100 flex items-center justify-center gap-2"></div>
           </div>
         </div>
       </div>
@@ -12969,14 +13041,235 @@
       return convert(angka).replace(/\s+/g, ' ').trim();
     }
 
-    function renderInvoiceTable() {
-      const tbody = document.getElementById('tableInvoiceBody');
-      if (!tbody) return;
+    const INVOICE_BATCH_SIZE = 25;
+    const invoiceToolbarState = {
+      search: '',
+      status: '',
+      layanan: '',
+      prodi: '',
+      sort: 'tanggal-desc',
+      visibleCount: INVOICE_BATCH_SIZE
+    };
+    let invoiceFilteredCache = [];
+    let invoiceInfiniteObserver = null;
 
-      const list = appData.pendaftaran || [];
+    function canEditInvoicePaymentStatus() {
+      const role = String((currentUser && currentUser.role) || '').trim().toLowerCase();
+      if (typeof isMasterAdmin === 'function' && isMasterAdmin()) return true;
+      return ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin', 'keuangan'].includes(role);
+    }
+
+    function getInvoicePaymentSelectStyle(status) {
+      const lower = String(status || '').trim().toLowerCase();
+      if (lower === 'lunas') {
+        return 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100/70';
+      }
+      if (lower === 'menunggu') {
+        return 'bg-sky-50 text-sky-800 border-sky-300 hover:bg-sky-100/70';
+      }
+      if (lower.startsWith('gratis')) {
+        return 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200/70';
+      }
+      return 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100/70';
+    }
+
+    function parseInvoiceDateMs(rawDate) {
+      if (!rawDate) return 0;
+      if (rawDate instanceof Date && !isNaN(rawDate.getTime())) return rawDate.getTime();
+      const str = String(rawDate).trim();
+      if (!str || str === '-') return 0;
+
+      // DD/MM/YYYY or DD-MM-YYYY (with optional time)
+      const dmyMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (dmyMatch) {
+        const day = parseInt(dmyMatch[1], 10);
+        const month = parseInt(dmyMatch[2], 10) - 1;
+        const year = parseInt(dmyMatch[3], 10);
+        const dt = new Date(year, month, day);
+        if (!isNaN(dt.getTime())) return dt.getTime();
+      }
+
+      // YYYY-MM-DD
+      const ymdMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+      if (ymdMatch) {
+        const dt = new Date(parseInt(ymdMatch[1], 10), parseInt(ymdMatch[2], 10) - 1, parseInt(ymdMatch[3], 10));
+        if (!isNaN(dt.getTime())) return dt.getTime();
+      }
+
+      // Indonesian month names (e.g. 20 November 2026)
+      const idMonths = {
+        januari: 0, jan: 0, februari: 1, feb: 1, maret: 2, mar: 2, april: 3, apr: 3,
+        mei: 4, juni: 5, jun: 5, juli: 6, jul: 6, agustus: 7, agu: 7, agust: 7,
+        september: 8, sep: 8, oktober: 9, okt: 9, november: 10, nov: 10, desember: 11, des: 11
+      };
+      const idMatch = str.toLowerCase().match(/(\d{1,2})\s+([a-z]+)\s+(\d{4})/);
+      if (idMatch && idMonths[idMatch[2]] !== undefined) {
+        const dt = new Date(parseInt(idMatch[3], 10), idMonths[idMatch[2]], parseInt(idMatch[1], 10));
+        if (!isNaN(dt.getTime())) return dt.getTime();
+      }
+
+      const parsed = Date.parse(str);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+
+    function extractNumericIdTail(idVal) {
+      const m = String(idVal || '').match(/(\d+)/g);
+      return m ? parseInt(m[m.length - 1], 10) || 0 : 0;
+    }
+
+    function resolveInvoiceProdiCode(p) {
+      const rawCode = String((p && (p['Kode Prodi'] || p.kodeProdi)) || '').trim().toUpperCase();
+      if (rawCode && ['MNJ', 'AKT', 'BD', 'PI', 'PKD'].includes(rawCode)) return rawCode;
+      const nameLower = String((p && (p['Program Studi'] || p.prodi)) || '').trim().toLowerCase();
+      if (nameLower.includes('manajemen')) return 'MNJ';
+      if (nameLower.includes('akuntansi')) return 'AKT';
+      if (nameLower.includes('bisnis digital')) return 'BD';
+      if (nameLower.includes('perdagangan')) return 'PI';
+      if (nameLower.includes('perbankan')) return 'PKD';
+      return rawCode;
+    }
+
+    function readInvoiceToolbarControls() {
+      const elSearch = document.getElementById('searchInvoice');
+      const elStatus = document.getElementById('filterInvoiceStatus');
+      const elLayanan = document.getElementById('filterInvoiceLayanan');
+      const elProdi = document.getElementById('filterInvoiceProdi');
+      const elSort = document.getElementById('sortInvoice');
+
+      if (elSearch) invoiceToolbarState.search = String(elSearch.value || '').trim();
+      if (elStatus) invoiceToolbarState.status = String(elStatus.value || '').trim();
+      if (elLayanan) invoiceToolbarState.layanan = String(elLayanan.value || '').trim();
+      if (elProdi) invoiceToolbarState.prodi = String(elProdi.value || '').trim();
+      if (elSort) invoiceToolbarState.sort = String(elSort.value || 'tanggal-desc').trim() || 'tanggal-desc';
+    }
+
+    function syncInvoiceToolbarVisualControls() {
+      const btnClear = document.getElementById('btnClearSearchInvoice');
+      if (btnClear) {
+        btnClear.classList.toggle('hidden', !invoiceToolbarState.search);
+      }
+
+      const isDirty = Boolean(
+        invoiceToolbarState.search ||
+        invoiceToolbarState.status ||
+        invoiceToolbarState.layanan ||
+        invoiceToolbarState.prodi ||
+        (invoiceToolbarState.sort && invoiceToolbarState.sort !== 'tanggal-desc')
+      );
+      const btnReset = document.getElementById('btnResetInvoiceToolbar');
+      if (btnReset) {
+        btnReset.classList.toggle('hidden', !isDirty);
+        btnReset.classList.toggle('inline-flex', isDirty);
+      }
+
+      // Sinkronkan indikator ikon sortir pada header kolom tabel
+      const s = invoiceToolbarState.sort;
+      const setIcon = (id, ascKey, descKey) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (s === ascKey) {
+          el.className = 'fas fa-sort-up text-[10px] text-blue-900';
+        } else if (s === descKey) {
+          el.className = 'fas fa-sort-down text-[10px] text-blue-900';
+        } else {
+          el.className = 'fas fa-sort text-[10px] text-slate-400';
+        }
+      };
+      setIcon('sortIconInvId', 'invoice-asc', 'invoice-desc');
+      setIcon('sortIconInvTanggal', 'tanggal-asc', 'tanggal-desc');
+      setIcon('sortIconInvNama', 'nama-asc', 'nama-desc');
+      setIcon('sortIconInvNominal', 'nominal-asc', 'nominal-desc');
+    }
+
+    function getFilteredSortedInvoiceList() {
+      readInvoiceToolbarControls();
+      const rawList = Array.isArray(appData && appData.pendaftaran) ? appData.pendaftaran : [];
+      let list = rawList.slice();
+
+      if (invoiceToolbarState.status) {
+        const targetStatus = invoiceToolbarState.status.toLowerCase();
+        list = list.filter(p => {
+          const st = String(p['Status Pembayaran'] || 'Belum Bayar').trim().toLowerCase();
+          if (targetStatus === 'gratis (tepat waktu)') return st.startsWith('gratis');
+          return st === targetStatus;
+        });
+      }
+
+      if (invoiceToolbarState.layanan) {
+        const targetLayanan = (typeof normalizeJenisLayananName === 'function'
+          ? normalizeJenisLayananName(invoiceToolbarState.layanan)
+          : invoiceToolbarState.layanan
+        ).toLowerCase();
+        list = list.filter(p => {
+          const rawLyn = p['Jenis Layanan'] || p.Layanan || '';
+          const normLyn = (typeof normalizeJenisLayananName === 'function'
+            ? normalizeJenisLayananName(rawLyn)
+            : String(rawLyn)
+          ).trim().toLowerCase();
+          return normLyn === targetLayanan;
+        });
+      }
+
+      if (invoiceToolbarState.prodi) {
+        const targetProdi = invoiceToolbarState.prodi.toUpperCase();
+        list = list.filter(p => resolveInvoiceProdiCode(p) === targetProdi);
+      }
+
+      if (invoiceToolbarState.search) {
+        const tokens = invoiceToolbarState.search.toLowerCase().split(/\s+/).filter(Boolean);
+        list = list.filter(p => {
+          const idStr = String(p.ID || '').trim();
+          const haystack = [
+            `INV-${idStr}`,
+            idStr,
+            p['Nama Mahasiswa'] || p.Nama || '',
+            p.NPM || p.NIM || '',
+            p['Kode Prodi'] || '',
+            p['Program Studi'] || '',
+            p['Jenis Layanan'] || p.Layanan || '',
+            p['Mata Kuliah'] || '',
+            p['Dosen Pengampu'] || '',
+            p['Status Pembayaran'] || 'Belum Bayar',
+            p.Tanggal || ''
+          ].join(' ').toLowerCase();
+          return tokens.every(tok => haystack.includes(tok));
+        });
+      }
+
+      const sortKey = invoiceToolbarState.sort || 'tanggal-desc';
+      list.sort((a, b) => {
+        if (sortKey === 'tanggal-desc' || sortKey === 'tanggal-asc') {
+          const diff = parseInvoiceDateMs(a.Tanggal) - parseInvoiceDateMs(b.Tanggal);
+          if (diff !== 0) return sortKey === 'tanggal-desc' ? -diff : diff;
+          const idDiff = extractNumericIdTail(a.ID) - extractNumericIdTail(b.ID);
+          return sortKey === 'tanggal-desc' ? -idDiff : idDiff;
+        }
+        if (sortKey === 'nominal-desc' || sortKey === 'nominal-asc') {
+          const diff = (Number(a.Nominal) || 0) - (Number(b.Nominal) || 0);
+          return sortKey === 'nominal-desc' ? -diff : diff;
+        }
+        if (sortKey === 'nama-asc' || sortKey === 'nama-desc') {
+          const cmp = String(a['Nama Mahasiswa'] || a.Nama || '').localeCompare(String(b['Nama Mahasiswa'] || b.Nama || ''), 'id');
+          return sortKey === 'nama-asc' ? cmp : -cmp;
+        }
+        if (sortKey === 'invoice-asc' || sortKey === 'invoice-desc') {
+          const cmp = String(a.ID || '').localeCompare(String(b.ID || ''), 'id', { numeric: true });
+          return sortKey === 'invoice-asc' ? cmp : -cmp;
+        }
+        return 0;
+      });
+
+      return list;
+    }
+
+    function updateInvoiceSummaryCards(filteredList) {
+      const list = Array.isArray(filteredList) ? filteredList : [];
       const totalCount = list.length;
-      const lunasCount = list.filter(p => (p['Status Pembayaran'] || '').toLowerCase() === 'lunas').length;
-      const belumBayarCount = totalCount - lunasCount;
+      const lunasCount = list.filter(p => String(p['Status Pembayaran'] || '').trim().toLowerCase() === 'lunas').length;
+      const belumBayarCount = list.filter(p => {
+        const s = String(p['Status Pembayaran'] || 'Belum Bayar').trim().toLowerCase();
+        return s !== 'lunas' && !s.startsWith('gratis');
+      }).length;
       const totalNominal = list.reduce((acc, p) => acc + (Number(p.Nominal) || 0), 0);
 
       const elTotal = document.getElementById('invTotalCount');
@@ -12988,56 +13281,342 @@
       if (elLunas) elLunas.innerText = lunasCount;
       if (elBelum) elBelum.innerText = belumBayarCount;
       if (elNominal) elNominal.innerText = 'Rp ' + totalNominal.toLocaleString('id-ID');
+    }
 
-      tbody.innerHTML = '';
-      if (list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="p-6 text-center text-slate-400 font-medium">Belum ada dokumen invoice atau kwitansi yang tercatat.</td></tr>';
+    function buildInvoiceTableRow(p) {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50/80 transition';
+
+      const idRaw = String(p.ID || '').trim();
+      const idAttr = escapeHtml(idRaw).replace(/'/g, '&#39;');
+      const statusBayar = String(p['Status Pembayaran'] || 'Belum Bayar').trim() || 'Belum Bayar';
+      const isLunas = statusBayar.toLowerCase() === 'lunas';
+      const nominal = Number(p.Nominal) || 0;
+      const canEdit = canEditInvoicePaymentStatus();
+
+      const standardStatuses = ['Lunas', 'Belum Bayar', 'Menunggu', 'Gratis (Tepat Waktu)'];
+      const hasExactMatch = standardStatuses.some(opt => opt.toLowerCase() === statusBayar.toLowerCase());
+      const optionsHtml = [
+        ...(hasExactMatch ? [] : [statusBayar]),
+        ...standardStatuses
+      ].map(opt => {
+        const isSelected = opt.toLowerCase() === statusBayar.toLowerCase();
+        return `<option value="${escapeHtml(opt)}" ${isSelected ? 'selected' : ''}>${escapeHtml(opt)}</option>`;
+      }).join('');
+
+      const statusCellHtml = canEdit
+        ? `<select aria-label="Status Pembayaran INV-${escapeHtml(idRaw)}" data-invoice-id="${escapeHtml(idRaw)}" onchange="handleInlineInvoiceStatusChange('${idAttr}', this.value, this)" class="text-[11px] font-bold rounded-lg px-2.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition max-w-[165px] ${getInvoicePaymentSelectStyle(statusBayar)}">${optionsHtml}</select>`
+        : `<span class="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] uppercase font-bold border ${isLunas ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-amber-50 text-amber-800 border-amber-300'}">${escapeHtml(statusBayar)}</span>`;
+
+      tr.innerHTML = `
+        <td class="p-3.5 font-mono font-bold text-blue-900 whitespace-nowrap tabular-nums">INV-${escapeHtml(idRaw)}</td>
+        <td class="p-3.5 font-mono text-slate-500 whitespace-nowrap text-xs tabular-nums">${escapeHtml(p.Tanggal || '-')}</td>
+        <td class="p-3.5">
+          <b class="text-slate-800 block text-xs">${escapeHtml(p['Nama Mahasiswa'] || p.Nama || '-')}</b>
+          <span class="font-mono text-slate-500 text-[11px] tabular-nums">${escapeHtml(p.NPM || p.NIM || '-')}</span>
+        </td>
+        <td class="p-3.5 whitespace-nowrap">
+          <span class="font-bold text-slate-700">[${escapeHtml(p['Kode Prodi'] || '-')}] ${escapeHtml(p['Program Studi'] || '-')}</span>
+        </td>
+        <td class="p-3.5 max-w-[260px]">
+          <span class="font-semibold text-slate-800 block">${escapeHtml(p['Jenis Layanan'] || p.Layanan || '-')}</span>
+          <span class="text-slate-500 text-[11px] line-clamp-2">${escapeHtml(p['Mata Kuliah'] || '-')}</span>
+        </td>
+        <td class="p-3.5 font-mono font-bold text-emerald-700 whitespace-nowrap tabular-nums">
+          Rp ${nominal.toLocaleString('id-ID')}
+        </td>
+        <td class="p-3.5 text-center whitespace-nowrap">
+          ${statusCellHtml}
+        </td>
+        <td class="p-3.5 text-center whitespace-nowrap">
+          <div class="flex items-center justify-center gap-1.5">
+            <button onclick="openInvoiceModal('${idAttr}')" title="Cetak Kwitansi Bukti Pembayaran Resmi" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+              <i class="fas fa-receipt text-xs" aria-hidden="true"></i> <span>Kwitansi</span>
+            </button>
+            <button onclick="openLateInvoiceModal('${idAttr}')" title="Cetak Invoice Tagihan Resmi" class="bg-slate-700 hover:bg-slate-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs inline-flex items-center gap-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+              <i class="fas fa-file-invoice text-xs" aria-hidden="true"></i> <span>Invoice</span>
+            </button>
+          </div>
+        </td>
+      `;
+      return tr;
+    }
+
+    function updateInvoiceSentinelAndCounts(renderedCount, totalFilteredCount) {
+      const totalAll = Array.isArray(appData && appData.pendaftaran) ? appData.pendaftaran.length : 0;
+      const countEl = document.getElementById('invoiceToolbarCountInfo');
+      if (countEl) {
+        if (totalFilteredCount === 0) {
+          countEl.innerText = `Menampilkan 0 dari ${totalAll} dokumen`;
+        } else {
+          const suffix = totalFilteredCount !== totalAll ? ` (tersaring dari ${totalAll} total)` : '';
+          countEl.innerText = `Menampilkan ${renderedCount} dari ${totalFilteredCount} dokumen${suffix}`;
+        }
+      }
+
+      const sentinel = document.getElementById('invoiceInfiniteSentinel');
+      if (!sentinel) return;
+
+      if (totalFilteredCount === 0) {
+        sentinel.classList.add('hidden');
+        sentinel.innerHTML = '';
         return;
       }
 
-      list.forEach(p => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-slate-50/80 transition';
-
-        const statusBayar = (p['Status Pembayaran'] || 'Belum Bayar');
-        const isLunas = statusBayar.toLowerCase() === 'lunas';
-        const nominal = Number(p.Nominal) || 0;
-
-        tr.innerHTML = `
-          <td class="p-3.5 font-mono font-bold text-blue-900 whitespace-nowrap">INV-${p.ID}</td>
-          <td class="p-3.5 font-mono text-slate-500 whitespace-nowrap text-xs">${p.Tanggal || '-'}</td>
-          <td class="p-3.5">
-            <b class="text-slate-800 block text-xs">${p['Nama Mahasiswa'] || p.Nama || '-'}</b>
-            <span class="font-mono text-slate-500 text-[11px]">${p.NPM || p.NIM || '-'}</span>
-          </td>
-          <td class="p-3.5">
-            <span class="font-bold text-slate-700">[${p['Kode Prodi'] || '-'}] ${p['Program Studi'] || '-'}</span>
-          </td>
-          <td class="p-3.5">
-            <span class="font-semibold text-slate-800">${p['Jenis Layanan'] || p.Layanan || '-'}</span><br>
-            <span class="text-slate-500 text-[11px]">${p['Mata Kuliah'] || '-'}</span>
-          </td>
-          <td class="p-3.5 font-mono font-bold text-emerald-600">
-            Rp ${nominal.toLocaleString('id-ID')}
-          </td>
-          <td class="p-3.5 text-center">
-            <span class="px-2.5 py-1 rounded-full text-[10px] uppercase font-bold ${isLunas ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
-              ${statusBayar}
-            </span>
-          </td>
-          <td class="p-3.5 text-center whitespace-nowrap">
-            <div class="flex items-center justify-center gap-1.5">
-              <button onclick="openInvoiceModal('${p.ID}')" title="Cetak Kwitansi Bukti Pembayaran Resmi" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
-                <i class="fas fa-receipt text-xs"></i> <span>Kwitansi</span>
-              </button>
-              <button onclick="openLateInvoiceModal('${p.ID}')" title="Cetak Invoice Tagihan Resmi" class="bg-slate-700 hover:bg-slate-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition">
-                <i class="fas fa-file-invoice text-xs"></i> <span>Invoice</span>
-              </button>
-            </div>
-          </td>
+      sentinel.classList.remove('hidden');
+      const remaining = totalFilteredCount - renderedCount;
+      if (remaining > 0) {
+        sentinel.innerHTML = `
+          <span class="text-slate-500">Menampilkan <b class="text-slate-700 tabular-nums">${renderedCount}</b> dari <b class="text-slate-700 tabular-nums">${totalFilteredCount}</b> dokumen · Gulir ke bawah untuk memuat berikutnya</span>
+          <button type="button" onclick="loadMoreInvoiceRows()" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-blue-900 font-bold text-[11px] transition cursor-pointer whitespace-nowrap shrink-0">Muat +${Math.min(INVOICE_BATCH_SIZE, remaining)}</button>
         `;
-        tbody.appendChild(tr);
+      } else {
+        sentinel.innerHTML = `<span class="text-slate-400">Seluruh <b class="text-slate-600 tabular-nums">${totalFilteredCount}</b> dokumen telah ditampilkan</span>`;
+      }
+    }
+
+    function setupInvoiceInfiniteScroll() {
+      const wrap = document.getElementById('invoiceTableScrollWrap');
+      const sentinel = document.getElementById('invoiceInfiniteSentinel');
+      if (!wrap || !sentinel || typeof IntersectionObserver === 'undefined') return;
+
+      if (invoiceInfiniteObserver) {
+        invoiceInfiniteObserver.disconnect();
+      }
+      invoiceInfiniteObserver = new IntersectionObserver((entries) => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          loadMoreInvoiceRows();
+        }
+      }, {
+        root: wrap,
+        rootMargin: '120px'
       });
+      invoiceInfiniteObserver.observe(sentinel);
+    }
+
+    function handleInvoiceScrollCheck() {
+      const wrap = document.getElementById('invoiceTableScrollWrap');
+      if (!wrap) return;
+      const distanceFromBottom = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight;
+      if (distanceFromBottom <= 120) {
+        loadMoreInvoiceRows();
+      }
+    }
+
+    function loadMoreInvoiceRows() {
+      const total = invoiceFilteredCache.length;
+      if (invoiceToolbarState.visibleCount >= total) return;
+
+      const tbody = document.getElementById('tableInvoiceBody');
+      if (!tbody) return;
+
+      const startIdx = invoiceToolbarState.visibleCount;
+      const nextCount = Math.min(total, startIdx + INVOICE_BATCH_SIZE);
+      const frag = document.createDocumentFragment();
+      for (let i = startIdx; i < nextCount; i++) {
+        frag.appendChild(buildInvoiceTableRow(invoiceFilteredCache[i]));
+      }
+      tbody.appendChild(frag);
+      invoiceToolbarState.visibleCount = nextCount;
+      updateInvoiceSentinelAndCounts(nextCount, total);
+    }
+
+    function handleInvoiceToolbarChange(resetScroll = true) {
+      readInvoiceToolbarControls();
+      invoiceToolbarState.visibleCount = INVOICE_BATCH_SIZE;
+      renderInvoiceTable({ preserveScroll: !resetScroll });
+    }
+
+    function clearInvoiceSearch() {
+      const input = document.getElementById('searchInvoice');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      handleInvoiceToolbarChange(true);
+    }
+
+    function resetInvoiceToolbar() {
+      const elSearch = document.getElementById('searchInvoice');
+      const elStatus = document.getElementById('filterInvoiceStatus');
+      const elLayanan = document.getElementById('filterInvoiceLayanan');
+      const elProdi = document.getElementById('filterInvoiceProdi');
+      const elSort = document.getElementById('sortInvoice');
+
+      if (elSearch) elSearch.value = '';
+      if (elStatus) elStatus.value = '';
+      if (elLayanan) elLayanan.value = '';
+      if (elProdi) elProdi.value = '';
+      if (elSort) elSort.value = 'tanggal-desc';
+
+      invoiceToolbarState.search = '';
+      invoiceToolbarState.status = '';
+      invoiceToolbarState.layanan = '';
+      invoiceToolbarState.prodi = '';
+      invoiceToolbarState.sort = 'tanggal-desc';
+      invoiceToolbarState.visibleCount = INVOICE_BATCH_SIZE;
+
+      renderInvoiceTable({ preserveScroll: false });
+    }
+
+    function toggleInvoiceColumnSort(col) {
+      readInvoiceToolbarControls();
+      const curr = invoiceToolbarState.sort;
+      let next = 'tanggal-desc';
+      if (col === 'tanggal') next = curr === 'tanggal-desc' ? 'tanggal-asc' : 'tanggal-desc';
+      else if (col === 'nominal') next = curr === 'nominal-desc' ? 'nominal-asc' : 'nominal-desc';
+      else if (col === 'nama') next = curr === 'nama-asc' ? 'nama-desc' : 'nama-asc';
+      else if (col === 'invoice') next = curr === 'invoice-asc' ? 'invoice-desc' : 'invoice-asc';
+
+      const elSort = document.getElementById('sortInvoice');
+      if (elSort) {
+        if (next === 'invoice-desc' && !elSort.querySelector('option[value="invoice-desc"]')) {
+          const opt = document.createElement('option');
+          opt.value = 'invoice-desc';
+          opt.text = 'No. Invoice Z–A';
+          elSort.appendChild(opt);
+        }
+        elSort.value = next;
+      }
+      invoiceToolbarState.sort = next;
+      handleInvoiceToolbarChange(true);
+    }
+
+    function handleInlineInvoiceStatusChange(id, newStatus, selectEl) {
+      if (!canEditInvoicePaymentStatus()) {
+        if (selectEl) {
+          const existing = (appData.pendaftaran || []).find(p => String(p.ID).trim() === String(id).trim());
+          if (existing) selectEl.value = existing['Status Pembayaran'] || 'Belum Bayar';
+        }
+        Swal.fire('Akses Ditolak', 'Hanya Admin TU atau Master Admin yang dapat mengubah status pembayaran.', 'warning');
+        return;
+      }
+
+      const item = (appData.pendaftaran || []).find(p => String(p.ID).trim() === String(id).trim());
+      if (!item) return;
+
+      const prevStatus = String(item['Status Pembayaran'] || 'Belum Bayar').trim() || 'Belum Bayar';
+      if (prevStatus.toLowerCase() === String(newStatus || '').trim().toLowerCase()) return;
+
+      const baseSelectClasses = 'text-[11px] font-bold rounded-lg px-2.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition max-w-[165px]';
+      item['Status Pembayaran'] = newStatus;
+      if (selectEl) {
+        selectEl.disabled = true;
+        selectEl.className = `${baseSelectClasses} opacity-75 cursor-wait ${getInvoicePaymentSelectStyle(newStatus)}`;
+      }
+      if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+      updateInvoiceSummaryCards(getFilteredSortedInvoiceList());
+      if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable();
+      if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+
+      const actorName = typeof getCurrentActorName === 'function' ? getCurrentActorName() : '';
+      const actorRole = typeof getCurrentActorRole === 'function' ? getCurrentActorRole() : '';
+
+      const rollbackInlineStatus = (errMsg) => {
+        item['Status Pembayaran'] = prevStatus;
+        if (selectEl) {
+          selectEl.value = prevStatus;
+          selectEl.disabled = false;
+          selectEl.className = `${baseSelectClasses} ${getInvoicePaymentSelectStyle(prevStatus)}`;
+        }
+        if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        updateInvoiceSummaryCards(getFilteredSortedInvoiceList());
+        if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable();
+        if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+        Swal.fire('Gagal Memperbarui Status', errMsg || 'Terjadi kesalahan saat menyimpan status pembayaran ke server.', 'error');
+      };
+
+      const onComplete = (res) => {
+        if (res && res.success === false) {
+          rollbackInlineStatus(res.message);
+          return;
+        }
+        if (selectEl) {
+          selectEl.disabled = false;
+          selectEl.className = `${baseSelectClasses} ${getInvoicePaymentSelectStyle(newStatus)}`;
+        }
+        if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        updateInvoiceSummaryCards(getFilteredSortedInvoiceList());
+        if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable();
+        if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+        // Jika filter status aktif dan item tidak lagi cocok, sinkronkan ulang tanpa reset posisi scroll
+        if (invoiceToolbarState.status) {
+          renderInvoiceTable({ preserveScroll: true });
+        }
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: `INV-${id} diperbarui: ${newStatus}`,
+          showConfirmButton: false,
+          timer: 1800,
+          timerProgressBar: true
+        });
+      };
+
+      const onError = (err) => {
+        rollbackInlineStatus((err && err.message) || String(err || 'Koneksi ke server gagal.'));
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(onComplete)
+          .withFailureHandler(onError)
+          .updateStatusPayment(id, newStatus, '', actorName, actorRole);
+      } else if (typeof callGasApi === 'function') {
+        callGasApi('updateStatusPayment', [id, newStatus, '', actorName, actorRole], onComplete, onError);
+      } else {
+        onComplete({ success: true });
+      }
+    }
+
+    function renderInvoiceTable(opts = {}) {
+      const tbody = document.getElementById('tableInvoiceBody');
+      if (!tbody) return;
+
+      const wrap = document.getElementById('invoiceTableScrollWrap');
+      const prevScrollTop = (opts && opts.preserveScroll && wrap) ? wrap.scrollTop : 0;
+
+      const filtered = getFilteredSortedInvoiceList();
+      invoiceFilteredCache = filtered;
+      syncInvoiceToolbarVisualControls();
+      updateInvoiceSummaryCards(filtered);
+
+      const allCount = Array.isArray(appData && appData.pendaftaran) ? appData.pendaftaran.length : 0;
+      tbody.innerHTML = '';
+
+      if (filtered.length === 0) {
+        updateInvoiceSentinelAndCounts(0, 0);
+        if (allCount === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="p-8 text-center text-slate-400 font-medium">Belum ada dokumen invoice atau kwitansi yang tercatat.</td></tr>';
+        } else {
+          tbody.innerHTML = `<tr><td colspan="8" class="p-8 text-center text-slate-500">
+            <div class="space-y-2">
+              <p class="font-semibold text-slate-600">Tidak ada dokumen invoice atau kwitansi yang sesuai dengan pencarian atau filter.</p>
+              <button type="button" onclick="resetInvoiceToolbar()" class="px-3.5 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs transition cursor-pointer">Reset Filter</button>
+            </div>
+          </td></tr>`;
+        }
+        return;
+      }
+
+      const targetVisible = Math.min(
+        filtered.length,
+        Math.max(INVOICE_BATCH_SIZE, invoiceToolbarState.visibleCount || INVOICE_BATCH_SIZE)
+      );
+      invoiceToolbarState.visibleCount = targetVisible;
+
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < targetVisible; i++) {
+        frag.appendChild(buildInvoiceTableRow(filtered[i]));
+      }
+      tbody.appendChild(frag);
+      updateInvoiceSentinelAndCounts(targetVisible, filtered.length);
+      setupInvoiceInfiniteScroll();
+
+      if (wrap) {
+        wrap.scrollTop = opts && opts.preserveScroll ? prevScrollTop : 0;
+      }
     }
 
     function openInvoiceModal(id) {
