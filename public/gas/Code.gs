@@ -63,6 +63,10 @@ function handleApiRequest(action, args) {
     addPendaftaran: addPendaftaran,
     updatePendaftaran: updatePendaftaran,
     deletePendaftaran: deletePendaftaran,
+    restorePendaftaran: restorePendaftaran,
+    bulkRestorePendaftaran: bulkRestorePendaftaran,
+    permanentDeletePendaftaran: permanentDeletePendaftaran,
+    emptySampahPendaftaran: emptySampahPendaftaran,
     addPeriode: addPeriode,
     updatePeriode: updatePeriode,
     deletePeriode: deletePeriode,
@@ -394,6 +398,7 @@ function getOrCreateSheet(ss, sheetName) {
   if (sheet) return sheet;
   var defaultHeadersMap = {
     'Pendaftaran': ["ID", "Tanggal", "Tahun Akademik", "Semester", "NPM", "Nama Mahasiswa", "Kode Prodi", "Program Studi", "Kelas", "Kategori Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Layanan", "Alasan", "Bukti Foto", "Status Jadwal", "Nominal", "Status Pembayaran", "Status Persetujuan"],
+    'Sampah_Pendaftaran': ["ID", "Tanggal", "Tahun Akademik", "Semester", "NPM", "Nama Mahasiswa", "Kode Prodi", "Program Studi", "Kelas", "Kategori Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Layanan", "Alasan", "Bukti Foto", "Status Jadwal", "Nominal", "Status Pembayaran", "Status Persetujuan", "Deleted At", "Deleted By", "Deleted Role"],
     'Periode_Pendaftaran': ["ID", "Tahun Akademik", "Semester", "Jenis Layanan", "Kategori Kelas", "Tanggal & Jam Mulai", "Tanggal & Jam Selesai", "Mulai Terlambat", "Selesai Terlambat", "Biaya Keterlambatan", "Status"],
     'User_Staff': ["ID", "Username", "Password", "Role", "Nama Lengkap", "NIK", "Kode Prodi"],
     'User_Mahasiswa': ["ID", "Username", "Password", "Role", "Nama Lengkap", "NPM", "Kode Prodi", "Kelas", "Angkatan", "Semester"],
@@ -1388,6 +1393,18 @@ function getInitialData(userRole, username, userProdi) {
       ];
     }
 
+    var sampahPendaftaran = [];
+    if (isStaffCanManageTrash_(userRole)) {
+      try { sampahPendaftaran = getSheetData('Sampah_Pendaftaran') || []; } catch(e) { sampahPendaftaran = []; }
+      if (sampahPendaftaran && sampahPendaftaran.length > 0) {
+        sampahPendaftaran = sampahPendaftaran.map(function(sp) {
+          if (sp.Kelas) sp.Kelas = normalizeClassName(sp.Kelas);
+          if (!sp['Kategori Kelas'] && sp.Kelas) sp['Kategori Kelas'] = detectCategoryFromClass(sp.Kelas);
+          return sp;
+        });
+      }
+    }
+
     return {
       success: true,
       version: getCompositeSyncVersion(getActiveSpreadsheetSafe()),
@@ -1402,6 +1419,7 @@ function getInitialData(userRole, username, userProdi) {
         logs: activityLogs
       },
       pendaftaran: pendaftaran,
+      sampahPendaftaran: sampahPendaftaran,
       jadwal: jadwal,
       ruangan: ruangan,
       notifications: notifikasi,
@@ -1412,7 +1430,8 @@ function getInitialData(userRole, username, userProdi) {
       backendMeta: {
         scriptVersion: GAS_SCRIPT_VERSION,
         supportsActorIdentity: true,
-        supportsArchiveSemester: true
+        supportsArchiveSemester: true,
+        supportsTrashPendaftaran: true
       }
     };
   } catch (err) {
@@ -2168,6 +2187,84 @@ function updatePendaftaran(payload) {
   }
 }
 
+function isStaffCanManageTrash_(roleStr) {
+  var r = String(roleStr || '').trim().toLowerCase();
+  return ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].indexOf(r) !== -1;
+}
+
+function isMasterAdminRole_(roleStr) {
+  var r = String(roleStr || '').trim().toLowerCase();
+  return ['master admin', 'master_admin'].indexOf(r) !== -1;
+}
+
+function ensureSampahPendaftaranSheet_(ss, pendaftaranSheet) {
+  var sampahSheet = ss.getSheetByName('Sampah_Pendaftaran');
+  var metaHeaders = ['Deleted At', 'Deleted By', 'Deleted Role'];
+  var baseHeaders = ["ID", "Tanggal", "Tahun Akademik", "Semester", "NPM", "Nama Mahasiswa", "Kode Prodi", "Program Studi", "Kelas", "Kategori Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Layanan", "Alasan", "Bukti Foto", "Status Jadwal", "Nominal", "Status Pembayaran", "Status Persetujuan"];
+
+  if (pendaftaranSheet && pendaftaranSheet.getLastColumn() > 0) {
+    baseHeaders = pendaftaranSheet.getRange(1, 1, 1, pendaftaranSheet.getLastColumn()).getValues()[0]
+      .map(function(h) { return String(h || '').trim(); })
+      .filter(function(h) { return Boolean(h); });
+  }
+
+  if (!sampahSheet) {
+    var initHeaders = baseHeaders.slice();
+    metaHeaders.forEach(function(mh) {
+      if (initHeaders.indexOf(mh) === -1) initHeaders.push(mh);
+    });
+    sampahSheet = ss.insertSheet('Sampah_Pendaftaran');
+    sampahSheet.appendRow(initHeaders);
+    var hr = sampahSheet.getRange(1, 1, 1, initHeaders.length);
+    hr.setBackground('#1E3A8A');
+    hr.setFontColor('#FFFFFF');
+    hr.setFontWeight('bold');
+    hr.setHorizontalAlignment('center');
+    sampahSheet.setFrozenRows(1);
+    return sampahSheet;
+  }
+
+  var lastCol = sampahSheet.getLastColumn();
+  var currentHeaders = lastCol > 0
+    ? sampahSheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(h) { return String(h || '').trim(); })
+    : [];
+  var addedHeaders = [];
+  baseHeaders.concat(metaHeaders).forEach(function(reqH) {
+    if (reqH && currentHeaders.indexOf(reqH) === -1) {
+      addedHeaders.push(reqH);
+      currentHeaders.push(reqH);
+    }
+  });
+  if (addedHeaders.length > 0) {
+    var startCol = lastCol + 1;
+    sampahSheet.getRange(1, startCol, 1, addedHeaders.length).setValues([addedHeaders])
+      .setBackground('#1E3A8A')
+      .setFontColor('#FFFFFF')
+      .setFontWeight('bold')
+      .setHorizontalAlignment('center');
+  }
+  return sampahSheet;
+}
+
+function buildMappedRowAndObject_(sourceHeaders, sourceRow, targetHeaders, extraObj) {
+  var obj = {};
+  for (var i = 0; i < sourceHeaders.length; i++) {
+    var key = String(sourceHeaders[i] || '').trim();
+    if (key) obj[key] = sourceRow[i];
+  }
+  if (extraObj) {
+    Object.keys(extraObj).forEach(function(k) {
+      obj[k] = extraObj[k];
+    });
+  }
+  var rowOut = new Array(targetHeaders.length);
+  for (var t = 0; t < targetHeaders.length; t++) {
+    var tKey = String(targetHeaders[t] || '').trim();
+    rowOut[t] = (tKey && obj[tKey] !== undefined && obj[tKey] !== null) ? obj[tKey] : '';
+  }
+  return { obj: obj, row: rowOut };
+}
+
 function deletePendaftaran(id, actor, userRole) {
   var lock = LockService.getScriptLock();
   try {
@@ -2175,12 +2272,240 @@ function deletePendaftaran(id, actor, userRole) {
     var ss = getActiveSpreadsheetSafe();
     var sheet = ss.getSheetByName('Pendaftaran');
     if (!sheet) throw new Error("Sheet Pendaftaran tidak ditemukan.");
-    var headerMap = getHeaderIndexMap(sheet);
+
+    var actorName = String(actor || '').trim();
+    var actorRole = String(userRole || '').trim();
+    var resolvedMeta = resolveActorIdentity_(ss, actorName, actorRole);
+    var effectiveRole = actorRole || resolvedMeta.role;
+    if (!isStaffCanManageTrash_(effectiveRole)) {
+      return { success: false, message: 'Akses ditolak: Hanya Master Admin atau Admin TU yang dapat memindahkan berkas ke Tong Sampah.' };
+    }
+
     var values = sheet.getDataRange().getValues();
+    if (!values || values.length <= 1) throw new Error("Data pendaftaran tidak ditemukan.");
+    var headers = values[0].map(function(h) { return String(h || '').trim(); });
+    var headerMap = getHeaderIndexMap(sheet);
     var rowIndex = -1;
+    var targetRow = null;
     var targetNama = '';
     var targetNpm = '';
 
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][0]).trim() === String(id).trim()) {
+        rowIndex = i + 1;
+        targetRow = values[i];
+        var colNama = (headerMap['Nama Mahasiswa'] || 6) - 1;
+        var colNpm = (headerMap['NPM'] || headerMap['NIM'] || 5) - 1;
+        targetNama = String(values[i][colNama] || '').trim();
+        targetNpm = String(values[i][colNpm] || '').trim();
+        break;
+      }
+    }
+
+    if (rowIndex === -1 || !targetRow) throw new Error("Data pendaftaran tidak ditemukan.");
+
+    var sampahSheet = ensureSampahPendaftaranSheet_(ss, sheet);
+    var sampahHeaders = sampahSheet.getRange(1, 1, 1, sampahSheet.getLastColumn()).getValues()[0]
+      .map(function(h) { return String(h || '').trim(); });
+    var tz = getSpreadsheetTimeZoneSafe(ss);
+    var deletedAtStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd HH:mm:ss');
+    var mapped = buildMappedRowAndObject_(headers, targetRow, sampahHeaders, {
+      'Deleted At': deletedAtStr,
+      'Deleted By': resolvedMeta.actor || actorName || 'Admin TU',
+      'Deleted Role': resolvedMeta.role || effectiveRole || 'Admin TU'
+    });
+
+    sampahSheet.appendRow(mapped.row);
+    sheet.deleteRow(rowIndex);
+    SpreadsheetApp.flush();
+
+    var detailMhs = targetNama ? (' a.n. ' + targetNama + (targetNpm ? ' (' + targetNpm + ')' : '')) : '';
+    bumpSyncVersion(resolvedMeta.actor, 'Pindah ke Tong Sampah ' + id);
+    addActivityLog(resolvedMeta.actor, 'Pindah ke Tong Sampah', id, 'Berkas pendaftaran' + detailMhs + ' dipindahkan ke Tong Sampah (dapat dipulihkan)', resolvedMeta.role);
+    return {
+      success: true,
+      movedToTrash: true,
+      trashedItem: mapped.obj,
+      message: 'Berkas pendaftaran ' + id + ' dipindahkan ke Tong Sampah.'
+    };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function restoreSinglePendaftaranRow_(ss, pendaftaranSheet, sampahSheet, id, actorMeta) {
+  var sampahValues = sampahSheet.getDataRange().getValues();
+  if (!sampahValues || sampahValues.length <= 1) {
+    return { success: false, message: 'Tong Sampah kosong.' };
+  }
+  var sampahHeaders = sampahValues[0].map(function(h) { return String(h || '').trim(); });
+  var rowIndex = -1;
+  var targetRow = null;
+  for (var i = 1; i < sampahValues.length; i++) {
+    if (String(sampahValues[i][0]).trim() === String(id).trim()) {
+      rowIndex = i + 1;
+      targetRow = sampahValues[i];
+      break;
+    }
+  }
+  if (rowIndex === -1 || !targetRow) {
+    return { success: false, message: 'Berkas ' + id + ' tidak ditemukan di Tong Sampah.' };
+  }
+
+  var pValues = pendaftaranSheet.getDataRange().getValues();
+  var pHeaders = (pValues && pValues.length > 0)
+    ? pValues[0].map(function(h) { return String(h || '').trim(); })
+    : ["ID", "Tanggal", "Tahun Akademik", "Semester", "NPM", "Nama Mahasiswa", "Kode Prodi", "Program Studi", "Kelas", "Kategori Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Layanan", "Alasan", "Bukti Foto", "Status Jadwal", "Nominal", "Status Pembayaran", "Status Persetujuan"];
+
+  // Cek bentrok ID aktif
+  for (var pIdx = 1; pIdx < pValues.length; pIdx++) {
+    if (String(pValues[pIdx][0]).trim() === String(id).trim()) {
+      return { success: false, code: 'DUPLICATE_ID', message: 'Gagal memulihkan: ID berkas ' + id + ' sudah ada di daftar Pendaftaran aktif.' };
+    }
+  }
+
+  var objRaw = {};
+  for (var c = 0; c < sampahHeaders.length; c++) {
+    var key = sampahHeaders[c];
+    if (key && key !== 'Deleted At' && key !== 'Deleted By' && key !== 'Deleted Role') {
+      objRaw[key] = targetRow[c];
+    }
+  }
+
+  var statusPersetujuan = String(objRaw['Status Persetujuan'] || 'Pending').trim();
+  if (statusPersetujuan.toLowerCase() !== 'ditolak') {
+    var dupPayload = {
+      id: id,
+      npm: objRaw.NPM || objRaw.NIM || '',
+      nim: objRaw.NIM || objRaw.NPM || '',
+      namaMahasiswa: objRaw['Nama Mahasiswa'] || '',
+      tahunAkademik: objRaw['Tahun Akademik'] || '2026/2027',
+      semester: objRaw.Semester || 'Ganjil',
+      semesterPeriode: objRaw['Semester Type'] || objRaw.Semester || 'Ganjil',
+      jenisLayanan: objRaw['Jenis Layanan'] || '',
+      mataKuliah: objRaw['Mata Kuliah'] || '',
+      dosenPengampu: objRaw['Dosen Pengampu'] || ''
+    };
+    var dupCheck = validateNoDuplicatePendaftaranServer(pendaftaranSheet, dupPayload, id);
+    if (!dupCheck.ok) {
+      return { success: false, code: 'DUPLICATE_REGISTRATION', message: dupCheck.message };
+    }
+  }
+
+  var mapped = buildMappedRowAndObject_(sampahHeaders, targetRow, pHeaders, null);
+  pendaftaranSheet.appendRow(mapped.row);
+  sampahSheet.deleteRow(rowIndex);
+
+  var targetNama = String(objRaw['Nama Mahasiswa'] || '').trim();
+  var targetNpm = String(objRaw.NPM || objRaw.NIM || '').trim();
+  var detailMhs = targetNama ? (' a.n. ' + targetNama + (targetNpm ? ' (' + targetNpm + ')' : '')) : '';
+  addActivityLog(actorMeta.actor, 'Pulihkan Pendaftaran', id, 'Berkas pendaftaran' + detailMhs + ' dipulihkan dari Tong Sampah', actorMeta.role);
+  return {
+    success: true,
+    id: id,
+    restoredItem: mapped.obj,
+    message: 'Berkas pendaftaran ' + id + ' berhasil dipulihkan.'
+  };
+}
+
+function restorePendaftaran(id, actor, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getActiveSpreadsheetSafe();
+    var pendaftaranSheet = getOrCreateSheet(ss, 'Pendaftaran');
+    var sampahSheet = ensureSampahPendaftaranSheet_(ss, pendaftaranSheet);
+    var resolvedMeta = resolveActorIdentity_(ss, String(actor || '').trim(), String(userRole || '').trim());
+    var effectiveRole = String(userRole || '').trim() || resolvedMeta.role;
+    if (!isStaffCanManageTrash_(effectiveRole)) {
+      return { success: false, message: 'Akses ditolak: Hanya Master Admin atau Admin TU yang dapat memulihkan berkas.' };
+    }
+
+    var res = restoreSinglePendaftaranRow_(ss, pendaftaranSheet, sampahSheet, id, resolvedMeta);
+    if (res.success) {
+      SpreadsheetApp.flush();
+      bumpSyncVersion(resolvedMeta.actor, 'Pulihkan pendaftaran ' + id);
+    }
+    return res;
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function bulkRestorePendaftaran(ids, actor, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    var ss = getActiveSpreadsheetSafe();
+    var pendaftaranSheet = getOrCreateSheet(ss, 'Pendaftaran');
+    var sampahSheet = ensureSampahPendaftaranSheet_(ss, pendaftaranSheet);
+    var resolvedMeta = resolveActorIdentity_(ss, String(actor || '').trim(), String(userRole || '').trim());
+    var effectiveRole = String(userRole || '').trim() || resolvedMeta.role;
+    if (!isStaffCanManageTrash_(effectiveRole)) {
+      return { success: false, message: 'Akses ditolak: Hanya Master Admin atau Admin TU yang dapat memulihkan berkas.' };
+    }
+
+    var idList = Array.isArray(ids) ? ids : [];
+    var restoredIds = [];
+    var restoredItems = [];
+    var failedItems = [];
+
+    for (var i = 0; i < idList.length; i++) {
+      var targetId = String(idList[i] || '').trim();
+      if (!targetId) continue;
+      var res = restoreSinglePendaftaranRow_(ss, pendaftaranSheet, sampahSheet, targetId, resolvedMeta);
+      if (res.success) {
+        restoredIds.push(targetId);
+        if (res.restoredItem) restoredItems.push(res.restoredItem);
+      } else {
+        failedItems.push({ id: targetId, message: res.message });
+      }
+    }
+
+    if (restoredIds.length > 0) {
+      SpreadsheetApp.flush();
+      bumpSyncVersion(resolvedMeta.actor, 'Pulihkan massal ' + restoredIds.length + ' berkas');
+    }
+
+    return {
+      success: restoredIds.length > 0,
+      restoredIds: restoredIds,
+      restoredItems: restoredItems,
+      failedItems: failedItems,
+      message: restoredIds.length > 0
+        ? ('Berhasil memulihkan ' + restoredIds.length + ' berkas.' + (failedItems.length ? (' (' + failedItems.length + ' dilewati karena bentrok/tidak ditemukan)') : ''))
+        : (failedItems[0] ? failedItems[0].message : 'Tidak ada berkas yang dipulihkan.')
+    };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function permanentDeletePendaftaran(id, actor, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var ss = getActiveSpreadsheetSafe();
+    var pendaftaranSheet = ss.getSheetByName('Pendaftaran');
+    var sampahSheet = ensureSampahPendaftaranSheet_(ss, pendaftaranSheet);
+    var resolvedMeta = resolveActorIdentity_(ss, String(actor || '').trim(), String(userRole || '').trim());
+    var effectiveRole = String(userRole || '').trim() || resolvedMeta.role;
+    if (!isMasterAdminRole_(effectiveRole)) {
+      return { success: false, message: 'Akses ditolak: Hanya Master Admin yang berhak menghapus berkas secara permanen.' };
+    }
+
+    var values = sampahSheet.getDataRange().getValues();
+    if (!values || values.length <= 1) throw new Error('Tong Sampah kosong.');
+    var headerMap = getHeaderIndexMap(sampahSheet);
+    var rowIndex = -1;
+    var targetNama = '';
+    var targetNpm = '';
     for (var i = 1; i < values.length; i++) {
       if (String(values[i][0]).trim() === String(id).trim()) {
         rowIndex = i + 1;
@@ -2191,16 +2516,43 @@ function deletePendaftaran(id, actor, userRole) {
         break;
       }
     }
+    if (rowIndex === -1) throw new Error('Berkas ' + id + ' tidak ditemukan di Tong Sampah.');
 
-    if (rowIndex === -1) throw new Error("Data pendaftaran tidak ditemukan.");
-    sheet.deleteRow(rowIndex);
+    sampahSheet.deleteRow(rowIndex);
     SpreadsheetApp.flush();
-    var actorName = String(actor || 'Admin TU').trim();
-    var actorRole = String(userRole || 'Admin TU').trim();
     var detailMhs = targetNama ? (' a.n. ' + targetNama + (targetNpm ? ' (' + targetNpm + ')' : '')) : '';
-    bumpSyncVersion(actorName, 'Hapus pendaftaran ' + id);
-    addActivityLog(actorName, 'Hapus Pendaftaran', id, 'Penghapusan berkas pendaftaran' + detailMhs + ' dari sistem', actorRole);
-    return { success: true, message: 'Data pendaftaran ' + id + ' berhasil dihapus.' };
+    bumpSyncVersion(resolvedMeta.actor, 'Hapus permanen ' + id);
+    addActivityLog(resolvedMeta.actor, 'Hapus Permanen Pendaftaran', id, 'Berkas pendaftaran' + detailMhs + ' dihapus permanen dari Tong Sampah', resolvedMeta.role);
+    return { success: true, message: 'Berkas ' + id + ' berhasil dihapus permanen.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function emptySampahPendaftaran(actor, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(15000);
+    var ss = getActiveSpreadsheetSafe();
+    var pendaftaranSheet = ss.getSheetByName('Pendaftaran');
+    var sampahSheet = ensureSampahPendaftaranSheet_(ss, pendaftaranSheet);
+    var resolvedMeta = resolveActorIdentity_(ss, String(actor || '').trim(), String(userRole || '').trim());
+    var effectiveRole = String(userRole || '').trim() || resolvedMeta.role;
+    if (!isMasterAdminRole_(effectiveRole)) {
+      return { success: false, message: 'Akses ditolak: Hanya Master Admin yang berhak mengosongkan Tong Sampah.' };
+    }
+
+    var lastRow = sampahSheet.getLastRow();
+    var count = Math.max(0, lastRow - 1);
+    if (count > 0) {
+      sampahSheet.deleteRows(2, count);
+      SpreadsheetApp.flush();
+      bumpSyncVersion(resolvedMeta.actor, 'Kosongkan Tong Sampah (' + count + ' berkas)');
+      addActivityLog(resolvedMeta.actor, 'Kosongkan Tong Sampah', 'Sampah_Pendaftaran', 'Menghapus permanen ' + count + ' berkas di Tong Sampah', resolvedMeta.role);
+    }
+    return { success: true, count: count, message: count > 0 ? ('Tong Sampah dikosongkan (' + count + ' berkas dihapus permanen).') : 'Tong Sampah sudah kosong.' };
   } catch (err) {
     return { success: false, message: err.message };
   } finally {

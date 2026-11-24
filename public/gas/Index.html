@@ -333,6 +333,7 @@
             appData = Object.assign({}, appData, cached);
           }
         }
+        if (!Array.isArray(appData.sampahPendaftaran)) appData.sampahPendaftaran = [];
         if (onSuccess) onSuccess(Object.assign({}, appData, { isLocalFallback: true }));
         return;
       }
@@ -725,16 +726,152 @@
         return;
       }
 
-      // 16. Hapus Pendaftaran
+      // 16. Hapus Pendaftaran (Soft Delete -> Pindah ke Tong Sampah)
       if (action === "deletePendaftaran") {
         const id = args && args[0];
         const actName = args && args[1];
-        const actRole = args && args[2];
-        if (id && Array.isArray(appData.pendaftaran)) {
-          appData.pendaftaran = appData.pendaftaran.filter(d => String(d.ID || d.id).trim() !== String(id).trim());
+        const actRole = (args && args[2]) || (currentUser && currentUser.role) || '';
+        const roleLower = String(actRole).trim().toLowerCase();
+        if (!['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes(roleLower)) {
+          if (onSuccess) onSuccess({ success: false, isLocalFallback: true, message: 'Akses ditolak: Hanya Master Admin atau Admin TU yang dapat memindahkan berkas ke Tong Sampah.' });
+          return;
         }
-        appendLocalActivityLog(actName, 'Hapus Pendaftaran', String(id || ''), 'Penghapusan berkas pendaftaran dari sistem (lokal)', actRole);
-        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: `Berkas ${id} berhasil dihapus.` });
+        appData.pendaftaran = Array.isArray(appData.pendaftaran) ? appData.pendaftaran : [];
+        appData.sampahPendaftaran = Array.isArray(appData.sampahPendaftaran) ? appData.sampahPendaftaran : [];
+        const idx = appData.pendaftaran.findIndex(d => String(d.ID || d.id).trim() === String(id).trim());
+        if (idx === -1) {
+          if (onSuccess) onSuccess({ success: false, isLocalFallback: true, message: `Berkas ${id} tidak ditemukan.` });
+          return;
+        }
+        const target = Object.assign({}, appData.pendaftaran[idx], {
+          'Deleted At': new Date().toISOString().slice(0, 19).replace('T', ' '),
+          'Deleted By': actName || (currentUser && currentUser.nama) || 'Admin TU',
+          'Deleted Role': actRole || 'Admin TU'
+        });
+        appData.pendaftaran.splice(idx, 1);
+        appData.sampahPendaftaran.unshift(target);
+        appendLocalActivityLog(actName, 'Pindah ke Tong Sampah', String(id || ''), 'Berkas pendaftaran dipindahkan ke Tong Sampah (lokal)', actRole);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, movedToTrash: true, trashedItem: target, message: `Berkas ${id} dipindahkan ke Tong Sampah.` });
+        return;
+      }
+
+      // 16b. Pulihkan Pendaftaran dari Tong Sampah (Master Admin & Admin TU)
+      if (action === "restorePendaftaran" || action === "bulkRestorePendaftaran") {
+        const rawIds = action === "restorePendaftaran" ? [args && args[0]] : (Array.isArray(args && args[0]) ? args[0] : []);
+        const actName = args && args[1];
+        const actRole = (args && args[2]) || (currentUser && currentUser.role) || '';
+        const roleLower = String(actRole).trim().toLowerCase();
+        if (!['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes(roleLower)) {
+          if (onSuccess) onSuccess({ success: false, isLocalFallback: true, message: 'Akses ditolak: Hanya Master Admin atau Admin TU yang dapat memulihkan berkas.' });
+          return;
+        }
+        appData.pendaftaran = Array.isArray(appData.pendaftaran) ? appData.pendaftaran : [];
+        appData.sampahPendaftaran = Array.isArray(appData.sampahPendaftaran) ? appData.sampahPendaftaran : [];
+
+        const restoredIds = [];
+        const restoredItems = [];
+        const failedItems = [];
+
+        rawIds.forEach(rawId => {
+          const cleanId = String(rawId || '').trim();
+          if (!cleanId) return;
+          const sIdx = appData.sampahPendaftaran.findIndex(d => String(d.ID || d.id).trim() === cleanId);
+          if (sIdx === -1) {
+            failedItems.push({ id: cleanId, message: `Berkas ${cleanId} tidak ditemukan di Tong Sampah.` });
+            return;
+          }
+          const candidate = Object.assign({}, appData.sampahPendaftaran[sIdx]);
+          if (appData.pendaftaran.some(p => String(p.ID || p.id).trim() === cleanId)) {
+            failedItems.push({ id: cleanId, message: `ID ${cleanId} sudah ada di daftar Pendaftaran aktif.` });
+            return;
+          }
+          const isBypass = String(candidate['Status Persetujuan'] || '').trim().toLowerCase() === 'ditolak';
+          if (!isBypass && typeof findCrossFormPendaftaranDuplicatesClient === 'function') {
+            const dupPayload = {
+              id: cleanId,
+              npm: candidate.NPM || candidate.NIM || '',
+              namaMahasiswa: candidate['Nama Mahasiswa'] || '',
+              tahunAkademik: candidate['Tahun Akademik'] || '2026/2027',
+              semester: candidate.Semester || 'Ganjil',
+              semesterPeriode: candidate['Semester Type'] || candidate.Semester || 'Ganjil',
+              jenisLayanan: candidate['Jenis Layanan'] || '',
+              mataKuliah: candidate['Mata Kuliah'] || '',
+              dosenPengampu: candidate['Dosen Pengampu'] || ''
+            };
+            const conflicts = findCrossFormPendaftaranDuplicatesClient(dupPayload, appData.pendaftaran, cleanId);
+            if (conflicts.length > 0) {
+              failedItems.push({ id: cleanId, message: `Pendaftaran ganda ditolak: ${conflicts[0].mataKuliah} sudah aktif pada ${conflicts[0].existingId}.` });
+              return;
+            }
+          }
+          delete candidate['Deleted At'];
+          delete candidate['Deleted By'];
+          delete candidate['Deleted Role'];
+          appData.sampahPendaftaran.splice(sIdx, 1);
+          appData.pendaftaran.unshift(candidate);
+          restoredIds.push(cleanId);
+          restoredItems.push(candidate);
+          appendLocalActivityLog(actName, 'Pulihkan Pendaftaran', cleanId, 'Berkas pendaftaran dipulihkan dari Tong Sampah (lokal)', actRole);
+        });
+
+        if (action === "restorePendaftaran") {
+          if (restoredIds.length > 0) {
+            if (onSuccess) onSuccess({ success: true, isLocalFallback: true, id: restoredIds[0], restoredItem: restoredItems[0], message: `Berkas ${restoredIds[0]} berhasil dipulihkan.` });
+          } else {
+            if (onSuccess) onSuccess({ success: false, isLocalFallback: true, message: (failedItems[0] && failedItems[0].message) || 'Gagal memulihkan berkas.' });
+          }
+        } else {
+          if (onSuccess) onSuccess({
+            success: restoredIds.length > 0,
+            isLocalFallback: true,
+            restoredIds,
+            restoredItems,
+            failedItems,
+            message: restoredIds.length > 0
+              ? `Berhasil memulihkan ${restoredIds.length} berkas.${failedItems.length ? ` (${failedItems.length} dilewati)` : ''}`
+              : ((failedItems[0] && failedItems[0].message) || 'Tidak ada berkas yang dipulihkan.')
+          });
+        }
+        return;
+      }
+
+      // 16c. Hapus Permanen & Kosongkan Tong Sampah (Eksklusif Master Admin)
+      if (action === "permanentDeletePendaftaran") {
+        const id = args && args[0];
+        const actName = args && args[1];
+        const actRole = (args && args[2]) || (currentUser && currentUser.role) || '';
+        const roleLower = String(actRole).trim().toLowerCase();
+        if (!['master admin', 'master_admin'].includes(roleLower)) {
+          if (onSuccess) onSuccess({ success: false, isLocalFallback: true, message: 'Akses ditolak: Hanya Master Admin yang berhak menghapus berkas secara permanen.' });
+          return;
+        }
+        appData.sampahPendaftaran = Array.isArray(appData.sampahPendaftaran) ? appData.sampahPendaftaran : [];
+        const beforeLen = appData.sampahPendaftaran.length;
+        appData.sampahPendaftaran = appData.sampahPendaftaran.filter(d => String(d.ID || d.id).trim() !== String(id).trim());
+        if (appData.sampahPendaftaran.length === beforeLen) {
+          if (onSuccess) onSuccess({ success: false, isLocalFallback: true, message: `Berkas ${id} tidak ditemukan di Tong Sampah.` });
+          return;
+        }
+        appendLocalActivityLog(actName, 'Hapus Permanen Pendaftaran', String(id || ''), 'Berkas dihapus permanen dari Tong Sampah (lokal)', actRole);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, message: `Berkas ${id} berhasil dihapus permanen.` });
+        return;
+      }
+
+      if (action === "emptySampahPendaftaran") {
+        const actName = args && args[0];
+        const actRole = (args && args[1]) || (currentUser && currentUser.role) || '';
+        const roleLower = String(actRole).trim().toLowerCase();
+        if (!['master admin', 'master_admin'].includes(roleLower)) {
+          if (onSuccess) onSuccess({ success: false, isLocalFallback: true, message: 'Akses ditolak: Hanya Master Admin yang berhak mengosongkan Tong Sampah.' });
+          return;
+        }
+        appData.sampahPendaftaran = Array.isArray(appData.sampahPendaftaran) ? appData.sampahPendaftaran : [];
+        const count = appData.sampahPendaftaran.length;
+        appData.sampahPendaftaran = [];
+        if (count > 0) {
+          appendLocalActivityLog(actName, 'Kosongkan Tong Sampah', 'Sampah_Pendaftaran', `Menghapus permanen ${count} berkas di Tong Sampah (lokal)`, actRole);
+        }
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, count, message: count > 0 ? `Tong Sampah dikosongkan (${count} berkas dihapus permanen).` : 'Tong Sampah sudah kosong.' });
         return;
       }
 
@@ -1347,26 +1484,26 @@
       </div>
 
       <!-- TAB: DATA & RIWAYAT PENDAFTARAN (MENU 1) -->
-      <div id="tabContentPendaftaran" class="hidden space-y-4">
-        <div id="pendaftaranRoleBanner" class="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs">
-          <div class="flex items-center space-x-2 text-blue-950 font-bold">
-            <i class="fas fa-circle-info text-blue-700 text-sm"></i>
-            <span id="pendaftaranRoleNotice">Memuat data pendaftaran mahasiswa...</span>
+      <div id="tabContentPendaftaran" class="hidden w-full min-w-0 space-y-4">
+        <div id="pendaftaranRoleBanner" class="p-3.5 bg-blue-50/80 border border-blue-200 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 text-xs min-w-0">
+          <div class="flex items-center space-x-2 text-blue-950 font-bold min-w-0">
+            <i class="fas fa-circle-info text-blue-700 text-sm shrink-0"></i>
+            <span id="pendaftaranRoleNotice" class="break-words">Memuat data pendaftaran mahasiswa...</span>
           </div>
-          <span class="text-[11px] text-blue-900 font-semibold bg-white px-2.5 py-1 rounded-xl border border-blue-200 shadow-xs">
-            Menu: Pendaftaran & Cek Riwayat
+          <span class="text-[11px] text-blue-900 font-semibold bg-white px-2.5 py-1 rounded-xl border border-blue-200 shadow-xs shrink-0 whitespace-nowrap">
+            Menu: Pendaftaran &amp; Cek Riwayat
           </span>
         </div>
 
         <!-- BANNER KETENTUAN JADWAL GRATIS & BIAYA DENDA KETERLAMBATAN OTOMATIS -->
-        <div id="bannerKetentuanPeriodeMhs" class="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs shadow-sm">
-          <div class="space-y-1">
+        <div id="bannerKetentuanPeriodeMhs" class="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-3 text-xs shadow-sm min-w-0">
+          <div class="space-y-1 min-w-0">
             <div class="flex flex-wrap items-center gap-2">
               <span class="bg-amber-600 text-white font-bold px-2 py-0.5 rounded text-[10px] uppercase tracking-wider">
                 Ketentuan Jadwal Periode
               </span>
               <span id="bannerPeriodeNama" class="font-bold text-slate-800">UTS Susulan (2026/2027)</span>
-              <span id="bannerPeriodeKelas" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200">Reguler & Karyawan</span>
+              <span id="bannerPeriodeKelas" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200">Reguler &amp; Karyawan</span>
             </div>
             <p class="text-slate-700 leading-relaxed">
               <i class="fas fa-calendar-check text-emerald-600 mr-1"></i> <b>Jadwal Normal (Bebas Denda):</b> <span id="bannerJadwalNormal" class="font-semibold text-emerald-800">Minggu, 15 November 2026 Pukul 00:00 WIB s.d. Jumat, 20 November 2026 Pukul 23:59 WIB</span>
@@ -1378,179 +1515,266 @@
             <p id="bannerPeriodeWindowNote" class="hidden text-[11px] font-bold pt-0.5"></p>
           </div>
           <div class="shrink-0 flex items-center gap-2">
-            <span id="bannerPeriodeStatusBadge" class="px-3 py-1 rounded-xl font-bold text-xs bg-emerald-100 text-emerald-800 border border-emerald-300">
+            <span id="bannerPeriodeStatusBadge" class="px-3 py-1 rounded-xl font-bold text-xs bg-emerald-100 text-emerald-800 border border-emerald-300 whitespace-nowrap">
               PERIODE AKTIF
             </span>
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
-          <div class="flex flex-wrap items-center gap-2">
-            <div class="relative w-full sm:w-72 md:w-80">
-              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" aria-hidden="true"></i>
-              <input type="text" id="searchPendaftaran" oninput="handlePendaftaranSearchInput()" onkeydown="if(event.key==='Escape'){clearPendaftaranSearch();}" placeholder="Cari Nama, NPM, Matkul, Dosen, ID, Prodi..." aria-label="Cari riwayat pendaftaran berdasarkan nama mahasiswa, NPM, mata kuliah, dosen, ID, atau prodi" class="border border-slate-300 rounded-xl pl-8 pr-8 py-2 text-xs w-full bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition">
-              <button type="button" id="btnClearSearchPendaftaran" onclick="clearPendaftaranSearch()" title="Hapus pencarian" aria-label="Hapus kata kunci pencarian" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-900 transition cursor-pointer">
-                <i class="fas fa-times text-xs" aria-hidden="true"></i>
-              </button>
-            </div>
-            <select id="filterPendaftaranProdi" onchange="pendaftaranCurrentPage = 1; renderPendaftaranTable()" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
-              <option value="">Semua Program Studi</option>
-              <option value="MNJ">Manajemen [MNJ]</option>
-              <option value="AKT">Akuntansi [AKT]</option>
-              <option value="BD">Bisnis Digital [BD]</option>
-              <option value="PI">Perdagangan Int [PI]</option>
-              <option value="PKD">Perbankan Keu Dig [PKD]</option>
-            </select>
-            <select id="filterPendaftaranStatus" onchange="pendaftaranCurrentPage = 1; renderPendaftaranTable()" class="border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
-              <option value="">Semua Status</option>
-              <option value="Disetujui">Disetujui</option>
-              <option value="Pending">Pending</option>
-              <option value="Ditolak">Ditolak</option>
-            </select>
+        <!-- 4 Kartu KPI Dinamis Pendaftaran (Dihitung dari data hasil filter) -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Total Berkas</p>
+            <h3 id="pendaftaranTotalCount" class="text-lg sm:text-xl font-black text-slate-800 tabular-nums mt-0.5 truncate">0</h3>
           </div>
-
-          <div class="flex flex-wrap items-center gap-2 shrink-0">
-            <div id="bulkActionBar" class="hidden items-center space-x-2 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl shadow-xs">
-              <span id="selectedCountBadge" class="text-xs font-bold text-emerald-900 whitespace-nowrap">0 Terpilih</span>
-              <button id="btnBulkApproveAction" onclick="handleBulkApproveRegistrations()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0">
-                <i class="fas fa-check-double"></i> <span>✔ Setujui Pendaftaran Massal</span>
-              </button>
-            </div>
-            <button id="btnExportPendaftaranPdf" onclick="openExportPdfModal()" class="bg-rose-700 hover:bg-rose-600 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0">
-              <i class="fas fa-file-pdf"></i> <span>Export PDF</span>
-            </button>
-            <button id="btnExportPendaftaranProdi" onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-sm whitespace-nowrap shrink-0">
-              <i class="fas fa-file-excel"></i> <span>Export Excel</span>
-            </button>
-            <button id="btnTambahPendaftaran" onclick="openPendaftaranModal()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-md whitespace-nowrap shrink-0">
-              <i class="fas fa-plus"></i> <span>Tambah Pendaftaran</span>
-            </button>
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Disetujui</p>
+            <h3 id="pendaftaranDisetujuiCount" class="text-lg sm:text-xl font-black text-emerald-600 tabular-nums mt-0.5 truncate">0</h3>
+          </div>
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Pending</p>
+            <h3 id="pendaftaranPendingCount" class="text-lg sm:text-xl font-black text-amber-600 tabular-nums mt-0.5 truncate">0</h3>
+          </div>
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm min-w-0">
+            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">Ditolak</p>
+            <h3 id="pendaftaranDitolakCount" class="text-lg sm:text-xl font-black text-rose-600 tabular-nums mt-0.5 truncate">0</h3>
           </div>
         </div>
 
-        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs text-slate-600">
-              <thead class="bg-slate-100/80 text-slate-700 uppercase font-bold border-b border-slate-200">
+        <!-- Toolbar Pintar Pendaftaran: Search, Filter (Prodi, Layanan, Status), Sort, & Aksi -->
+        <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3 min-w-0">
+          <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-2.5 min-w-0">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 flex-1 min-w-0">
+              <div class="relative sm:col-span-2 lg:w-64 xl:w-72 min-w-0">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" aria-hidden="true"></i>
+                <input type="text" id="searchPendaftaran" oninput="handlePendaftaranToolbarChange(true)" onkeydown="if(event.key==='Escape'){clearPendaftaranSearch();}" placeholder="Cari Nama, NPM, Matkul, Dosen, ID, Prodi..." aria-label="Cari riwayat pendaftaran berdasarkan nama mahasiswa, NPM, mata kuliah, dosen, ID, atau prodi" class="border border-slate-300 rounded-xl pl-8 pr-8 py-2 text-xs w-full bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition">
+                <button type="button" id="btnClearSearchPendaftaran" onclick="clearPendaftaranSearch()" title="Hapus pencarian" aria-label="Hapus kata kunci pencarian" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-900 transition cursor-pointer">
+                  <i class="fas fa-times text-xs" aria-hidden="true"></i>
+                </button>
+              </div>
+
+              <select id="filterPendaftaranProdi" onchange="handlePendaftaranToolbarChange(true)" aria-label="Filter Program Studi" class="w-full lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                <option value="">Semua Program Studi</option>
+                <option value="MNJ">Manajemen [MNJ]</option>
+                <option value="AKT">Akuntansi [AKT]</option>
+                <option value="BD">Bisnis Digital [BD]</option>
+                <option value="PI">Perdagangan Int [PI]</option>
+                <option value="PKD">Perbankan Keu Dig [PKD]</option>
+              </select>
+
+              <select id="filterPendaftaranLayanan" onchange="handlePendaftaranToolbarChange(true)" aria-label="Filter Jenis Layanan" class="w-full lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                <option value="">Semua Jenis Layanan</option>
+                <option value="UTS Susulan">UTS Susulan</option>
+                <option value="UAS Susulan">UAS Susulan</option>
+                <option value="Remedial Teaching">Remedial Teaching</option>
+              </select>
+
+              <select id="filterPendaftaranStatus" onchange="handlePendaftaranToolbarChange(true)" aria-label="Filter Status Persetujuan" class="w-full sm:col-span-2 lg:col-span-1 lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer transition">
+                <option value="" class="bg-white text-slate-700 font-medium">Semua Status</option>
+                <option value="Disetujui" class="bg-emerald-50 text-emerald-800 font-semibold">Disetujui</option>
+                <option value="Pending" class="bg-amber-50 text-amber-800 font-semibold">Pending</option>
+                <option value="Ditolak" class="bg-rose-50 text-rose-800 font-semibold">Ditolak</option>
+              </select>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 shrink-0 min-w-0">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Urutkan:</span>
+                <select id="sortPendaftaran" onchange="handlePendaftaranToolbarChange(true)" aria-label="Urutkan daftar pendaftaran" class="border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer max-w-full">
+                  <option value="tanggal-desc" selected>Terbaru</option>
+                  <option value="tanggal-asc">Terlama</option>
+                  <option value="nama-asc">Nama A–Z</option>
+                  <option value="nama-desc">Nama Z–A</option>
+                  <option value="id-asc">No. Berkas A–Z</option>
+                  <option value="nominal-desc">Nominal Tertinggi</option>
+                  <option value="nominal-asc">Nominal Terendah</option>
+                </select>
+              </div>
+              <button type="button" id="btnResetPendaftaranToolbar" onclick="resetAllPendaftaranFilters()" class="hidden px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs items-center gap-1.5 transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-rotate-left text-[11px]" aria-hidden="true"></i>
+                <span>Reset</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 min-w-0">
+            <span id="pendaftaranToolbarCountInfo" class="text-[11px] font-medium text-slate-500 tabular-nums">Menampilkan 0 dari 0 berkas</span>
+            <div class="flex flex-wrap items-center gap-2 shrink-0 min-w-0">
+              <div id="bulkActionBar" class="hidden items-center space-x-2 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl shadow-xs">
+                <span id="selectedCountBadge" class="text-xs font-bold text-emerald-900 whitespace-nowrap">0 Terpilih</span>
+                <button id="btnBulkApproveAction" onclick="handleBulkApproveRegistrations()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs flex items-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+                  <i class="fas fa-check-double"></i> <span>Setujui Massal</span>
+                </button>
+              </div>
+              <button type="button" id="btnTongSampahPendaftaran" onclick="openSampahPendaftaranModal()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold px-3 py-1.5 rounded-xl text-xs items-center gap-1.5 shadow-2xs transition whitespace-nowrap shrink-0 cursor-pointer" title="Lihat dan pulihkan berkas pendaftaran yang dihapus">
+                <i class="fas fa-trash-restore text-slate-600" aria-hidden="true"></i>
+                <span>Tong Sampah</span>
+                <span id="sampahPendaftaranBadgeCount" class="px-1.5 py-0.5 rounded-md bg-slate-700 text-white text-[10px] font-mono tabular-nums">0</span>
+              </button>
+              <button id="btnExportPendaftaranPdf" onclick="openExportPdfModal()" class="bg-rose-700 hover:bg-rose-600 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-file-pdf"></i> <span>Export PDF</span>
+              </button>
+              <button id="btnExportPendaftaranProdi" onclick="exportToExcel()" class="bg-emerald-700 hover:bg-emerald-600 text-white font-bold px-3 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-sm whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-file-excel"></i> <span>Export Excel</span>
+              </button>
+              <button id="btnTambahPendaftaran" onclick="openPendaftaranModal()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center space-x-1.5 shadow-md whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-plus"></i> <span>Tambah Pendaftaran</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden w-full min-w-0">
+          <div id="pendaftaranTableScrollWrap" onscroll="handlePendaftaranScrollCheck()" class="max-h-[62vh] min-h-[280px] w-full overflow-y-auto overflow-x-hidden relative">
+            <table class="w-full table-fixed text-left text-xs text-slate-600 border-collapse">
+              <thead class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
                 <tr>
-                  <th id="thSelectAll" class="p-3 w-10 text-center">
+                  <th id="thSelectAll" class="px-1.5 py-3 w-[34px] text-center">
                     <input type="checkbox" id="selectAllCb" onclick="toggleSelectAll(this)" title="Pilih Semua Pendaftaran" class="rounded text-blue-900 cursor-pointer">
                   </th>
-                  <th class="p-3">ID</th>
-                  <th class="p-3">Tanggal</th>
-                  <th class="p-3">Mahasiswa (NPM)</th>
-                  <th class="p-3">Prodi & Kelas</th>
-                  <th class="p-3">Mata Kuliah & Dosen</th>
-                  <th class="p-3">Layanan</th>
-                  <th class="p-3">Biaya Retribusi</th>
-                  <th class="p-3 text-center">Status Persetujuan</th>
-                  <th class="p-3 text-center">Status Bayar</th>
-                  <th class="p-3 text-center">Bukti</th>
-                  <th class="p-3 text-center">Aksi</th>
+                  <th class="px-2 py-3 w-[22%] sm:w-[15%] lg:w-[12%] select-none">
+                    <div class="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-[11px]">
+                      <button type="button" onclick="togglePendaftaranColumnSort('id')" class="inline-flex items-center gap-1 hover:text-blue-900 transition cursor-pointer uppercase font-bold" title="Urutkan berdasarkan No. Berkas">
+                        <span>ID</span><i id="sortIconPenId" class="fas fa-sort text-[10px] text-slate-400"></i>
+                      </button>
+                      <span class="text-slate-300" aria-hidden="true">/</span>
+                      <button type="button" onclick="togglePendaftaranColumnSort('tanggal')" class="inline-flex items-center gap-1 hover:text-blue-900 transition cursor-pointer uppercase font-bold" title="Urutkan berdasarkan Tanggal">
+                        <span>Tgl</span><i id="sortIconPenTanggal" class="fas fa-sort-down text-[10px] text-blue-900"></i>
+                      </button>
+                    </div>
+                  </th>
+                  <th onclick="togglePendaftaranColumnSort('nama')" class="px-2 py-3 w-[28%] sm:w-[20%] lg:w-[17%] cursor-pointer select-none hover:bg-slate-200/70 transition text-[11px]" title="Klik untuk mengurutkan berdasarkan Nama Mahasiswa">
+                    <span class="inline-flex items-center gap-1">Mahasiswa <i id="sortIconPenNama" class="fas fa-sort text-[10px] text-slate-400"></i></span>
+                  </th>
+                  <th class="hidden sm:table-cell px-2 py-3 sm:w-[27%] lg:w-[26%] text-[11px]">Matkul, Dosen &amp; Layanan</th>
+                  <th onclick="togglePendaftaranColumnSort('nominal')" class="hidden lg:table-cell px-2 py-3 lg:w-[14%] text-right cursor-pointer select-none hover:bg-slate-200/70 transition text-[11px]" title="Klik untuk mengurutkan berdasarkan Biaya Retribusi">
+                    <span class="inline-flex items-center justify-end gap-1">Biaya &amp; Bayar <i id="sortIconPenNominal" class="fas fa-sort text-[10px] text-slate-400"></i></span>
+                  </th>
+                  <th class="px-2 py-3 w-[25%] sm:w-[19%] lg:w-[15%] text-center text-[11px]">Status</th>
+                  <th class="px-1.5 py-3 w-[84px] sm:w-[96px] lg:w-[12%] text-center text-[11px]">Aksi</th>
                 </tr>
               </thead>
               <tbody id="tablePendaftaranBody" class="divide-y divide-slate-100"></tbody>
             </table>
-          </div>
-
-          <!-- Pagination Toolbar (Optimasi Performa DOM Ringan: 10-25 Baris) -->
-          <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div class="flex items-center gap-2 text-slate-600">
-              <span class="font-bold">Baris per halaman:</span>
-              <select id="pendaftaranPageSize" onchange="changePendaftaranPageSize(this.value)" class="text-xs py-1 px-2.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-700 shadow-xs focus:ring-2 focus:ring-blue-900 cursor-pointer">
-                <option value="10" selected>10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-                <option value="1000">Semua</option>
-              </select>
-              <span id="pendaftaranPaginationInfo" class="text-slate-500 font-semibold ml-2">Menampilkan 0-0 dari 0 berkas</span>
-            </div>
-            <div class="flex items-center space-x-1" id="pendaftaranPaginationControls">
-              <!-- Tombol Prev, Nomor Halaman, Next di-render via renderPendaftaranPagination() -->
-            </div>
+            <div id="pendaftaranInfiniteSentinel" class="px-4 py-3 text-center text-[11px] text-slate-500 bg-slate-50/70 border-t border-slate-100 flex flex-wrap items-center justify-center gap-2"></div>
           </div>
         </div>
       </div>
 
-      <!-- TAB: JADWAL UJIAN (MENU 2 - POIN 4 & 5 DITERAPKAN RAPI SEPERTI PERIODE) -->
-      <div id="tabContentJadwal" class="hidden space-y-4">
-        <!-- Quick Stats Jadwal Ujian -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-            <div>
-              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Jadwal Ujian</p>
-              <h3 id="statTotalJadwal" class="text-2xl font-black text-slate-800 mt-1">0</h3>
+      <!-- TAB: JADWAL UJIAN (MENU 2) -->
+      <div id="tabContentJadwal" class="hidden w-full min-w-0 space-y-4">
+        <!-- Quick Stats Jadwal Ujian (Dinamis sesuai hasil filter) -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-3 min-w-0">
+            <div class="min-w-0">
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">Total Jadwal Ujian</p>
+              <h3 id="statTotalJadwal" class="text-xl sm:text-2xl font-black text-slate-800 tabular-nums mt-0.5 truncate">0</h3>
             </div>
-            <div class="p-3.5 bg-indigo-50 text-indigo-700 rounded-2xl border border-indigo-100"><i class="fas fa-calendar-check text-2xl"></i></div>
+            <div class="p-3 bg-indigo-50 text-indigo-700 rounded-2xl border border-indigo-100 shrink-0"><i class="fas fa-calendar-check text-xl"></i></div>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-            <div>
-              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Program Studi</p>
-              <h3 id="statProdiJadwal" class="text-2xl font-black text-blue-900 mt-1">0 Prodi</h3>
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-3 min-w-0">
+            <div class="min-w-0">
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">Program Studi</p>
+              <h3 id="statProdiJadwal" class="text-xl sm:text-2xl font-black text-blue-900 tabular-nums mt-0.5 truncate">0 Prodi</h3>
             </div>
-            <div class="p-3.5 bg-blue-50 text-blue-900 rounded-2xl border border-blue-100"><i class="fas fa-graduation-cap text-2xl"></i></div>
+            <div class="p-3 bg-blue-50 text-blue-900 rounded-2xl border border-blue-100 shrink-0"><i class="fas fa-graduation-cap text-xl"></i></div>
           </div>
-          <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between">
-            <div>
-              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ruangan Terpakai</p>
-              <h3 id="statRuanganJadwal" class="text-2xl font-black text-emerald-700 mt-1">0 Ruangan</h3>
+          <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm flex items-center justify-between gap-3 min-w-0">
+            <div class="min-w-0">
+              <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider truncate">Ruangan Terpakai</p>
+              <h3 id="statRuanganJadwal" class="text-xl sm:text-2xl font-black text-emerald-700 tabular-nums mt-0.5 truncate">0 Ruangan</h3>
             </div>
-            <div class="p-3.5 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100"><i class="fas fa-door-open text-2xl"></i></div>
+            <div class="p-3 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-100 shrink-0"><i class="fas fa-door-open text-xl"></i></div>
           </div>
         </div>
 
-        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3">
-          <div class="flex flex-wrap items-center gap-2">
-            <input type="text" id="searchJadwal" onkeyup="renderJadwalUjianTable()" placeholder="Cari Matkul / Dosen / Ruang..." class="border border-slate-300 rounded-xl px-3 py-2 text-xs w-full sm:w-56 focus:ring-2 focus:ring-blue-900">
-            <select id="jadwalFilterProdi" onchange="renderJadwalUjianTable()" class="border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold focus:ring-2 focus:ring-blue-900">
-              <option value="">Semua Program Studi</option>
-              <option value="MNJ">Manajemen (MNJ)</option>
-              <option value="AKT">Akuntansi (AKT)</option>
-              <option value="BD">Bisnis Digital (BD)</option>
-              <option value="PI">Perdagangan Internasional (PI)</option>
-              <option value="PKD">Perbankan Keu Dig (PKD)</option>
-            </select>
+        <!-- Toolbar Pintar Jadwal Ujian: Search, Filter (Prodi, Jenis Ujian), Sort, Reset & Tambah -->
+        <div class="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3 min-w-0">
+          <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-2.5 min-w-0">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center gap-2 flex-1 min-w-0">
+              <div class="relative sm:col-span-2 lg:w-64 xl:w-72 min-w-0">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" aria-hidden="true"></i>
+                <input type="text" id="searchJadwal" oninput="handleJadwalToolbarChange(true)" onkeydown="if(event.key==='Escape'){clearJadwalSearch();}" placeholder="Cari ID, Matkul, Dosen, Ruangan, Prodi..." aria-label="Cari jadwal ujian" class="border border-slate-300 rounded-xl pl-8 pr-8 py-2 text-xs w-full bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition">
+                <button type="button" id="btnClearSearchJadwal" onclick="clearJadwalSearch()" title="Hapus pencarian" aria-label="Hapus kata kunci pencarian jadwal" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-900 transition cursor-pointer">
+                  <i class="fas fa-times text-xs" aria-hidden="true"></i>
+                </button>
+              </div>
+
+              <select id="jadwalFilterProdi" onchange="handleJadwalToolbarChange(true)" aria-label="Filter Program Studi Jadwal" class="w-full lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                <option value="">Semua Program Studi</option>
+                <option value="MNJ">Manajemen [MNJ]</option>
+                <option value="AKT">Akuntansi [AKT]</option>
+                <option value="BD">Bisnis Digital [BD]</option>
+                <option value="PI">Perdagangan Int [PI]</option>
+                <option value="PKD">Perbankan Keu Dig [PKD]</option>
+              </select>
+
+              <select id="jadwalFilterJenis" onchange="handleJadwalToolbarChange(true)" aria-label="Filter Jenis Ujian" class="w-full lg:w-auto min-w-0 border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+                <option value="">Semua Jenis Ujian</option>
+                <option value="UTS Susulan">UTS Susulan</option>
+                <option value="UAS Susulan">UAS Susulan</option>
+                <option value="Remedial Teaching">Remedial Teaching</option>
+              </select>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between sm:justify-end gap-2 shrink-0 min-w-0">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="text-[11px] font-semibold text-slate-500 whitespace-nowrap">Urutkan:</span>
+                <select id="sortJadwal" onchange="handleJadwalToolbarChange(true)" aria-label="Urutkan daftar jadwal ujian" class="border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer max-w-full">
+                  <option value="tanggal-asc" selected>Terdekat</option>
+                  <option value="tanggal-desc">Terbaru / Terakhir</option>
+                  <option value="matkul-asc">Mata Kuliah A–Z</option>
+                  <option value="ruangan-asc">Ruangan A–Z</option>
+                  <option value="id-asc">No. Jadwal A–Z</option>
+                </select>
+              </div>
+              <button type="button" id="btnResetJadwalToolbar" onclick="resetJadwalToolbar()" class="hidden px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs items-center gap-1.5 transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-rotate-left text-[11px]" aria-hidden="true"></i>
+                <span>Reset</span>
+              </button>
+              <button id="btnTambahJadwal" onclick="openJadwalModal()" class="bg-indigo-900 hover:bg-indigo-800 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-md whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-plus"></i> <span>Input Jadwal Ujian</span>
+              </button>
+            </div>
           </div>
-          <button id="btnTambahJadwal" onclick="openJadwalModal()" class="bg-indigo-900 hover:bg-indigo-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-md">
-            <i class="fas fa-plus"></i> <span>Input Jadwal Ujian (Admin TU)</span>
-          </button>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+            <span id="jadwalToolbarCountInfo" class="font-medium tabular-nums">Menampilkan 0 dari 0 jadwal</span>
+            <span class="text-slate-400">Klik judul kolom untuk mengurutkan · Gulir ke bawah untuk memuat jadwal berikutnya</span>
+          </div>
         </div>
 
-        <!-- Tabel Jadwal Ujian Tersusun Rapi Seperti Jadwal Periode (POIN 5) -->
-        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs text-slate-600">
-              <thead class="bg-slate-100/80 text-slate-700 uppercase font-bold border-b border-slate-200">
+        <!-- Tabel Jadwal Ujian Modern: Sticky Header, 6 Kolom Proporsional & Infinite Scroll -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden w-full min-w-0">
+          <div id="jadwalTableScrollWrap" onscroll="handleJadwalScrollCheck()" class="max-h-[62vh] min-h-[280px] w-full overflow-y-auto overflow-x-hidden relative">
+            <table class="w-full table-fixed text-left text-xs text-slate-600 border-collapse">
+              <thead class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
                 <tr>
-                  <th class="p-3.5">ID</th>
-                  <th class="p-3.5">Jadwal Pelaksanaan (Tanggal & Jam Rapi)</th>
-                  <th class="p-3.5">Ruangan Ujian</th>
-                  <th class="p-3.5">Program Studi & Kelas</th>
-                  <th class="p-3.5">Mata Kuliah</th>
-                  <th class="p-3.5">Dosen Pengampu</th>
-                  <th class="p-3.5">Jenis & Catatan</th>
-                  <th id="thAksiJadwal" class="p-3.5 text-center">Aksi (Admin TU)</th>
+                  <th class="px-2.5 py-3 w-[34%] sm:w-[27%] lg:w-[24%] select-none">
+                    <div class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
+                      <button type="button" onclick="toggleJadwalColumnSort('id')" class="inline-flex items-center gap-1 hover:text-blue-900 transition cursor-pointer uppercase font-bold" title="Urutkan berdasarkan No. Jadwal">
+                        <span>ID</span><i id="sortIconJdwId" class="fas fa-sort text-[10px] text-slate-400"></i>
+                      </button>
+                      <span class="text-slate-300" aria-hidden="true">/</span>
+                      <button type="button" onclick="toggleJadwalColumnSort('tanggal')" class="inline-flex items-center gap-1 hover:text-blue-900 transition cursor-pointer uppercase font-bold" title="Urutkan berdasarkan Tanggal &amp; Jam Ujian">
+                        <span>Jadwal</span><i id="sortIconJdwTanggal" class="fas fa-sort-up text-[10px] text-blue-900"></i>
+                      </button>
+                    </div>
+                  </th>
+                  <th onclick="toggleJadwalColumnSort('ruangan')" class="px-2.5 py-3 w-[27%] sm:w-[22%] lg:w-[19%] cursor-pointer select-none hover:bg-slate-200/70 transition text-[11px]" title="Klik untuk mengurutkan berdasarkan Ruangan">
+                    <span class="inline-flex items-center gap-1">Ruang &amp; Prodi <i id="sortIconJdwRuangan" class="fas fa-sort text-[10px] text-slate-400"></i></span>
+                  </th>
+                  <th onclick="toggleJadwalColumnSort('matkul')" class="px-2.5 py-3 w-[23%] sm:w-[24%] lg:w-[23%] cursor-pointer select-none hover:bg-slate-200/70 transition text-[11px]" title="Klik untuk mengurutkan berdasarkan Mata Kuliah">
+                    <span class="inline-flex items-center gap-1">Mata Kuliah <i id="sortIconJdwMatkul" class="fas fa-sort text-[10px] text-slate-400"></i></span>
+                  </th>
+                  <th class="hidden lg:table-cell px-2.5 py-3 lg:w-[15%] text-[11px]">Dosen Pengampu</th>
+                  <th class="hidden sm:table-cell px-2.5 py-3 sm:w-[18%] lg:w-[11%] text-[11px]">Jenis &amp; Ket.</th>
+                  <th id="thAksiJadwal" class="px-2 py-3 w-[72px] sm:w-[82px] lg:w-[8%] text-center text-[11px]">Aksi</th>
                 </tr>
               </thead>
               <tbody id="tableJadwalBody" class="divide-y divide-slate-100"></tbody>
             </table>
-          </div>
-
-          <!-- Pagination Toolbar Jadwal Ujian (Default 10 Baris) -->
-          <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div class="flex items-center gap-2 text-slate-600">
-              <span class="font-bold">Baris per halaman:</span>
-              <select id="jadwalPageSize" onchange="changeJadwalPageSize(this.value)" class="text-xs py-1 px-2.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-700 shadow-xs focus:ring-2 focus:ring-blue-900 cursor-pointer">
-                <option value="10" selected>10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-                <option value="1000">Semua</option>
-              </select>
-              <span id="jadwalPaginationInfo" class="text-slate-500 font-semibold ml-2">Menampilkan 0-0 dari 0 jadwal</span>
-            </div>
-            <div class="flex items-center space-x-1" id="jadwalPaginationControls">
-              <!-- Tombol Prev, Nomor Halaman, Next di-render via renderJadwalPagination() -->
-            </div>
+            <div id="jadwalInfiniteSentinel" class="px-4 py-3 text-center text-[11px] text-slate-500 bg-slate-50/70 border-t border-slate-100 flex flex-wrap items-center justify-center gap-2"></div>
           </div>
         </div>
       </div>
@@ -2054,6 +2278,7 @@
               </span>
               <select id="activeSheetSelector" onchange="renderSpreadsheetWorkbook()" class="border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-bold">
                 <option value="Pendaftaran">Data Pendaftaran</option>
+                <option value="Sampah_Pendaftaran">Sampah Pendaftaran</option>
                 <option value="Jadwal_Ujian">Jadwal Ujian</option>
                 <option value="Master_Ruangan">Master Ruangan</option>
                 <option value="User_Staff">User Staff</option>
@@ -3207,6 +3432,91 @@
     </div>
   </div>
 
+  <!-- MODAL: TONG SAMPAH PENDAFTARAN (SOFT DELETE & RESTORE) -->
+  <div id="modalSampahPendaftaran" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-3 sm:p-4">
+    <div class="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-5xl w-full overflow-hidden flex flex-col max-h-[90vh]">
+      <div class="px-5 py-4 border-b border-slate-200 flex items-start justify-between gap-3 bg-slate-50/70">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-10 h-10 rounded-xl bg-slate-200/80 text-slate-800 flex items-center justify-center text-base shrink-0">
+            <i class="fas fa-trash-restore" aria-hidden="true"></i>
+          </div>
+          <div class="min-w-0">
+            <h3 class="text-base font-black text-slate-900 truncate">Tong Sampah Pendaftaran</h3>
+            <p id="sampahModalSubtitle" class="text-xs text-slate-500 mt-0.5">Kelola berkas terhapus yang disimpan di sheet Sampah_Pendaftaran tanpa batas waktu otomatis.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeSampahPendaftaranModal()" aria-label="Tutup modal Tong Sampah" class="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 flex items-center justify-center transition cursor-pointer shrink-0">
+          <i class="fas fa-times" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="p-4 border-b border-slate-200 bg-white space-y-2.5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1 min-w-0">
+            <div class="relative flex-1 sm:max-w-xs min-w-0">
+              <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" aria-hidden="true"></i>
+              <input type="text" id="searchSampahPendaftaran" oninput="renderSampahPendaftaranTable()" onkeydown="if(event.key==='Escape'){clearSampahPendaftaranSearch();}" placeholder="Cari ID, Nama, NPM, Matkul, Pelaku..." aria-label="Cari berkas di Tong Sampah" class="border border-slate-300 rounded-xl pl-8 pr-8 py-2 text-xs w-full bg-white text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-900">
+              <button type="button" id="btnClearSearchSampah" onclick="clearSampahPendaftaranSearch()" title="Hapus pencarian" aria-label="Hapus pencarian sampah" class="hidden absolute right-1.5 top-1/2 -translate-y-1/2 w-6 h-6 items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer">
+                <i class="fas fa-times text-xs" aria-hidden="true"></i>
+              </button>
+            </div>
+            <select id="filterSampahProdi" onchange="renderSampahPendaftaranTable()" aria-label="Filter Prodi Tong Sampah" class="border border-slate-300 rounded-xl px-2.5 py-2 text-xs bg-white text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer">
+              <option value="">Semua Program Studi</option>
+              <option value="MNJ">Manajemen [MNJ]</option>
+              <option value="AKT">Akuntansi [AKT]</option>
+              <option value="BD">Bisnis Digital [BD]</option>
+              <option value="PI">Perdagangan Int [PI]</option>
+              <option value="PKD">Perbankan Keu Dig [PKD]</option>
+            </select>
+            <button type="button" id="btnResetSampahFilter" onclick="resetSampahPendaftaranFilters()" class="hidden px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-700 font-semibold text-xs items-center gap-1.5 transition whitespace-nowrap shrink-0 cursor-pointer">
+              <i class="fas fa-rotate-left text-[11px]" aria-hidden="true"></i>
+              <span>Reset</span>
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            <button type="button" id="btnBulkRestoreSampah" onclick="handleBulkRestoreSampah()" class="hidden bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs items-center gap-1.5 shadow-xs transition whitespace-nowrap shrink-0 cursor-pointer">
+              <i class="fas fa-trash-restore text-[11px]" aria-hidden="true"></i>
+              <span id="btnBulkRestoreSampahLabel">Pulihkan Terpilih (0)</span>
+            </button>
+            <button type="button" id="btnEmptySampahPendaftaran" onclick="handleEmptySampahPendaftaran()" class="hidden bg-rose-700 hover:bg-rose-800 text-white font-bold px-3 py-1.5 rounded-xl text-xs items-center gap-1.5 shadow-xs transition whitespace-nowrap shrink-0 cursor-pointer" title="Hapus permanen seluruh isi Tong Sampah (Khusus Master Admin)">
+              <i class="fas fa-dumpster-fire text-[11px]" aria-hidden="true"></i>
+              <span>Kosongkan Sampah</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 pt-1">
+          <span id="sampahToolbarCountInfo" class="font-medium tabular-nums">Menampilkan 0 berkas terhapus</span>
+          <span id="sampahRbacNotice" class="text-slate-500"></span>
+        </div>
+      </div>
+
+      <div id="sampahTableScrollWrap" class="flex-1 min-h-[240px] w-full overflow-y-auto overflow-x-hidden bg-white">
+        <table class="w-full table-fixed text-left text-xs text-slate-600 border-collapse">
+          <thead class="bg-slate-100 text-slate-700 uppercase font-bold border-b border-slate-200 sticky top-0 z-10 shadow-[0_1px_0_0_rgba(226,232,240,1)]">
+            <tr>
+              <th class="px-2 py-2.5 w-[34px] text-center">
+                <input type="checkbox" id="sampahSelectAllCb" onclick="toggleSampahSelectAll(this)" title="Pilih Semua Berkas Sampah" class="rounded text-emerald-700 cursor-pointer">
+              </th>
+              <th class="px-2 py-2.5 w-[20%] sm:w-[15%] text-[11px]">ID &amp; Tgl</th>
+              <th class="px-2 py-2.5 w-[26%] sm:w-[21%] text-[11px]">Mahasiswa &amp; Prodi</th>
+              <th class="hidden sm:table-cell px-2 py-2.5 sm:w-[26%] text-[11px]">Layanan &amp; Matkul</th>
+              <th class="px-2 py-2.5 w-[26%] sm:w-[19%] text-[11px]">Info Dihapus</th>
+              <th class="px-2 py-2.5 w-[96px] sm:w-[15%] text-center text-[11px]">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tableSampahPendaftaranBody" class="divide-y divide-slate-100"></tbody>
+        </table>
+      </div>
+
+      <div class="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3 text-xs">
+        <span class="text-slate-500">Pemulihan akan memeriksa duplikasi data aktif agar jadwal tidak bentrok.</span>
+        <button type="button" onclick="closeSampahPendaftaranModal()" class="px-4 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold transition cursor-pointer whitespace-nowrap shrink-0">Tutup</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: AI DIAGNOSTICS & SUNTIK 5 MOCKUP DATA -->
   <!-- MODAL: AI DIAGNOSTICS & SUNTIK 10 MOCKUP DATA -->
   <div id="modalAiDiagnostics" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
@@ -4171,6 +4481,7 @@
         if (labelPendaftaran) labelPendaftaran.innerText = 'Pendaftaran & Cek Riwayat';
 
         showElem('btnTambahPendaftaran');
+        hideElem('btnTongSampahPendaftaran');
         hideElem('btnBulkDeleteNotif');
         hideElem('btnDeleteAllNotif');
         hideElem('containerSelectAllNotif');
@@ -4209,6 +4520,7 @@
         if (labelPendaftaran) labelPendaftaran.innerText = 'Pendaftaran';
 
         hideElem('btnTambahPendaftaran');
+        hideElem('btnTongSampahPendaftaran');
         hideElem('btnTambahJadwal');
         hideElem('btnBulkDeleteNotif');
         hideElem('btnDeleteAllNotif');
@@ -4243,6 +4555,7 @@
         if (labelPendaftaran) labelPendaftaran.innerText = 'Pendaftaran';
 
         hideElem('btnTambahPendaftaran');
+        hideElem('btnTongSampahPendaftaran');
         hideElem('btnTambahJadwal');
         hideElem('btnBulkDeleteNotif');
         hideElem('btnDeleteAllNotif');
@@ -4275,6 +4588,7 @@
         if (labelPendaftaran) labelPendaftaran.innerText = 'Pendaftaran';
 
         showElem('btnTambahPendaftaran');
+        showElem('btnTongSampahPendaftaran', 'inline-flex');
         showElem('btnTambahJadwal');
         showElem('btnTambahPeriode');
         showElem('btnTambahTahunAkademik');
@@ -4359,6 +4673,10 @@
         if (selProdi) selProdi.value = '';
         const selStatus = document.getElementById('filterPendaftaranStatus') || document.getElementById('pendaftaranFilterStatus');
         if (selStatus) selStatus.value = '';
+        const selLayanan = document.getElementById('filterPendaftaranLayanan') || document.getElementById('pendaftaranFilterLayanan');
+        if (selLayanan) selLayanan.value = '';
+        const selSort = document.getElementById('sortPendaftaran');
+        if (selSort) selSort.value = 'tanggal-desc';
         const selSearch = document.getElementById('searchPendaftaran');
         if (selSearch) selSearch.value = '';
         if (typeof syncPendaftaranSearchClearButton === 'function') syncPendaftaranSearchClearButton();
@@ -4470,20 +4788,27 @@
         }
         if (res && res.success) {
           const localPendaftaran = appData.pendaftaran || [];
+          const localSampah = appData.sampahPendaftaran || [];
           const isFallback = Boolean(res.isLocalFallback);
           appData = res;
           if (!appData.master) appData.master = {};
           if (!Array.isArray(appData.master.periode)) appData.master.periode = [];
           if (!Array.isArray(appData.pendaftaran)) appData.pendaftaran = [];
+          if (!Array.isArray(appData.sampahPendaftaran)) appData.sampahPendaftaran = [];
 
           if (isFallback) {
+            const trashedIdSet = new Set(localSampah.map(s => String(s.ID || s.id || '').trim()).filter(Boolean));
             localPendaftaran.forEach(loc => {
-              const locId = String(loc.ID || loc.id || '');
-              const exists = appData.pendaftaran.some(s => String(s.ID || s.id || '') === locId);
+              const locId = String(loc.ID || loc.id || '').trim();
+              if (trashedIdSet.has(locId)) return;
+              const exists = appData.pendaftaran.some(s => String(s.ID || s.id || '').trim() === locId);
               if (!exists) {
                 appData.pendaftaran.unshift(loc);
               }
             });
+            if (localSampah.length > 0 && appData.sampahPendaftaran.length === 0) {
+              appData.sampahPendaftaran = localSampah;
+            }
           }
 
           if (!isFallback) {
@@ -4493,6 +4818,11 @@
           saveAppDataCache(appData);
         }
         refreshAllViews();
+        if (typeof syncSampahPendaftaranBadge === 'function') syncSampahPendaftaranBadge();
+        const modalSampah = document.getElementById('modalSampahPendaftaran');
+        if (modalSampah && !modalSampah.classList.contains('hidden') && typeof renderSampahPendaftaranTable === 'function') {
+          renderSampahPendaftaranTable();
+        }
         updateSyncStatusIndicator('online');
 
         if (!isSilent) {
@@ -8010,57 +8340,65 @@
     // Format tanggal dan jam tersusun rapi seperti Jadwal Periode
     // ==========================================
     // ==========================================
-    // [PAGINATION & OPTIMASI DOM TABEL JADWAL UJIAN]
+    // [JADWAL UJIAN MODERN]: KPI DINAMIS, TOOLBAR PINTAR, STICKY HEADER & INFINITE SCROLL
     // ==========================================
-    let jadwalCurrentPage = 1;
-    let jadwalPageSize = 10;
+    const JADWAL_BATCH_SIZE = 25;
+    const jadwalToolbarState = {
+      search: '',
+      prodi: '',
+      jenis: '',
+      sort: 'tanggal-asc',
+      visibleCount: JADWAL_BATCH_SIZE
+    };
+    let jadwalFilteredCache = [];
+    let jadwalInfiniteObserver = null;
 
-    function changeJadwalPageSize(val) {
-      jadwalPageSize = parseInt(val, 10) || 10;
-      jadwalCurrentPage = 1;
-      renderJadwalUjianTable();
+    function readJadwalToolbarControls() {
+      const elSearch = document.getElementById('searchJadwal');
+      const elProdi = document.getElementById('jadwalFilterProdi');
+      const elJenis = document.getElementById('jadwalFilterJenis');
+      const elSort = document.getElementById('sortJadwal');
+
+      if (elSearch) jadwalToolbarState.search = String(elSearch.value || '').trim();
+      if (elProdi) jadwalToolbarState.prodi = String(elProdi.value || '').trim();
+      if (elJenis) jadwalToolbarState.jenis = String(elJenis.value || '').trim();
+      if (elSort) jadwalToolbarState.sort = String(elSort.value || 'tanggal-asc').trim() || 'tanggal-asc';
     }
 
-    function renderJadwalPagination(totalPages) {
-      const container = document.getElementById('jadwalPaginationControls');
-      if (!container) return;
-      container.innerHTML = '';
-      if (totalPages <= 1) return;
-
-      const prevBtn = document.createElement('button');
-      prevBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
-        jadwalCurrentPage === 1 ? 'text-slate-300 border-slate-200 cursor-not-allowed' : 'text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer'
-      }`;
-      prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
-      prevBtn.disabled = jadwalCurrentPage === 1;
-      prevBtn.onclick = () => { if (jadwalCurrentPage > 1) { jadwalCurrentPage--; renderJadwalUjianTable(); } };
-      container.appendChild(prevBtn);
-
-      for (let p = 1; p <= totalPages; p++) {
-        if (p === 1 || p === totalPages || (p >= jadwalCurrentPage - 1 && p <= jadwalCurrentPage + 1)) {
-          const pageBtn = document.createElement('button');
-          pageBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
-            p === jadwalCurrentPage ? 'bg-blue-900 text-white border-blue-900 shadow-xs' : 'text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer'
-          }`;
-          pageBtn.innerText = p;
-          pageBtn.onclick = () => { jadwalCurrentPage = p; renderJadwalUjianTable(); };
-          container.appendChild(pageBtn);
-        } else if (p === jadwalCurrentPage - 2 || p === jadwalCurrentPage + 2) {
-          const dots = document.createElement('span');
-          dots.className = 'px-1 text-slate-400 font-bold';
-          dots.innerText = '...';
-          container.appendChild(dots);
-        }
+    function syncJadwalToolbarVisualControls() {
+      const btnClear = document.getElementById('btnClearSearchJadwal');
+      if (btnClear) {
+        btnClear.classList.toggle('hidden', !jadwalToolbarState.search);
       }
 
-      const nextBtn = document.createElement('button');
-      nextBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
-        jadwalCurrentPage === totalPages ? 'text-slate-300 border-slate-200 cursor-not-allowed' : 'text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer'
-      }`;
-      nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
-      nextBtn.disabled = jadwalCurrentPage === totalPages;
-      nextBtn.onclick = () => { if (jadwalCurrentPage < totalPages) { jadwalCurrentPage++; renderJadwalUjianTable(); } };
-      container.appendChild(nextBtn);
+      const isDirty = Boolean(
+        jadwalToolbarState.search ||
+        jadwalToolbarState.prodi ||
+        jadwalToolbarState.jenis ||
+        (jadwalToolbarState.sort && jadwalToolbarState.sort !== 'tanggal-asc')
+      );
+      const btnReset = document.getElementById('btnResetJadwalToolbar');
+      if (btnReset) {
+        btnReset.classList.toggle('hidden', !isDirty);
+        btnReset.classList.toggle('inline-flex', isDirty);
+      }
+
+      const s = jadwalToolbarState.sort;
+      const setIcon = (id, ascKey, descKey) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (s === ascKey) {
+          el.className = 'fas fa-sort-up text-[10px] text-blue-900';
+        } else if (s === descKey) {
+          el.className = 'fas fa-sort-down text-[10px] text-blue-900';
+        } else {
+          el.className = 'fas fa-sort text-[10px] text-slate-400';
+        }
+      };
+      setIcon('sortIconJdwId', 'id-asc', 'id-desc');
+      setIcon('sortIconJdwTanggal', 'tanggal-asc', 'tanggal-desc');
+      setIcon('sortIconJdwRuangan', 'ruangan-asc', 'ruangan-desc');
+      setIcon('sortIconJdwMatkul', 'matkul-asc', 'matkul-desc');
     }
 
     function getMahasiswaOwnJadwalList(jadwalList, userObj) {
@@ -8126,101 +8464,407 @@
       });
     }
 
-    function renderJadwalUjianTable() {
-      const tbody = document.getElementById('tableJadwalBody');
-      if (!tbody) return;
-      const search = (document.getElementById('searchJadwal')?.value || '').toLowerCase();
-      const filterProdi = document.getElementById('jadwalFilterProdi')?.value || '';
-
+    function getJadwalScopedList() {
       const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
-      const allJadwal = appData.jadwal || [];
-      const scopedList = isMhs ? getMahasiswaOwnJadwalList(allJadwal, currentUser) : allJadwal;
+      const allJadwal = (appData && Array.isArray(appData.jadwal)) ? appData.jadwal : [];
+      return isMhs ? getMahasiswaOwnJadwalList(allJadwal, currentUser) : allJadwal.slice();
+    }
 
-      // Update Quick Stats berdasarkan cakupan role (khusus akun Mahasiswa atau full untuk role lain)
-      if (document.getElementById('statTotalJadwal')) document.getElementById('statTotalJadwal').innerText = scopedList.length;
-      if (document.getElementById('statProdiJadwal')) document.getElementById('statProdiJadwal').innerText = new Set(scopedList.map(j => j['Kode Prodi']).filter(Boolean)).size + ' Prodi';
-      if (document.getElementById('statRuanganJadwal')) document.getElementById('statRuanganJadwal').innerText = new Set(scopedList.map(j => j.Ruangan).filter(Boolean)).size + ' Ruangan';
+    function parseJadwalDateTimeMs(item) {
+      if (!item || typeof item !== 'object') return 0;
+      const dateMs = typeof parseInvoiceDateMs === 'function'
+        ? parseInvoiceDateMs(item['Tanggal Ujian'] || item.tanggal || '')
+        : 0;
+      const cleanJam = typeof formatJamClean === 'function'
+        ? formatJamClean(item['Jam Mulai'] || '')
+        : String(item['Jam Mulai'] || '');
+      const timeMatch = String(cleanJam).match(/(\d{1,2})[:.](\d{2})/);
+      const minsOffset = timeMatch
+        ? ((parseInt(timeMatch[1], 10) || 0) * 60 + (parseInt(timeMatch[2], 10) || 0)) * 60000
+        : 0;
+      return dateMs + minsOffset;
+    }
 
-      let list = scopedList;
-      if (filterProdi) list = list.filter(j => (j['Kode Prodi'] || '').toUpperCase() === filterProdi.toUpperCase());
-      if (search) list = list.filter(j => (j['Mata Kuliah'] || '').toLowerCase().includes(search) || (j.Ruangan || '').toLowerCase().includes(search));
+    function getFilteredSortedJadwalList(scopedInput) {
+      readJadwalToolbarControls();
+      let list = Array.isArray(scopedInput) ? scopedInput.slice() : getJadwalScopedList();
 
-      // [OPTIMASI PERFORMA]: Pagination Jadwal Ujian (Default 10 baris per halaman)
-      const totalFiltered = list.length;
-      const totalPages = Math.ceil(totalFiltered / jadwalPageSize) || 1;
-      if (jadwalCurrentPage > totalPages) jadwalCurrentPage = totalPages;
-      if (jadwalCurrentPage < 1) jadwalCurrentPage = 1;
-
-      const startIndex = (jadwalCurrentPage - 1) * jadwalPageSize;
-      const endIndex = Math.min(startIndex + jadwalPageSize, totalFiltered);
-      const pageItems = list.slice(startIndex, endIndex);
-
-      const infoEl = document.getElementById('jadwalPaginationInfo');
-      if (infoEl) {
-        infoEl.innerText = totalFiltered > 0
-          ? `Menampilkan ${startIndex + 1} - ${endIndex} dari ${totalFiltered} jadwal`
-          : (isMhs && scopedList.length === 0 ? 'Belum ada jadwal ujian untuk akun Anda' : 'Tidak ada jadwal yang cocok');
+      if (jadwalToolbarState.prodi) {
+        const targetProdi = jadwalToolbarState.prodi.toUpperCase();
+        list = list.filter(j => {
+          const code = typeof resolveInvoiceProdiCode === 'function'
+            ? resolveInvoiceProdiCode(j)
+            : String(j['Kode Prodi'] || '').trim().toUpperCase();
+          return code === targetProdi;
+        });
       }
-      renderJadwalPagination(totalPages);
 
-      tbody.innerHTML = '';
-      if (pageItems.length === 0) {
-        const emptyMsg = (isMhs && scopedList.length === 0)
-          ? 'Belum ada jadwal ujian untuk akun Anda.'
-          : 'Belum ada jadwal ujian yang cocok';
-        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-slate-400">${emptyMsg}</td></tr>`;
+      if (jadwalToolbarState.jenis) {
+        const targetJenis = (typeof normalizeJenisLayananName === 'function'
+          ? normalizeJenisLayananName(jadwalToolbarState.jenis)
+          : jadwalToolbarState.jenis
+        ).toLowerCase();
+        list = list.filter(j => {
+          const rawJenis = j['Jenis Ujian'] || j['Jenis Layanan'] || '';
+          const normJenis = (typeof normalizeJenisLayananName === 'function'
+            ? normalizeJenisLayananName(rawJenis)
+            : String(rawJenis)
+          ).trim().toLowerCase();
+          return normJenis === targetJenis;
+        });
+      }
+
+      if (jadwalToolbarState.search) {
+        const tokens = jadwalToolbarState.search.toLowerCase().split(/\s+/).filter(Boolean);
+        if (tokens.length > 0) {
+          list = list.filter(j => {
+            const haystack = [
+              j.ID,
+              j['Tanggal Ujian'],
+              j['Jam Mulai'],
+              j['Jam Selesai'],
+              j.Ruangan,
+              j['Kode Prodi'],
+              j['Program Studi'],
+              j.Semester,
+              j.Kelas,
+              j['Mata Kuliah'],
+              j['Dosen Pengampu'],
+              j['Jenis Ujian'],
+              j.Keterangan
+            ]
+              .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
+              .map(v => String(v).toLowerCase())
+              .join(' ');
+            return tokens.every(token => haystack.includes(token));
+          });
+        }
+      }
+
+      const sortKey = jadwalToolbarState.sort || 'tanggal-asc';
+      list.sort((a, b) => {
+        if (sortKey === 'tanggal-asc' || sortKey === 'tanggal-desc') {
+          const diff = parseJadwalDateTimeMs(a) - parseJadwalDateTimeMs(b);
+          if (diff !== 0) return sortKey === 'tanggal-asc' ? diff : -diff;
+          const idDiff = (typeof extractNumericIdTail === 'function' ? extractNumericIdTail(a.ID) - extractNumericIdTail(b.ID) : 0);
+          return sortKey === 'tanggal-asc' ? idDiff : -idDiff;
+        }
+        if (sortKey === 'matkul-asc' || sortKey === 'matkul-desc') {
+          const cmp = String(a['Mata Kuliah'] || '').localeCompare(String(b['Mata Kuliah'] || ''), 'id');
+          return sortKey === 'matkul-asc' ? cmp : -cmp;
+        }
+        if (sortKey === 'ruangan-asc' || sortKey === 'ruangan-desc') {
+          const cmp = String(a.Ruangan || '').localeCompare(String(b.Ruangan || ''), 'id', { numeric: true });
+          return sortKey === 'ruangan-asc' ? cmp : -cmp;
+        }
+        if (sortKey === 'id-asc' || sortKey === 'id-desc') {
+          const cmp = String(a.ID || '').localeCompare(String(b.ID || ''), 'id', { numeric: true });
+          return sortKey === 'id-asc' ? cmp : -cmp;
+        }
+        return 0;
+      });
+
+      return list;
+    }
+
+    function updateJadwalSummaryCards(filteredList) {
+      const list = Array.isArray(filteredList) ? filteredList : [];
+      const elTotal = document.getElementById('statTotalJadwal');
+      const elProdi = document.getElementById('statProdiJadwal');
+      const elRuang = document.getElementById('statRuanganJadwal');
+
+      if (elTotal) elTotal.innerText = list.length;
+      if (elProdi) {
+        const prodiCount = new Set(
+          list
+            .map(j => (typeof resolveInvoiceProdiCode === 'function' ? resolveInvoiceProdiCode(j) : String(j['Kode Prodi'] || '').trim().toUpperCase()))
+            .filter(Boolean)
+        ).size;
+        elProdi.innerText = `${prodiCount} Prodi`;
+      }
+      if (elRuang) {
+        const ruangCount = new Set(
+          list
+            .map(j => String(j.Ruangan || '').trim())
+            .filter(r => r && r !== '-')
+        ).size;
+        elRuang.innerText = `${ruangCount} Ruangan`;
+      }
+    }
+
+    function buildJadwalTableRow(item, canManageJadwal) {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50/80 transition align-top';
+
+      const idRaw = String(item.ID || '-').trim();
+      const idAttr = escapeHtml(idRaw).replace(/'/g, '&#39;');
+      const cleanMulai = formatJamClean(item['Jam Mulai']);
+      const cleanSelesai = formatJamClean(item['Jam Selesai']);
+      const durasi = hitungDurasiMenit(cleanMulai, cleanSelesai);
+      const jamDisplay = `${cleanMulai} - ${cleanSelesai} WIB`;
+      const tglIndo = formatTanggalIndo(item['Tanggal Ujian']);
+      const kodeProdi = String(item['Kode Prodi'] || (typeof resolveInvoiceProdiCode === 'function' ? resolveInvoiceProdiCode(item) : '') || '-').trim() || '-';
+      const namaProdi = String(item['Program Studi'] || '-').trim() || '-';
+      const ruangan = String(item.Ruangan || '-').trim() || '-';
+      const jenisUjian = String(item['Jenis Ujian'] || '-').trim() || '-';
+      const keterangan = String(item.Keterangan || '-').trim() || '-';
+      const dosen = String(item['Dosen Pengampu'] || '-').trim() || '-';
+
+      const aksiTd = canManageJadwal ? `
+        <td class="px-2 py-2.5 text-center">
+          <div class="flex flex-col gap-1 items-stretch max-w-[74px] mx-auto">
+            <button type="button" onclick="openJadwalModal('${idAttr}')" class="bg-blue-900 hover:bg-blue-800 text-white px-2 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-1 shadow-xs transition cursor-pointer">
+              <i class="fas fa-edit text-[9px]" aria-hidden="true"></i> <span>Edit</span>
+            </button>
+            <button type="button" onclick="deleteJadwalItem('${idAttr}')" class="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-1 transition cursor-pointer">
+              <i class="fas fa-trash text-[9px]" aria-hidden="true"></i> <span>Hapus</span>
+            </button>
+          </div>
+        </td>
+      ` : '';
+
+      tr.innerHTML = `
+        <td class="px-2.5 py-2.5 min-w-0">
+          <div class="flex items-center justify-between gap-1.5 mb-1">
+            <span class="font-mono font-bold text-blue-900 text-[11px] tabular-nums truncate">${escapeHtml(idRaw)}</span>
+            <span class="sm:hidden inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 text-[9px] font-bold shrink-0">${escapeHtml(jenisUjian)}</span>
+          </div>
+          <div class="bg-indigo-50/75 border border-indigo-200/80 rounded-xl px-2 py-1.5 space-y-1 text-[11px]">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <i class="fas fa-calendar-day text-indigo-700 text-[10px] shrink-0" aria-hidden="true"></i>
+              <span class="font-bold text-slate-900 leading-snug break-words">${escapeHtml(tglIndo)}</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-1">
+              <span class="font-bold font-mono text-indigo-950 text-[10.5px] tabular-nums whitespace-nowrap">${escapeHtml(jamDisplay)}</span>
+              <span class="text-[9.5px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 font-semibold whitespace-nowrap">${escapeHtml(durasi)}</span>
+            </div>
+          </div>
+        </td>
+        <td class="px-2.5 py-2.5 min-w-0">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-900 font-black border border-emerald-300 text-[11px] max-w-full truncate" title="${escapeHtml(ruangan)}">${escapeHtml(ruangan)}</span>
+          <div class="font-bold text-slate-800 text-[11px] leading-snug mt-1 break-words">
+            <span class="text-blue-900">[${escapeHtml(kodeProdi)}]</span> ${escapeHtml(namaProdi)}
+          </div>
+          <div class="text-[10px] text-slate-500 leading-snug mt-0.5">${escapeHtml(item.Semester || '-')} · ${escapeHtml(item.Kelas || '-')}</div>
+        </td>
+        <td class="px-2.5 py-2.5 min-w-0">
+          <b class="text-blue-950 text-xs leading-snug block break-words">${escapeHtml(item['Mata Kuliah'] || '-')}</b>
+          <div class="lg:hidden text-[10px] text-slate-500 leading-snug mt-1 break-words">
+            <i class="fas fa-user-tie text-[9px] text-slate-400 mr-1" aria-hidden="true"></i>${escapeHtml(dosen)}
+          </div>
+        </td>
+        <td class="hidden lg:table-cell px-2.5 py-2.5 text-slate-700 font-medium text-[11px] leading-snug break-words min-w-0">
+          ${escapeHtml(dosen)}
+        </td>
+        <td class="hidden sm:table-cell px-2.5 py-2.5 min-w-0">
+          <span class="inline-block font-bold text-blue-900 bg-blue-50 border border-blue-200/80 rounded px-1.5 py-0.5 text-[10px] leading-snug">${escapeHtml(jenisUjian)}</span>
+          <div class="text-[10px] text-slate-500 leading-snug mt-1 break-words line-clamp-3" title="${escapeHtml(keterangan)}">${escapeHtml(keterangan)}</div>
+        </td>
+        ${aksiTd}
+      `;
+      return tr;
+    }
+
+    function updateJadwalSentinelAndCounts(renderedCount, totalFilteredCount, totalScopedCount, isMhs) {
+      const infoEl = document.getElementById('jadwalToolbarCountInfo');
+      if (infoEl) {
+        if (totalFilteredCount === 0) {
+          infoEl.innerText = isMhs && totalScopedCount === 0
+            ? 'Belum ada jadwal ujian untuk akun Anda'
+            : `Menampilkan 0 dari ${totalScopedCount} jadwal`;
+        } else {
+          const suffix = totalFilteredCount !== totalScopedCount ? ` (tersaring dari ${totalScopedCount} total)` : '';
+          infoEl.innerText = `Menampilkan ${renderedCount} dari ${totalFilteredCount} jadwal${suffix}`;
+        }
+      }
+
+      const sentinel = document.getElementById('jadwalInfiniteSentinel');
+      if (!sentinel) return;
+
+      if (totalFilteredCount === 0) {
+        sentinel.classList.add('hidden');
+        sentinel.innerHTML = '';
         return;
       }
 
-      const canManageJadwal = currentUser && ['master admin', 'master_admin', 'admin tu'].includes((currentUser.role || '').toLowerCase());
+      sentinel.classList.remove('hidden');
+      const remaining = totalFilteredCount - renderedCount;
+      if (remaining > 0) {
+        sentinel.innerHTML = `
+          <span class="text-slate-500">Menampilkan <b class="text-slate-700 tabular-nums">${renderedCount}</b> dari <b class="text-slate-700 tabular-nums">${totalFilteredCount}</b> jadwal · Gulir ke bawah untuk memuat berikutnya</span>
+          <button type="button" onclick="loadMoreJadwalRows()" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-blue-900 font-bold text-[11px] transition cursor-pointer whitespace-nowrap shrink-0">Muat +${Math.min(JADWAL_BATCH_SIZE, remaining)}</button>
+        `;
+      } else {
+        sentinel.innerHTML = `<span class="text-slate-400">Seluruh <b class="text-slate-600 tabular-nums">${totalFilteredCount}</b> jadwal telah ditampilkan</span>`;
+      }
+    }
+
+    function setupJadwalInfiniteScroll() {
+      const wrap = document.getElementById('jadwalTableScrollWrap');
+      const sentinel = document.getElementById('jadwalInfiniteSentinel');
+      if (!wrap || !sentinel || typeof IntersectionObserver === 'undefined') return;
+
+      if (jadwalInfiniteObserver) {
+        jadwalInfiniteObserver.disconnect();
+      }
+      jadwalInfiniteObserver = new IntersectionObserver((entries) => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          loadMoreJadwalRows();
+        }
+      }, {
+        root: wrap,
+        rootMargin: '120px'
+      });
+      jadwalInfiniteObserver.observe(sentinel);
+    }
+
+    function handleJadwalScrollCheck() {
+      const wrap = document.getElementById('jadwalTableScrollWrap');
+      if (!wrap) return;
+      const distanceFromBottom = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight;
+      if (distanceFromBottom <= 120) {
+        loadMoreJadwalRows();
+      }
+    }
+
+    function loadMoreJadwalRows() {
+      const total = jadwalFilteredCache.length;
+      if (jadwalToolbarState.visibleCount >= total) return;
+
+      const tbody = document.getElementById('tableJadwalBody');
+      if (!tbody) return;
+
+      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      const canManageJadwal = currentUser && ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes((currentUser.role || '').toLowerCase());
+      const startIdx = jadwalToolbarState.visibleCount;
+      const nextCount = Math.min(total, startIdx + JADWAL_BATCH_SIZE);
+      const frag = document.createDocumentFragment();
+      for (let i = startIdx; i < nextCount; i++) {
+        frag.appendChild(buildJadwalTableRow(jadwalFilteredCache[i], canManageJadwal));
+      }
+      tbody.appendChild(frag);
+      jadwalToolbarState.visibleCount = nextCount;
+      updateJadwalSentinelAndCounts(nextCount, total, getJadwalScopedList().length, isMhs);
+    }
+
+    function handleJadwalToolbarChange(resetScroll = true) {
+      readJadwalToolbarControls();
+      jadwalToolbarState.visibleCount = JADWAL_BATCH_SIZE;
+      renderJadwalUjianTable({ preserveScroll: !resetScroll });
+    }
+
+    function clearJadwalSearch() {
+      const input = document.getElementById('searchJadwal');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      handleJadwalToolbarChange(true);
+    }
+
+    function resetJadwalToolbar() {
+      const elSearch = document.getElementById('searchJadwal');
+      if (elSearch) elSearch.value = '';
+      const elProdi = document.getElementById('jadwalFilterProdi');
+      if (elProdi) elProdi.value = '';
+      const elJenis = document.getElementById('jadwalFilterJenis');
+      if (elJenis) elJenis.value = '';
+      const elSort = document.getElementById('sortJadwal');
+      if (elSort) elSort.value = 'tanggal-asc';
+
+      jadwalToolbarState.search = '';
+      jadwalToolbarState.prodi = '';
+      jadwalToolbarState.jenis = '';
+      jadwalToolbarState.sort = 'tanggal-asc';
+      jadwalToolbarState.visibleCount = JADWAL_BATCH_SIZE;
+
+      renderJadwalUjianTable({ preserveScroll: false });
+    }
+
+    function toggleJadwalColumnSort(col) {
+      readJadwalToolbarControls();
+      const curr = jadwalToolbarState.sort;
+      let next = 'tanggal-asc';
+      if (col === 'tanggal') next = curr === 'tanggal-asc' ? 'tanggal-desc' : 'tanggal-asc';
+      else if (col === 'matkul') next = curr === 'matkul-asc' ? 'matkul-desc' : 'matkul-asc';
+      else if (col === 'ruangan') next = curr === 'ruangan-asc' ? 'ruangan-desc' : 'ruangan-asc';
+      else if (col === 'id') next = curr === 'id-asc' ? 'id-desc' : 'id-asc';
+
+      const elSort = document.getElementById('sortJadwal');
+      if (elSort) {
+        const descLabels = {
+          'matkul-desc': 'Mata Kuliah Z–A',
+          'ruangan-desc': 'Ruangan Z–A',
+          'id-desc': 'No. Jadwal Z–A'
+        };
+        if (descLabels[next] && !elSort.querySelector(`option[value="${next}"]`)) {
+          const opt = document.createElement('option');
+          opt.value = next;
+          opt.text = descLabels[next];
+          elSort.appendChild(opt);
+        }
+        elSort.value = next;
+      }
+      jadwalToolbarState.sort = next;
+      handleJadwalToolbarChange(true);
+    }
+
+    function renderJadwalUjianTable(opts = {}) {
+      const tbody = document.getElementById('tableJadwalBody');
+      if (!tbody) return;
+
+      const wrap = document.getElementById('jadwalTableScrollWrap');
+      const prevScrollTop = (opts && opts.preserveScroll && wrap) ? wrap.scrollTop : 0;
+
+      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      const canManageJadwal = currentUser && ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes((currentUser.role || '').toLowerCase());
       const thAksi = document.getElementById('thAksiJadwal');
       if (thAksi) thAksi.classList.toggle('hidden', !canManageJadwal);
 
-      pageItems.forEach(item => {
-        const cleanMulai = formatJamClean(item['Jam Mulai']);
-        const cleanSelesai = formatJamClean(item['Jam Selesai']);
-        const durasi = hitungDurasiMenit(cleanMulai, cleanSelesai);
-        const jamDisplay = cleanMulai + ' - ' + cleanSelesai + ' WIB';
-        const tglIndo = formatTanggalIndo(item['Tanggal Ujian']);
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-slate-50 transition';
+      const scopedList = getJadwalScopedList();
+      const list = getFilteredSortedJadwalList(scopedList);
+      jadwalFilteredCache = list;
 
-        const aksiTd = canManageJadwal ? `
-          <td class="p-3.5 text-center whitespace-nowrap">
-            <button onclick="openJadwalModal('${item.ID}')" class="text-blue-900 font-bold hover:underline mr-2">Edit</button>
-            <button onclick="deleteJadwalItem('${item.ID}')" class="text-rose-600 font-bold hover:underline">Hapus</button>
-          </td>
-        ` : '';
+      syncJadwalToolbarVisualControls();
+      updateJadwalSummaryCards(list);
 
-        // Tampilan tanggal & jam rapi bergaya Jadwal Periode
-        tr.innerHTML = `
-          <td class="p-3.5 font-mono font-bold text-blue-900 whitespace-nowrap">${item.ID}</td>
-          <td class="p-3.5 font-medium text-slate-700 whitespace-nowrap">
-            <div class="bg-indigo-50/80 border border-indigo-200/90 rounded-2xl p-2.5 space-y-1.5 text-xs shadow-xs">
-              <div class="flex items-center gap-1.5">
-                <span class="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-900 font-bold text-[10px] uppercase flex items-center gap-1">
-                  <i class="fas fa-calendar-day"></i> Tanggal
-                </span>
-                <span class="font-bold text-slate-900 text-xs">${tglIndo}</span>
-              </div>
-              <div class="flex items-center gap-1.5">
-                <span class="px-2 py-0.5 rounded-md bg-amber-100 text-amber-950 font-bold text-[10px] uppercase font-mono flex items-center gap-1">
-                  <i class="fas fa-clock"></i> Pukul
-                </span>
-                <span class="font-bold font-mono text-indigo-950 text-xs">${jamDisplay}</span>
-                <span class="text-[10px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 font-semibold font-sans">${durasi}</span>
-              </div>
-            </div>
-          </td>
-          <td class="p-3.5 whitespace-nowrap"><span class="px-3 py-1 rounded-xl bg-emerald-50 text-emerald-900 font-black border border-emerald-300 text-xs">${item.Ruangan}</span></td>
-          <td class="p-3.5"><b>${item['Program Studi']}</b><br><span class="text-slate-500">${item.Semester} · ${item.Kelas}</span></td>
-          <td class="p-3.5"><b class="text-blue-950">${item['Mata Kuliah']}</b></td>
-          <td class="p-3.5 text-slate-700 font-medium">${item['Dosen Pengampu']}</td>
-          <td class="p-3.5"><span class="font-bold text-blue-900">${item['Jenis Ujian']}</span><br><span class="text-[11px] text-slate-500">${item.Keterangan || '-'}</span></td>
-          ${aksiTd}
-        `;
-        tbody.appendChild(tr);
-      });
+      const hasActiveFilter = Boolean(
+        jadwalToolbarState.search ||
+        jadwalToolbarState.prodi ||
+        jadwalToolbarState.jenis
+      );
+
+      tbody.innerHTML = '';
+      if (list.length === 0) {
+        updateJadwalSentinelAndCounts(0, 0, scopedList.length, isMhs);
+        const colCount = canManageJadwal ? 6 : 5;
+        const emptyMsg = (isMhs && scopedList.length === 0)
+          ? 'Belum ada jadwal ujian untuk akun Anda.'
+          : 'Tidak ada jadwal ujian yang cocok dengan pencarian atau filter.';
+        const resetActionHtml = hasActiveFilter
+          ? `<div class="mt-2"><button type="button" onclick="resetJadwalToolbar()" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs transition cursor-pointer"><i class="fas fa-rotate-left text-[11px]"></i><span>Reset Filter</span></button></div>`
+          : '';
+        tbody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-slate-400 font-medium"><div>${emptyMsg}</div>${resetActionHtml}</td></tr>`;
+        return;
+      }
+
+      const targetVisible = Math.min(
+        list.length,
+        Math.max(JADWAL_BATCH_SIZE, jadwalToolbarState.visibleCount || JADWAL_BATCH_SIZE)
+      );
+      jadwalToolbarState.visibleCount = targetVisible;
+
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < targetVisible; i++) {
+        frag.appendChild(buildJadwalTableRow(list[i], canManageJadwal));
+      }
+      tbody.appendChild(frag);
+      updateJadwalSentinelAndCounts(targetVisible, list.length, scopedList.length, isMhs);
+      setupJadwalInfiniteScroll();
+
+      if (wrap) {
+        wrap.scrollTop = opts && opts.preserveScroll ? prevScrollTop : 0;
+      }
     }
 
     function deleteJadwalItem(id) {
@@ -10469,62 +11113,60 @@
     }
 
     // ==========================================
-    // [PAGINATION & OPTIMASI DOM TABEL PENDAFTARAN]
+    // [RIWAYAT PENDAFTARAN MODERN]: KPI DINAMIS, TOOLBAR PINTAR, STICKY HEADER, INFINITE SCROLL & EDIT INLINE
     // ==========================================
-    let pendaftaranCurrentPage = 1;
-    let pendaftaranPageSize = 10;
+    const PENDAFTARAN_BATCH_SIZE = 25;
+    const pendaftaranToolbarState = {
+      search: '',
+      prodi: '',
+      layanan: '',
+      status: '',
+      sort: 'tanggal-desc',
+      visibleCount: PENDAFTARAN_BATCH_SIZE
+    };
+    let pendaftaranFilteredCache = [];
+    let pendaftaranInfiniteObserver = null;
 
-    function changePendaftaranPageSize(val) {
-      pendaftaranPageSize = parseInt(val, 10) || 10;
-      pendaftaranCurrentPage = 1;
-      renderPendaftaranTable();
+    function changePendaftaranPageSize() {
+      handlePendaftaranToolbarChange(true);
     }
 
-    function renderPendaftaranPagination(totalPages) {
-      const container = document.getElementById('pendaftaranPaginationControls');
-      if (!container) return;
-      container.innerHTML = '';
-      if (totalPages <= 1) return;
-
-      const prevBtn = document.createElement('button');
-      prevBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
-        pendaftaranCurrentPage === 1 ? 'text-slate-300 border-slate-200 cursor-not-allowed' : 'text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer'
-      }`;
-      prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
-      prevBtn.disabled = pendaftaranCurrentPage === 1;
-      prevBtn.onclick = () => { if (pendaftaranCurrentPage > 1) { pendaftaranCurrentPage--; renderPendaftaranTable(); } };
-      container.appendChild(prevBtn);
-
-      for (let p = 1; p <= totalPages; p++) {
-        if (p === 1 || p === totalPages || (p >= pendaftaranCurrentPage - 1 && p <= pendaftaranCurrentPage + 1)) {
-          const pageBtn = document.createElement('button');
-          pageBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
-            p === pendaftaranCurrentPage ? 'bg-blue-900 text-white border-blue-900 shadow-xs' : 'text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer'
-          }`;
-          pageBtn.innerText = p;
-          pageBtn.onclick = () => { pendaftaranCurrentPage = p; renderPendaftaranTable(); };
-          container.appendChild(pageBtn);
-        } else if (p === pendaftaranCurrentPage - 2 || p === pendaftaranCurrentPage + 2) {
-          const dots = document.createElement('span');
-          dots.className = 'px-1 text-slate-400 font-bold';
-          dots.innerText = '...';
-          container.appendChild(dots);
-        }
+    function getPendaftaranApprovalSelectStyle(status) {
+      const lower = String(status || '').trim().toLowerCase();
+      if (lower === 'disetujui') {
+        return 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100/70';
       }
-
-      const nextBtn = document.createElement('button');
-      nextBtn.className = `px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
-        pendaftaranCurrentPage === totalPages ? 'text-slate-300 border-slate-200 cursor-not-allowed' : 'text-slate-700 border-slate-300 hover:bg-slate-100 cursor-pointer'
-      }`;
-      nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
-      nextBtn.disabled = pendaftaranCurrentPage === totalPages;
-      nextBtn.onclick = () => { if (pendaftaranCurrentPage < totalPages) { pendaftaranCurrentPage++; renderPendaftaranTable(); } };
-      container.appendChild(nextBtn);
+      if (lower === 'ditolak') {
+        return 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100/70';
+      }
+      return 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100/70';
     }
 
-    // ==========================================
-    // [RIWAYAT PENDAFTARAN]: ENGINE PENCARIAN & TABEL SINKRON RBAC
-    // ==========================================
+    function getPendaftaranApprovalBadgeStyle(status) {
+      const lower = String(status || '').trim().toLowerCase();
+      if (lower === 'disetujui') {
+        return 'bg-emerald-50 text-emerald-800 border-emerald-300';
+      }
+      if (lower === 'ditolak') {
+        return 'bg-rose-50 text-rose-800 border-rose-300';
+      }
+      return 'bg-amber-50 text-amber-800 border-amber-300';
+    }
+
+    function readPendaftaranToolbarControls() {
+      const elSearch = document.getElementById('searchPendaftaran');
+      const elProdi = document.getElementById('filterPendaftaranProdi') || document.getElementById('pendaftaranFilterProdi');
+      const elLayanan = document.getElementById('filterPendaftaranLayanan') || document.getElementById('pendaftaranFilterLayanan');
+      const elStatus = document.getElementById('filterPendaftaranStatus') || document.getElementById('pendaftaranFilterStatus');
+      const elSort = document.getElementById('sortPendaftaran');
+
+      if (elSearch) pendaftaranToolbarState.search = String(elSearch.value || '').trim();
+      if (elProdi) pendaftaranToolbarState.prodi = String(elProdi.value || '').trim();
+      if (elLayanan) pendaftaranToolbarState.layanan = String(elLayanan.value || '').trim();
+      if (elStatus) pendaftaranToolbarState.status = String(elStatus.value || '').trim();
+      if (elSort) pendaftaranToolbarState.sort = String(elSort.value || 'tanggal-desc').trim() || 'tanggal-desc';
+    }
+
     function syncPendaftaranSearchClearButton() {
       const input = document.getElementById('searchPendaftaran');
       const clearBtn = document.getElementById('btnClearSearchPendaftaran');
@@ -10533,10 +11175,52 @@
       clearBtn.classList.toggle('hidden', !hasValue);
     }
 
-    function handlePendaftaranSearchInput() {
+    function syncPendaftaranToolbarVisualControls() {
       syncPendaftaranSearchClearButton();
-      pendaftaranCurrentPage = 1;
-      renderPendaftaranTable();
+
+      const isDirty = Boolean(
+        pendaftaranToolbarState.search ||
+        pendaftaranToolbarState.prodi ||
+        pendaftaranToolbarState.layanan ||
+        pendaftaranToolbarState.status ||
+        (pendaftaranToolbarState.sort && pendaftaranToolbarState.sort !== 'tanggal-desc')
+      );
+      const btnReset = document.getElementById('btnResetPendaftaranToolbar');
+      if (btnReset) {
+        btnReset.classList.toggle('hidden', !isDirty);
+        btnReset.classList.toggle('inline-flex', isDirty);
+      }
+
+      const elStatusFilter = document.getElementById('filterPendaftaranStatus') || document.getElementById('pendaftaranFilterStatus');
+      if (elStatusFilter) {
+        const baseFilterClasses = 'w-full sm:col-span-2 lg:col-span-1 lg:w-auto min-w-0 border rounded-xl px-2.5 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900 cursor-pointer transition';
+        if (pendaftaranToolbarState.status) {
+          elStatusFilter.className = `${baseFilterClasses} ${getPendaftaranApprovalSelectStyle(pendaftaranToolbarState.status)}`;
+        } else {
+          elStatusFilter.className = `${baseFilterClasses} border-slate-300 bg-white text-slate-700`;
+        }
+      }
+
+      const s = pendaftaranToolbarState.sort;
+      const setIcon = (id, ascKey, descKey) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (s === ascKey) {
+          el.className = 'fas fa-sort-up text-[10px] text-blue-900';
+        } else if (s === descKey) {
+          el.className = 'fas fa-sort-down text-[10px] text-blue-900';
+        } else {
+          el.className = 'fas fa-sort text-[10px] text-slate-400';
+        }
+      };
+      setIcon('sortIconPenId', 'id-asc', 'id-desc');
+      setIcon('sortIconPenTanggal', 'tanggal-asc', 'tanggal-desc');
+      setIcon('sortIconPenNama', 'nama-asc', 'nama-desc');
+      setIcon('sortIconPenNominal', 'nominal-asc', 'nominal-desc');
+    }
+
+    function handlePendaftaranSearchInput() {
+      handlePendaftaranToolbarChange(true);
     }
 
     function clearPendaftaranSearch() {
@@ -10545,9 +11229,7 @@
         input.value = '';
         input.focus();
       }
-      syncPendaftaranSearchClearButton();
-      pendaftaranCurrentPage = 1;
-      renderPendaftaranTable();
+      handlePendaftaranToolbarChange(true);
     }
 
     function resetAllPendaftaranFilters() {
@@ -10555,13 +11237,21 @@
       if (input) input.value = '';
       const selProdi = document.getElementById('filterPendaftaranProdi') || document.getElementById('pendaftaranFilterProdi');
       if (selProdi) selProdi.value = '';
-      const selStatus = document.getElementById('filterPendaftaranStatus') || document.getElementById('pendaftaranFilterStatus');
-      if (selStatus) selStatus.value = '';
       const selLayanan = document.getElementById('filterPendaftaranLayanan') || document.getElementById('pendaftaranFilterLayanan');
       if (selLayanan) selLayanan.value = '';
-      syncPendaftaranSearchClearButton();
-      pendaftaranCurrentPage = 1;
-      renderPendaftaranTable();
+      const selStatus = document.getElementById('filterPendaftaranStatus') || document.getElementById('pendaftaranFilterStatus');
+      if (selStatus) selStatus.value = '';
+      const selSort = document.getElementById('sortPendaftaran');
+      if (selSort) selSort.value = 'tanggal-desc';
+
+      pendaftaranToolbarState.search = '';
+      pendaftaranToolbarState.prodi = '';
+      pendaftaranToolbarState.layanan = '';
+      pendaftaranToolbarState.status = '';
+      pendaftaranToolbarState.sort = 'tanggal-desc';
+      pendaftaranToolbarState.visibleCount = PENDAFTARAN_BATCH_SIZE;
+
+      renderPendaftaranTable({ preserveScroll: false });
     }
 
     function buildPendaftaranSearchHaystack(p) {
@@ -10579,7 +11269,10 @@
         p.Kelas, p.kelas,
         p['Kategori Kelas'], p.kategoriKelas,
         p.Semester, p.semester,
-        p['Jenis Layanan'], p.jenisLayanan
+        p['Jenis Layanan'], p.jenisLayanan,
+        p['Status Persetujuan'],
+        p['Status Pembayaran'],
+        p.Tanggal
       ];
 
       if (Array.isArray(p.mataKuliahList)) {
@@ -10607,68 +11300,468 @@
       return tokens.every(token => haystack.includes(token));
     }
 
-    function getFilteredPendaftaranList() {
+    function getPendaftaranRoleScopedList() {
       const pendaftaran = (appData && Array.isArray(appData.pendaftaran)) ? appData.pendaftaran : [];
-      const search = String(document.getElementById('searchPendaftaran')?.value || '').trim();
-      const filterProdi = String(document.getElementById('filterPendaftaranProdi')?.value || document.getElementById('pendaftaranFilterProdi')?.value || '').trim();
-      const filterStatus = String(document.getElementById('filterPendaftaranStatus')?.value || document.getElementById('pendaftaranFilterStatus')?.value || '').trim();
-      const filterLayanan = String(document.getElementById('filterPendaftaranLayanan')?.value || document.getElementById('pendaftaranFilterLayanan')?.value || '').trim();
-
       const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
-      let list = pendaftaran;
+      if (!isMhs) return pendaftaran.slice();
 
-      // Mahasiswa HANYA melihat data miliknya sendiri (Pencocokan multi-atribut: NPM, NIM, Nama Mahasiswa, Username)
-      if (isMhs) {
-        const myNpm = String(currentUser.npm || currentUser.username || '').trim().toLowerCase();
-        const myName = String(currentUser.nama || '').trim().toLowerCase();
-        const myUser = String(currentUser.username || '').trim().toLowerCase();
+      const myNpm = String(currentUser.npm || currentUser.username || '').trim().toLowerCase();
+      const myName = String(currentUser.nama || '').trim().toLowerCase();
+      const myUser = String(currentUser.username || '').trim().toLowerCase();
+      return pendaftaran.filter(p => {
+        const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
+        const pName = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
+        const pUser = String(p.Username || p.username || '').trim().toLowerCase();
+
+        const npmMatch = myNpm && pNpm && (pNpm === myNpm || pNpm.includes(myNpm) || myNpm.includes(pNpm));
+        const nameMatch = myName && pName && (pName === myName || pName.includes(myName) || myName.includes(pName));
+        const userMatch = myUser && (pNpm === myUser || pUser === myUser || pName.includes(myUser));
+
+        return Boolean(npmMatch || nameMatch || userMatch);
+      });
+    }
+
+    function getFilteredPendaftaranList(scopedInput) {
+      readPendaftaranToolbarControls();
+      let list = Array.isArray(scopedInput) ? scopedInput.slice() : getPendaftaranRoleScopedList();
+
+      if (pendaftaranToolbarState.prodi) {
+        const targetProdi = pendaftaranToolbarState.prodi.toUpperCase();
         list = list.filter(p => {
-          const pNpm = String(p.NPM || p.NIM || '').trim().toLowerCase();
-          const pName = String(p['Nama Mahasiswa'] || p.nama || '').trim().toLowerCase();
-          const pUser = String(p.Username || p.username || '').trim().toLowerCase();
-
-          const npmMatch = myNpm && pNpm && (pNpm === myNpm || pNpm.includes(myNpm) || myNpm.includes(pNpm));
-          const nameMatch = myName && pName && (pName === myName || pName.includes(myName) || myName.includes(pName));
-          const userMatch = myUser && (pNpm === myUser || pUser === myUser || pName.includes(myUser));
-
-          return Boolean(npmMatch || nameMatch || userMatch);
+          const code = typeof resolveInvoiceProdiCode === 'function'
+            ? resolveInvoiceProdiCode(p)
+            : String(p['Kode Prodi'] || p.kodeProdi || '').trim().toUpperCase();
+          return code === targetProdi;
         });
       }
+      if (pendaftaranToolbarState.status) {
+        const targetStatus = pendaftaranToolbarState.status.toLowerCase();
+        list = list.filter(p => String(p['Status Persetujuan'] || 'Pending').trim().toLowerCase() === targetStatus);
+      }
+      if (pendaftaranToolbarState.layanan) {
+        const targetLayanan = (typeof normalizeJenisLayananName === 'function'
+          ? normalizeJenisLayananName(pendaftaranToolbarState.layanan)
+          : pendaftaranToolbarState.layanan
+        ).toLowerCase();
+        list = list.filter(p => {
+          const rawLyn = p['Jenis Layanan'] || p.Layanan || '';
+          const normLyn = (typeof normalizeJenisLayananName === 'function'
+            ? normalizeJenisLayananName(rawLyn)
+            : String(rawLyn)
+          ).trim().toLowerCase();
+          return normLyn === targetLayanan;
+        });
+      }
+      if (pendaftaranToolbarState.search) {
+        list = list.filter(p => matchesPendaftaranSearch(p, pendaftaranToolbarState.search));
+      }
 
-      if (filterProdi) {
-        const targetProdi = filterProdi.toUpperCase();
-        list = list.filter(p => String(p['Kode Prodi'] || p.kodeProdi || '').trim().toUpperCase() === targetProdi);
-      }
-      if (filterStatus) {
-        const targetStatus = filterStatus.toLowerCase();
-        list = list.filter(p => String(p['Status Persetujuan'] || '').trim().toLowerCase() === targetStatus);
-      }
-      if (filterLayanan) {
-        const targetLayanan = filterLayanan.toLowerCase();
-        list = list.filter(p => String(p['Jenis Layanan'] || '').trim().toLowerCase() === targetLayanan);
-      }
-      if (search) {
-        list = list.filter(p => matchesPendaftaranSearch(p, search));
-      }
+      const sortKey = pendaftaranToolbarState.sort || 'tanggal-desc';
+      list.sort((a, b) => {
+        if (sortKey === 'tanggal-desc' || sortKey === 'tanggal-asc') {
+          const diff = (typeof parseInvoiceDateMs === 'function' ? parseInvoiceDateMs(a.Tanggal) - parseInvoiceDateMs(b.Tanggal) : 0);
+          if (diff !== 0) return sortKey === 'tanggal-desc' ? -diff : diff;
+          const idDiff = (typeof extractNumericIdTail === 'function' ? extractNumericIdTail(a.ID) - extractNumericIdTail(b.ID) : 0);
+          return sortKey === 'tanggal-desc' ? -idDiff : idDiff;
+        }
+        if (sortKey === 'nominal-desc' || sortKey === 'nominal-asc') {
+          const diff = (Number(a.Nominal) || 0) - (Number(b.Nominal) || 0);
+          return sortKey === 'nominal-desc' ? -diff : diff;
+        }
+        if (sortKey === 'nama-asc' || sortKey === 'nama-desc') {
+          const cmp = String(a['Nama Mahasiswa'] || a.Nama || '').localeCompare(String(b['Nama Mahasiswa'] || b.Nama || ''), 'id');
+          return sortKey === 'nama-asc' ? cmp : -cmp;
+        }
+        if (sortKey === 'id-asc' || sortKey === 'id-desc') {
+          const cmp = String(a.ID || '').localeCompare(String(b.ID || ''), 'id', { numeric: true });
+          return sortKey === 'id-asc' ? cmp : -cmp;
+        }
+        return 0;
+      });
 
       return list;
     }
 
-    function renderPendaftaranTable() {
-      if (typeof syncActivePeriodBanner === 'function') syncActivePeriodBanner();
-      syncPendaftaranSearchClearButton();
+    function updatePendaftaranSummaryCards(filteredList) {
+      const list = Array.isArray(filteredList) ? filteredList : [];
+      const elTotal = document.getElementById('pendaftaranTotalCount');
+      const elSetuju = document.getElementById('pendaftaranDisetujuiCount');
+      const elPending = document.getElementById('pendaftaranPendingCount');
+      const elTolak = document.getElementById('pendaftaranDitolakCount');
+
+      if (elTotal) elTotal.innerText = list.length;
+      if (elSetuju) elSetuju.innerText = list.filter(p => String(p['Status Persetujuan'] || '').trim().toLowerCase() === 'disetujui').length;
+      if (elPending) elPending.innerText = list.filter(p => String(p['Status Persetujuan'] || 'Pending').trim().toLowerCase() === 'pending').length;
+      if (elTolak) elTolak.innerText = list.filter(p => String(p['Status Persetujuan'] || '').trim().toLowerCase() === 'ditolak').length;
+    }
+
+    function buildPendaftaranTableRow(p, roleFlags) {
+      const { isMhs, isDekanOrWadek, isPimpinan, canManageFull } = roleFlags;
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-slate-50/80 transition align-top';
+
+      const idRaw = String(p.ID || '').trim();
+      const idAttr = escapeHtml(idRaw).replace(/'/g, '&#39;');
+      const statusApp = String(p['Status Persetujuan'] || 'Pending').trim() || 'Pending';
+      const statusBayar = String(p['Status Pembayaran'] || 'Belum Bayar').trim() || 'Belum Bayar';
+      const bayarBadgeClass = typeof getInvoicePaymentBadgeStyle === 'function'
+        ? getInvoicePaymentBadgeStyle(statusBayar)
+        : (statusBayar.toLowerCase() === 'lunas' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-rose-50 text-rose-800 border-rose-300');
+      const nominal = Number(p.Nominal || 0);
+      const kodeProdi = String(p['Kode Prodi'] || (typeof resolveInvoiceProdiCode === 'function' ? resolveInvoiceProdiCode(p) : '') || '-').trim() || '-';
+      const namaProdi = String(p['Program Studi'] || '-').trim() || '-';
+      const layananStr = String(p['Jenis Layanan'] || p.Layanan || '-').trim() || '-';
+
+      const buktiFotoHtml = p['Bukti Foto'] ? `
+        <button type="button" onclick="showBuktiPreviewModal('${escapeHtml(p['Bukti Foto']).replace(/'/g, '&#39;')}')" class="text-blue-700 hover:text-blue-900 hover:underline inline-flex items-center gap-1 font-bold text-[10px] mt-1 cursor-pointer">
+          <i class="fas fa-image text-[9px]" aria-hidden="true"></i> <span>Bukti Foto</span>
+        </button>
+      ` : '<span class="text-[10px] text-slate-400 italic block mt-0.5">Tanpa bukti</span>';
+
+      // Status Persetujuan cell: Inline Select untuk Master Admin & Admin TU, Badge statis untuk role lain
+      const standardAppStatuses = ['Pending', 'Disetujui', 'Ditolak'];
+      const hasAppMatch = standardAppStatuses.some(opt => opt.toLowerCase() === statusApp.toLowerCase());
+      const appOptionsHtml = [
+        ...(hasAppMatch ? [] : [statusApp]),
+        ...standardAppStatuses
+      ].map(opt => {
+        const isSelected = opt.toLowerCase() === statusApp.toLowerCase();
+        const optCls = getPendaftaranApprovalBadgeStyle(opt);
+        return `<option value="${escapeHtml(opt)}" class="${optCls} font-semibold" ${isSelected ? 'selected' : ''}>${escapeHtml(opt)}</option>`;
+      }).join('');
+
+      const statusAppHtml = canManageFull
+        ? `<select aria-label="Status Persetujuan ${escapeHtml(idRaw)}" data-pendaftaran-id="${escapeHtml(idRaw)}" onchange="handleInlinePendaftaranStatusChange('${idAttr}', this.value, this)" class="w-full max-w-[116px] text-[10px] sm:text-[11px] font-bold rounded-lg px-1.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition truncate ${getPendaftaranApprovalSelectStyle(statusApp)}">${appOptionsHtml}</select>`
+        : `<span class="inline-flex items-center justify-center px-2 py-1 rounded-lg text-[10px] uppercase font-bold border break-words ${getPendaftaranApprovalBadgeStyle(statusApp)}">${escapeHtml(statusApp)}</span>`;
+
+      let aksiButtons = '';
+      if (canManageFull) {
+        aksiButtons = `
+          <div class="grid grid-cols-2 gap-1 max-w-[110px] mx-auto">
+            <button type="button" onclick="openSettingPembayaranModal('${idAttr}')" title="Setting Status Pembayaran" class="bg-indigo-700 hover:bg-indigo-800 text-white px-1.5 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-0.5 shadow-xs transition cursor-pointer"><i class="fas fa-money-bill-transfer text-[9px]"></i><span class="hidden lg:inline">Bayar</span></button>
+            <button type="button" onclick="openPendaftaranModal('${idAttr}')" title="Edit Data Pendaftaran" class="bg-blue-900 hover:bg-blue-800 text-white px-1.5 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-0.5 shadow-xs transition cursor-pointer"><i class="fas fa-edit text-[9px]"></i><span class="hidden lg:inline">Edit</span></button>
+            <button type="button" onclick="renderKartuUjianDigital('${idAttr}'); switchTab('kartu');" title="Kartu Ujian Digital" class="bg-teal-700 hover:bg-teal-800 text-white px-1.5 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-0.5 shadow-xs transition cursor-pointer"><i class="fas fa-id-card text-[9px]"></i><span class="hidden lg:inline">Kartu</span></button>
+            <button type="button" onclick="openSuratDosenFromPendaftaran('${idAttr}')" title="Surat Pengantar Dosen &amp; Daftar Hadir" class="bg-sky-700 hover:bg-sky-800 text-white px-1.5 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-0.5 shadow-xs transition cursor-pointer"><i class="fas fa-envelope-open-text text-[9px]"></i><span class="hidden lg:inline">Surat</span></button>
+            <button type="button" onclick="openInvoiceModal('${idAttr}')" title="Cetak Kwitansi" class="bg-slate-700 hover:bg-slate-800 text-white px-1.5 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-0.5 shadow-xs transition cursor-pointer"><i class="fas fa-receipt text-[9px]"></i><span class="hidden lg:inline">Kwit.</span></button>
+            <button type="button" onclick="handleDeletePendaftaran('${idAttr}')" title="Hapus Berkas" class="bg-rose-50 hover:bg-rose-100 text-rose-700 px-1.5 py-1 rounded-lg text-[10px] font-bold border border-rose-200 inline-flex items-center justify-center gap-0.5 transition cursor-pointer"><i class="fas fa-trash text-[9px]"></i><span class="hidden lg:inline">Hapus</span></button>
+          </div>
+        `;
+      } else if (isDekanOrWadek) {
+        aksiButtons = `
+          <div class="flex flex-col gap-1 items-stretch max-w-[82px] mx-auto">
+            <button type="button" onclick="openInvoiceModal('${idAttr}')" class="bg-blue-900 hover:bg-blue-800 text-white px-2 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-1 shadow-xs cursor-pointer">
+              <i class="fas fa-receipt text-[9px]"></i> <span>Kwitansi</span>
+            </button>
+          </div>
+        `;
+      } else if (isPimpinan) {
+        aksiButtons = `<span class="text-[10px] text-slate-400 font-semibold">Pemantauan</span>`;
+      } else if (isMhs) {
+        aksiButtons = statusApp.toLowerCase() === 'disetujui'
+          ? `<button type="button" onclick="renderKartuUjianDigital('${idAttr}'); switchTab('kartu');" class="bg-blue-900 hover:bg-blue-950 text-white px-2 py-1.5 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-1 shadow-xs cursor-pointer"><i class="fas fa-print text-[9px]"></i> <span>Kartu</span></button>`
+          : `<span class="text-[10px] text-amber-700 italic leading-tight block">Verifikasi TU</span>`;
+      }
+
+      const isApproved = statusApp.toLowerCase() === 'disetujui';
+      const checkboxAttr = isApproved
+        ? 'disabled style="opacity: 0.35; cursor: not-allowed;" title="Berkas telah disetujui (tidak dapat dipilih massal)"'
+        : 'class="pendaftaran-row-cb rounded text-blue-900 cursor-pointer"';
+
+      const checkboxTd = canManageFull ? `
+        <td class="px-1.5 py-2.5 text-center">
+          <input type="checkbox" ${isApproved ? 'class="pendaftaran-row-cb rounded text-blue-900"' : ''} value="${escapeHtml(idRaw)}" ${checkboxAttr} onchange="updatePendaftaranSelectionUI()">
+        </td>
+      ` : '';
+
+      let matkulTdContent = '';
+      if (Array.isArray(p.mataKuliahList) && p.mataKuliahList.length > 0) {
+        matkulTdContent = p.mataKuliahList.map((m, idx) => {
+          const num = p.mataKuliahList.length > 1 ? `<span class="text-slate-400 font-mono text-[10px] mr-1">${idx + 1}.</span>` : '';
+          const nilaiBadge = m.nilaiHuruf ? `<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-900 border border-indigo-200">Nilai ${escapeHtml(m.nilaiHuruf)}</span>` : '';
+          const dosenLaluInfo = m.dosenLalu ? `<div class="text-[10px] text-indigo-700 italic mt-0.5 break-words">Dosen Lalu: ${escapeHtml(m.dosenLalu)}</div>` : '';
+          return `
+            <div class="${idx > 0 ? 'pt-1 mt-1 border-t border-slate-100' : ''}">
+              <div class="font-bold text-blue-950 leading-snug text-[11px] break-words">
+                ${num}${escapeHtml(m.nama || m.mataKuliah || '')}${nilaiBadge}
+              </div>
+              <div class="text-[10px] text-slate-500 leading-snug mt-0.5 break-words">
+                <i class="fas fa-user-tie text-[9px] text-slate-400 mr-1" aria-hidden="true"></i>${escapeHtml(m.dosen || m.dosenPengampu || '-')}
+              </div>
+              ${dosenLaluInfo}
+            </div>
+          `;
+        }).join('');
+      } else {
+        matkulTdContent = `
+          <div class="space-y-0.5">
+            <div class="font-bold text-blue-950 leading-snug text-[11px] break-words">
+              ${escapeHtml(p['Mata Kuliah'] || '-').replace(/\n/g, '<br>')}
+            </div>
+            <div class="text-[10px] text-slate-500 leading-snug break-words">
+              ${escapeHtml(p['Dosen Pengampu'] || '-').replace(/\n/g, '<br>')}
+            </div>
+          </div>
+        `;
+      }
+
+      tr.innerHTML = `
+        ${checkboxTd}
+        <td class="px-2 py-2.5 min-w-0">
+          <div class="font-mono font-bold text-blue-900 text-[11px] leading-snug break-all tabular-nums">${escapeHtml(idRaw)}</div>
+          <div class="font-mono text-slate-400 text-[10px] leading-snug tabular-nums mt-0.5">${escapeHtml(p.Tanggal || '-')}</div>
+        </td>
+        <td class="px-2 py-2.5 min-w-0">
+          <b class="text-slate-800 block text-xs leading-snug break-words">${escapeHtml(p['Nama Mahasiswa'] || p.nama || '-')}</b>
+          <div class="font-mono text-slate-500 text-[10px] leading-snug tabular-nums mt-0.5 break-all">${escapeHtml(p.NPM || p.NIM || '-')}</div>
+          <div class="text-[10px] text-slate-600 leading-snug mt-0.5 break-words">
+            <span class="font-bold">[${escapeHtml(kodeProdi)}]</span> <span class="hidden xl:inline">${escapeHtml(namaProdi)} · </span>${escapeHtml(p.Semester || 'Sem 3')} · ${escapeHtml(p.Kelas || 'Reguler')}
+          </div>
+          <div class="sm:hidden text-[10px] font-semibold text-blue-900 leading-snug mt-0.5 truncate">${escapeHtml(layananStr)}</div>
+        </td>
+        <td class="hidden sm:table-cell px-2 py-2.5 min-w-0">
+          <div class="inline-block text-[10px] font-bold text-blue-900 bg-blue-50 border border-blue-200/80 rounded px-1.5 py-0.5 mb-1">${escapeHtml(layananStr)}</div>
+          ${matkulTdContent}
+        </td>
+        <td class="hidden lg:table-cell px-2 py-2.5 text-right min-w-0">
+          <div class="font-mono font-bold text-slate-900 text-[11px] tabular-nums whitespace-nowrap">Rp ${nominal.toLocaleString('id-ID')}</div>
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9.5px] font-bold border mt-1 max-w-full truncate ${bayarBadgeClass}" title="${escapeHtml(statusBayar)}">${escapeHtml(statusBayar)}</span>
+          <div class="flex justify-end">${buktiFotoHtml}</div>
+        </td>
+        <td class="px-2 py-2.5 text-center min-w-0">
+          <div class="flex flex-col items-center gap-1">
+            ${statusAppHtml}
+            <span class="lg:hidden inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-bold border max-w-full truncate ${bayarBadgeClass}">${escapeHtml(statusBayar)}</span>
+            <div class="lg:hidden">${buktiFotoHtml}</div>
+          </div>
+        </td>
+        <td class="px-1.5 py-2.5 text-center">${aksiButtons}</td>
+      `;
+      return tr;
+    }
+
+    function updatePendaftaranSentinelAndCounts(renderedCount, totalFilteredCount, totalScopedCount) {
+      const countEl = document.getElementById('pendaftaranToolbarCountInfo');
+      if (countEl) {
+        if (totalFilteredCount === 0) {
+          countEl.innerText = `Menampilkan 0 dari ${totalScopedCount} berkas`;
+        } else {
+          const suffix = totalFilteredCount !== totalScopedCount ? ` (tersaring dari ${totalScopedCount} total)` : '';
+          countEl.innerText = `Menampilkan ${renderedCount} dari ${totalFilteredCount} berkas${suffix}`;
+        }
+      }
+
+      const sentinel = document.getElementById('pendaftaranInfiniteSentinel');
+      if (!sentinel) return;
+
+      if (totalFilteredCount === 0) {
+        sentinel.classList.add('hidden');
+        sentinel.innerHTML = '';
+        return;
+      }
+
+      sentinel.classList.remove('hidden');
+      const remaining = totalFilteredCount - renderedCount;
+      if (remaining > 0) {
+        sentinel.innerHTML = `
+          <span class="text-slate-500">Menampilkan <b class="text-slate-700 tabular-nums">${renderedCount}</b> dari <b class="text-slate-700 tabular-nums">${totalFilteredCount}</b> berkas · Gulir ke bawah untuk memuat berikutnya</span>
+          <button type="button" onclick="loadMorePendaftaranRows()" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-blue-900 font-bold text-[11px] transition cursor-pointer whitespace-nowrap shrink-0">Muat +${Math.min(PENDAFTARAN_BATCH_SIZE, remaining)}</button>
+        `;
+      } else {
+        sentinel.innerHTML = `<span class="text-slate-400">Seluruh <b class="text-slate-600 tabular-nums">${totalFilteredCount}</b> berkas telah ditampilkan</span>`;
+      }
+    }
+
+    function setupPendaftaranInfiniteScroll() {
+      const wrap = document.getElementById('pendaftaranTableScrollWrap');
+      const sentinel = document.getElementById('pendaftaranInfiniteSentinel');
+      if (!wrap || !sentinel || typeof IntersectionObserver === 'undefined') return;
+
+      if (pendaftaranInfiniteObserver) {
+        pendaftaranInfiniteObserver.disconnect();
+      }
+      pendaftaranInfiniteObserver = new IntersectionObserver((entries) => {
+        if (entries.some(entry => entry.isIntersecting)) {
+          loadMorePendaftaranRows();
+        }
+      }, {
+        root: wrap,
+        rootMargin: '120px'
+      });
+      pendaftaranInfiniteObserver.observe(sentinel);
+    }
+
+    function handlePendaftaranScrollCheck() {
+      const wrap = document.getElementById('pendaftaranTableScrollWrap');
+      if (!wrap) return;
+      const distanceFromBottom = wrap.scrollHeight - wrap.scrollTop - wrap.clientHeight;
+      if (distanceFromBottom <= 120) {
+        loadMorePendaftaranRows();
+      }
+    }
+
+    function loadMorePendaftaranRows() {
+      const total = pendaftaranFilteredCache.length;
+      if (pendaftaranToolbarState.visibleCount >= total) return;
+
       const tbody = document.getElementById('tablePendaftaranBody');
       if (!tbody) return;
 
-      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
-      const isDekanOrWadek = currentUser && ['dekan', 'wakil dekan'].includes((currentUser.role || '').toLowerCase());
-      const isPimpinan = currentUser && ['dekan', 'wakil dekan', 'ketua program studi', 'sekretaris program studi'].includes((currentUser.role || '').toLowerCase());
-      const canManageFull = currentUser && ['master admin', 'master_admin', 'admin tu', 'admintu'].includes((currentUser.role || '').toLowerCase());
+      const roleFlags = {
+        isMhs: currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa',
+        isDekanOrWadek: currentUser && ['dekan', 'wakil dekan', 'wadek'].includes((currentUser.role || '').toLowerCase()),
+        isPimpinan: currentUser && ['dekan', 'wakil dekan', 'wadek', 'ketua program studi', 'kaprodi', 'sekretaris program studi', 'sekprodi'].includes((currentUser.role || '').toLowerCase()),
+        canManageFull: currentUser && ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes((currentUser.role || '').toLowerCase())
+      };
+
+      const startIdx = pendaftaranToolbarState.visibleCount;
+      const nextCount = Math.min(total, startIdx + PENDAFTARAN_BATCH_SIZE);
+      const frag = document.createDocumentFragment();
+      for (let i = startIdx; i < nextCount; i++) {
+        frag.appendChild(buildPendaftaranTableRow(pendaftaranFilteredCache[i], roleFlags));
+      }
+      tbody.appendChild(frag);
+      pendaftaranToolbarState.visibleCount = nextCount;
+      updatePendaftaranSentinelAndCounts(nextCount, total, getPendaftaranRoleScopedList().length);
+      updatePendaftaranSelectionUI();
+    }
+
+    function handlePendaftaranToolbarChange(resetScroll = true) {
+      readPendaftaranToolbarControls();
+      pendaftaranToolbarState.visibleCount = PENDAFTARAN_BATCH_SIZE;
+      renderPendaftaranTable({ preserveScroll: !resetScroll });
+    }
+
+    function togglePendaftaranColumnSort(col) {
+      readPendaftaranToolbarControls();
+      const curr = pendaftaranToolbarState.sort;
+      let next = 'tanggal-desc';
+      if (col === 'tanggal') next = curr === 'tanggal-desc' ? 'tanggal-asc' : 'tanggal-desc';
+      else if (col === 'nominal') next = curr === 'nominal-desc' ? 'nominal-asc' : 'nominal-desc';
+      else if (col === 'nama') next = curr === 'nama-asc' ? 'nama-desc' : 'nama-asc';
+      else if (col === 'id') next = curr === 'id-asc' ? 'id-desc' : 'id-asc';
+
+      const elSort = document.getElementById('sortPendaftaran');
+      if (elSort) {
+        if (next === 'id-desc' && !elSort.querySelector('option[value="id-desc"]')) {
+          const opt = document.createElement('option');
+          opt.value = 'id-desc';
+          opt.text = 'No. Berkas Z–A';
+          elSort.appendChild(opt);
+        }
+        elSort.value = next;
+      }
+      pendaftaranToolbarState.sort = next;
+      handlePendaftaranToolbarChange(true);
+    }
+
+    function handleInlinePendaftaranStatusChange(id, newStatus, selectEl) {
+      const canManageFull = currentUser && ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes((currentUser.role || '').toLowerCase());
+      if (!canManageFull) {
+        if (selectEl) {
+          const existing = (appData.pendaftaran || []).find(p => String(p.ID).trim() === String(id).trim());
+          if (existing) selectEl.value = existing['Status Persetujuan'] || 'Pending';
+        }
+        Swal.fire('Akses Ditolak', 'Hanya Master Admin atau Admin TU yang dapat mengubah status persetujuan.', 'warning');
+        return;
+      }
+
+      const item = (appData.pendaftaran || []).find(p => String(p.ID).trim() === String(id).trim());
+      if (!item) return;
+
+      const prevStatus = String(item['Status Persetujuan'] || 'Pending').trim() || 'Pending';
+      if (prevStatus.toLowerCase() === String(newStatus || '').trim().toLowerCase()) return;
+
+      const baseSelectClasses = 'w-full max-w-[116px] text-[10px] sm:text-[11px] font-bold rounded-lg px-1.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition truncate';
+      item['Status Persetujuan'] = newStatus;
+      if (selectEl) {
+        selectEl.disabled = true;
+        selectEl.className = `${baseSelectClasses} opacity-75 cursor-wait ${getPendaftaranApprovalSelectStyle(newStatus)}`;
+      }
+      if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+      updatePendaftaranSummaryCards(getFilteredPendaftaranList());
+      if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+
+      const actorName = typeof getCurrentActorName === 'function' ? getCurrentActorName() : '';
+      const actorRole = typeof getCurrentActorRole === 'function' ? getCurrentActorRole() : '';
+
+      const rollbackInlineApproval = (errMsg) => {
+        item['Status Persetujuan'] = prevStatus;
+        if (selectEl) {
+          selectEl.value = prevStatus;
+          selectEl.disabled = false;
+          selectEl.className = `${baseSelectClasses} ${getPendaftaranApprovalSelectStyle(prevStatus)}`;
+        }
+        if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        updatePendaftaranSummaryCards(getFilteredPendaftaranList());
+        if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+        Swal.fire('Gagal Memperbarui Status', errMsg || 'Terjadi kesalahan saat menyimpan status persetujuan ke server.', 'error');
+      };
+
+      const onComplete = (res) => {
+        if (res && res.success === false) {
+          rollbackInlineApproval(res.message);
+          return;
+        }
+        if (selectEl) {
+          selectEl.disabled = false;
+          selectEl.className = `${baseSelectClasses} ${getPendaftaranApprovalSelectStyle(newStatus)}`;
+        }
+        if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        updatePendaftaranSummaryCards(getFilteredPendaftaranList());
+        if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+        if (typeof renderKartuUjianDigital === 'function') renderKartuUjianDigital();
+        if (pendaftaranToolbarState.status) {
+          renderPendaftaranTable({ preserveScroll: true });
+        } else {
+          // Sinkronkan status checkbox smart-approval baris tanpa reset scroll
+          renderPendaftaranTable({ preserveScroll: true });
+        }
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: `${id} diperbarui: ${newStatus}`,
+          showConfirmButton: false,
+          timer: 1800,
+          timerProgressBar: true
+        });
+      };
+
+      const onError = (err) => {
+        rollbackInlineApproval((err && err.message) || String(err || 'Koneksi ke server gagal.'));
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run) {
+        google.script.run
+          .withSuccessHandler(onComplete)
+          .withFailureHandler(onError)
+          .updateStatusApproval(id, newStatus, actorName, actorRole);
+      } else if (typeof callGasApi === 'function') {
+        callGasApi('updateStatusApproval', [id, newStatus, actorName, actorRole], onComplete, onError);
+      } else {
+        onComplete({ success: true });
+      }
+    }
+
+    function renderPendaftaranTable(opts = {}) {
+      if (typeof syncActivePeriodBanner === 'function') syncActivePeriodBanner();
+      const tbody = document.getElementById('tablePendaftaranBody');
+      if (!tbody) return;
+
+      const wrap = document.getElementById('pendaftaranTableScrollWrap');
+      const prevScrollTop = (opts && opts.preserveScroll && wrap) ? wrap.scrollTop : 0;
+
+      const roleFlags = {
+        isMhs: currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa',
+        isDekanOrWadek: currentUser && ['dekan', 'wakil dekan', 'wadek'].includes((currentUser.role || '').toLowerCase()),
+        isPimpinan: currentUser && ['dekan', 'wakil dekan', 'wadek', 'ketua program studi', 'kaprodi', 'sekretaris program studi', 'sekprodi'].includes((currentUser.role || '').toLowerCase()),
+        canManageFull: currentUser && ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes((currentUser.role || '').toLowerCase())
+      };
 
       // RBAC Ketat Kolom Checkbox: Hanya untuk Master Admin & Admin TU
       const thSelectAll = document.getElementById('thSelectAll');
       if (thSelectAll) {
-        thSelectAll.style.display = canManageFull ? '' : 'none';
+        thSelectAll.style.display = roleFlags.canManageFull ? '' : 'none';
       }
       const selectAllCb = document.getElementById('selectAllCb');
       if (selectAllCb) {
@@ -10677,175 +11770,77 @@
       }
       updatePendaftaranSelectionUI();
 
-      const list = getFilteredPendaftaranList();
+      const scopedList = getPendaftaranRoleScopedList();
+      const list = getFilteredPendaftaranList(scopedList);
+      pendaftaranFilteredCache = list;
+
+      syncPendaftaranToolbarVisualControls();
+      updatePendaftaranSummaryCards(list);
+
       const hasActiveFilter = Boolean(
-        String(document.getElementById('searchPendaftaran')?.value || '').trim() ||
-        String(document.getElementById('filterPendaftaranProdi')?.value || document.getElementById('pendaftaranFilterProdi')?.value || '').trim() ||
-        String(document.getElementById('filterPendaftaranStatus')?.value || document.getElementById('pendaftaranFilterStatus')?.value || '').trim() ||
-        String(document.getElementById('filterPendaftaranLayanan')?.value || document.getElementById('pendaftaranFilterLayanan')?.value || '').trim()
+        pendaftaranToolbarState.search ||
+        pendaftaranToolbarState.prodi ||
+        pendaftaranToolbarState.layanan ||
+        pendaftaranToolbarState.status
       );
 
-      // Update counter stats pendaftaran
-      if (document.getElementById('pendaftaranTotalCount')) document.getElementById('pendaftaranTotalCount').innerText = list.length;
-      if (document.getElementById('pendaftaranDisetujuiCount')) document.getElementById('pendaftaranDisetujuiCount').innerText = list.filter(p => String(p['Status Persetujuan'] || '').toLowerCase() === 'disetujui').length;
-      if (document.getElementById('pendaftaranPendingCount')) document.getElementById('pendaftaranPendingCount').innerText = list.filter(p => String(p['Status Persetujuan'] || '').toLowerCase() === 'pending').length;
-
-      // [OPTIMASI PERFORMA]: Pagination Tabel (10-25 baris per halaman)
-      const totalFiltered = list.length;
-      const totalPages = Math.ceil(totalFiltered / pendaftaranPageSize) || 1;
-      if (pendaftaranCurrentPage > totalPages) pendaftaranCurrentPage = totalPages;
-      if (pendaftaranCurrentPage < 1) pendaftaranCurrentPage = 1;
-
-      const startIndex = (pendaftaranCurrentPage - 1) * pendaftaranPageSize;
-      const endIndex = Math.min(startIndex + pendaftaranPageSize, totalFiltered);
-      const pageItems = list.slice(startIndex, endIndex);
-
-      const infoEl = document.getElementById('pendaftaranPaginationInfo');
-      if (infoEl) {
-        infoEl.innerText = totalFiltered > 0
-          ? `Menampilkan ${startIndex + 1} - ${endIndex} dari ${totalFiltered} berkas`
-          : 'Tidak ada berkas yang cocok';
-      }
-      renderPendaftaranPagination(totalPages);
-
       tbody.innerHTML = '';
-      if (pageItems.length === 0) {
+      if (list.length === 0) {
+        updatePendaftaranSentinelAndCounts(0, 0, scopedList.length);
+        const colCount = roleFlags.canManageFull ? 7 : 6;
         const resetActionHtml = hasActiveFilter
-          ? `<div class="mt-2"><button type="button" onclick="resetAllPendaftaranFilters()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-xs transition cursor-pointer"><i class="fas fa-rotate-left text-[11px]"></i><span>Reset Pencarian &amp; Filter</span></button></div>`
+          ? `<div class="mt-2"><button type="button" onclick="resetAllPendaftaranFilters()" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs transition cursor-pointer"><i class="fas fa-rotate-left text-[11px]"></i><span>Reset Filter</span></button></div>`
           : '';
-        tbody.innerHTML = `<tr><td colspan="${canManageFull ? 12 : 11}" class="p-6 text-center text-slate-400"><div>Tidak ada berkas pendaftaran yang cocok dengan filter.</div>${resetActionHtml}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="${colCount}" class="p-8 text-center text-slate-400 font-medium"><div>${scopedList.length === 0 ? 'Belum ada berkas pendaftaran yang tercatat.' : 'Tidak ada berkas pendaftaran yang cocok dengan pencarian atau filter.'}</div>${resetActionHtml}</td></tr>`;
         return;
       }
 
-      pageItems.forEach(p => {
-        const tr = document.createElement('tr');
-        tr.className = 'hover:bg-slate-50 transition';
+      const targetVisible = Math.min(
+        list.length,
+        Math.max(PENDAFTARAN_BATCH_SIZE, pendaftaranToolbarState.visibleCount || PENDAFTARAN_BATCH_SIZE)
+      );
+      pendaftaranToolbarState.visibleCount = targetVisible;
 
-        const statusApp = p['Status Persetujuan'] || 'Pending';
-        let badgeAppClass = 'bg-amber-100 text-amber-800 border-amber-300';
-        if (statusApp.toLowerCase() === 'disetujui') badgeAppClass = 'bg-emerald-100 text-emerald-800 border-emerald-300';
-        if (statusApp.toLowerCase() === 'ditolak') badgeAppClass = 'bg-rose-100 text-rose-800 border-rose-300';
+      const frag = document.createDocumentFragment();
+      for (let i = 0; i < targetVisible; i++) {
+        frag.appendChild(buildPendaftaranTableRow(list[i], roleFlags));
+      }
+      tbody.appendChild(frag);
+      updatePendaftaranSentinelAndCounts(targetVisible, list.length, scopedList.length);
+      setupPendaftaranInfiniteScroll();
+      updatePendaftaranSelectionUI();
 
-        const statusBayar = p['Status Pembayaran'] || 'Belum Bayar';
-        const badgeBayarClass = statusBayar.toLowerCase() === 'lunas' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800';
+      if (wrap) {
+        wrap.scrollTop = opts && opts.preserveScroll ? prevScrollTop : 0;
+      }
+      syncSampahPendaftaranBadge();
+    }
 
-        // Aksi kolom berdasarkan Role
-        let aksiButtons = '';
-        if (canManageFull) {
-          aksiButtons = `
-            <div class="flex items-center justify-center space-x-1 whitespace-nowrap">
-              ${statusApp.toLowerCase() === 'pending' ? `
-                <button onclick="handleSingleApproval('${p.ID}', 'Disetujui')" title="Setujui" class="bg-emerald-600 hover:bg-emerald-700 text-white p-1.5 rounded-lg text-xs shadow-xs"><i class="fas fa-check"></i></button>
-                <button onclick="handleSingleApproval('${p.ID}', 'Ditolak')" title="Tolak" class="bg-rose-600 hover:bg-rose-700 text-white p-1.5 rounded-lg text-xs shadow-xs"><i class="fas fa-times"></i></button>
-              ` : `
-                <button onclick="renderKartuUjianDigital('${p.ID}'); switchTab('kartu');" title="Cetak Kartu Ujian" class="bg-blue-900 hover:bg-blue-950 text-white p-1.5 rounded-lg text-xs shadow-xs"><i class="fas fa-print"></i></button>
-              `}
-              <!-- Tombol Setting Status Pembayaran Modal (Revisi Poin 4) -->
-              <button onclick="openSettingPembayaranModal('${p.ID}')" title="Setting Status Pembayaran" class="bg-indigo-700 hover:bg-indigo-800 text-white p-1.5 rounded-lg text-xs shadow-xs"><i class="fas fa-money-bill-transfer"></i></button>
-              <button onclick="openSuratDosenFromPendaftaran('${p.ID}')" title="Buat Surat Pengantar Dosen & Daftar Hadir" class="bg-sky-700 hover:bg-sky-800 text-white p-1.5 rounded-lg text-xs shadow-xs"><i class="fas fa-envelope-open-text"></i></button>
-              <button onclick="openPendaftaranModal('${p.ID}')" title="Edit" class="bg-blue-900 hover:bg-blue-800 text-white p-1.5 rounded-lg text-xs"><i class="fas fa-edit"></i></button>
-              <button onclick="openInvoiceModal('${p.ID}')" title="Kwitansi" class="bg-slate-700 hover:bg-slate-800 text-white p-1.5 rounded-lg text-xs"><i class="fas fa-receipt"></i></button>
-              <button onclick="handleDeletePendaftaran('${p.ID}')" title="Hapus" class="bg-rose-50 hover:bg-rose-100 text-rose-700 p-1.5 rounded-lg text-xs border border-rose-200"><i class="fas fa-trash"></i></button>
-            </div>
-          `;
-        } else if (isDekanOrWadek) {
-          aksiButtons = `
-            <button onclick="openInvoiceModal('${p.ID}')" class="bg-blue-900 hover:bg-blue-800 text-white px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs">
-              <i class="fas fa-receipt"></i> Kwitansi
-            </button>
-          `;
-        } else if (isPimpinan) {
-          aksiButtons = `<span class="text-[11px] text-slate-400 font-semibold">Pemantauan</span>`;
-        } else if (isMhs) {
-          aksiButtons = `
-            <div class="flex items-center space-x-1.5">
-              ${statusApp.toLowerCase() === 'disetujui' ? `
-                <button onclick="renderKartuUjianDigital('${p.ID}'); switchTab('kartu');" class="bg-blue-900 hover:bg-blue-950 text-white px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 shadow-xs">
-                  <i class="fas fa-print"></i> <span>Cetak Kartu</span>
-                </button>
-              ` : `<span class="text-[11px] text-amber-700 italic">Verifikasi TU</span>`}
-            </div>
-          `;
-        }
+    function canManagePendaftaranTrash() {
+      const r = currentUser ? String(currentUser.role || '').trim().toLowerCase() : '';
+      return ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes(r);
+    }
 
-        const buktiFotoHtml = p['Bukti Foto'] ? `
-          <button onclick="showBuktiPreviewModal('${p['Bukti Foto']}')" class="text-blue-600 hover:underline flex items-center gap-1 font-bold">
-            <i class="fas fa-image"></i> Lihat
-          </button>
-        ` : '<span class="text-slate-400 italic">Tidak ada</span>';
+    function canPermanentDeletePendaftaranTrash() {
+      const r = currentUser ? String(currentUser.role || '').trim().toLowerCase() : '';
+      return ['master admin', 'master_admin'].includes(r);
+    }
 
-        // [SMART CHECKBOX]: Berkas Disetujui otomatis disabled, redup, dan tidak dapat dipilih ulang
-        const isApproved = statusApp.toLowerCase() === 'disetujui';
-        const checkboxAttr = isApproved 
-          ? 'disabled style="opacity: 0.35; cursor: not-allowed;" title="Berkas telah disetujui (tidak dapat dipilih massal)"' 
-          : 'class="cursor-pointer"';
-
-        // Kolom Checkbox HANYA dirender jika canManageFull (Master Admin & Admin TU)
-        const checkboxTd = canManageFull ? `
-          <td class="p-3 text-center">
-            <input type="checkbox" class="pendaftaran-row-cb rounded text-blue-900" value="${p.ID}" ${checkboxAttr} onchange="updatePendaftaranSelectionUI()">
-          </td>
-        ` : '';
-
-        let matkulTdContent = '';
-        if (Array.isArray(p.mataKuliahList) && p.mataKuliahList.length > 0) {
-          matkulTdContent = p.mataKuliahList.map((m, idx) => {
-            const num = p.mataKuliahList.length > 1 ? `<span class="text-slate-400 font-mono text-[10px] mr-1">${idx + 1}.</span>` : '';
-            const nilaiBadge = m.nilaiHuruf ? `<span class="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-900 border border-indigo-200 shadow-2xs"><i class="fas fa-award text-[9px] text-indigo-600"></i> Nilai ${m.nilaiHuruf}</span>` : '';
-            const dosenLaluInfo = m.dosenLalu ? `<div class="text-[10px] text-indigo-700 italic flex items-center gap-1 mt-0.5"><i class="fas fa-history text-[9px]"></i> Dosen Saat Mengambil: ${escapeHtml(m.dosenLalu)}</div>` : '';
-            return `
-              <div class="${idx > 0 ? 'pt-1.5 mt-1.5 border-t border-slate-100' : ''}">
-                <div class="font-extrabold text-blue-950 leading-tight text-xs flex items-center flex-wrap">
-                  ${num}${escapeHtml(m.nama || m.mataKuliah || '')}${nilaiBadge}
-                </div>
-                <div class="text-[11px] text-slate-500 leading-tight mt-0.5 flex items-center gap-1">
-                  <i class="fas fa-user-tie text-[9px] text-slate-400"></i> ${escapeHtml(m.dosen || m.dosenPengampu || '-')}
-                </div>
-                ${dosenLaluInfo}
-              </div>
-            `;
-          }).join('');
-        } else {
-          matkulTdContent = `
-            <div class="space-y-1">
-              <div class="font-extrabold text-blue-950 leading-tight text-xs">
-                ${escapeHtml(p['Mata Kuliah'] || '').replace(/\n/g, '<br>')}
-              </div>
-              <div class="text-[11px] text-slate-500 leading-tight">
-                ${escapeHtml(p['Dosen Pengampu'] || '').replace(/\n/g, '<br>')}
-              </div>
-            </div>
-          `;
-        }
-
-        tr.innerHTML = `
-          ${checkboxTd}
-          <td class="p-3 font-mono font-bold text-blue-900 whitespace-nowrap">${p.ID}</td>
-          <td class="p-3 whitespace-nowrap text-slate-500 font-mono">${p.Tanggal || '-'}</td>
-          <td class="p-3">
-            <b class="text-slate-800">${p['Nama Mahasiswa']}</b><br>
-            <span class="font-mono text-slate-500">${p.NPM || p.NIM}</span>
-          </td>
-          <td class="p-3">
-            <span class="font-bold text-slate-700">[${p['Kode Prodi']}] ${p['Program Studi']}</span><br>
-            <span class="text-[11px] text-slate-500">${p.Semester || 'Semester 3'} · ${p.Kelas || 'Reguler'}</span>
-          </td>
-          <td class="p-3">
-            ${matkulTdContent}
-          </td>
-          <td class="p-3 font-bold text-slate-700 whitespace-nowrap">${p['Jenis Layanan']}</td>
-          <td class="p-3 font-mono font-bold text-slate-900 whitespace-nowrap">Rp ${Number(p.Nominal || 0).toLocaleString('id-ID')}</td>
-          <td class="p-3 text-center whitespace-nowrap">
-            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase ${badgeAppClass}">${statusApp}</span>
-          </td>
-          <td class="p-3 text-center whitespace-nowrap">
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${badgeBayarClass}">${statusBayar}</span>
-          </td>
-          <td class="p-3 text-center whitespace-nowrap">${buktiFotoHtml}</td>
-          <td class="p-3 text-center">${aksiButtons}</td>
-        `;
-        tbody.appendChild(tr);
-      });
+    function syncSampahPendaftaranBadge() {
+      const btn = document.getElementById('btnTongSampahPendaftaran');
+      const badge = document.getElementById('sampahPendaftaranBadgeCount');
+      const allowed = canManagePendaftaranTrash();
+      const count = (appData && Array.isArray(appData.sampahPendaftaran)) ? appData.sampahPendaftaran.length : 0;
+      if (btn) {
+        btn.classList.toggle('hidden', !allowed);
+        btn.classList.toggle('inline-flex', allowed);
+      }
+      if (badge) {
+        badge.innerText = count;
+        badge.className = count > 0
+          ? 'px-1.5 py-0.5 rounded-md bg-amber-600 text-white text-[10px] font-mono tabular-nums'
+          : 'px-1.5 py-0.5 rounded-md bg-slate-700 text-white text-[10px] font-mono tabular-nums';
+      }
     }
 
     function handleSingleApproval(id, status) {
@@ -10860,29 +11855,511 @@
     }
 
     function handleDeletePendaftaran(id) {
+      if (!canManagePendaftaranTrash()) {
+        Swal.fire('Akses Ditolak', 'Hanya Master Admin atau Admin TU yang dapat memindahkan berkas ke Tong Sampah.', 'warning');
+        return;
+      }
       Swal.fire({
-        title: 'Hapus Berkas ' + id + '?',
-        text: 'Berkas pendaftaran akan dihapus dari sistem.',
+        title: `Pindahkan ${id} ke Tong Sampah?`,
+        text: 'Berkas akan dipindahkan ke Tong Sampah Pendaftaran dan masih dapat dipulihkan kapan saja.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: 'Ya, Hapus',
-        confirmButtonColor: '#e11d48'
+        confirmButtonText: 'Ya, Pindah ke Sampah',
+        confirmButtonColor: '#d97706',
+        cancelButtonText: 'Batal'
       }).then(r => {
-        if (r.isConfirmed) {
-          const actorName = getCurrentActorName();
-          const actorRole = getCurrentActorRole();
-          if (Array.isArray(appData.pendaftaran)) {
-            appData.pendaftaran = appData.pendaftaran.filter(p => String(p.ID || p.id).trim() !== String(id).trim());
-            if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
-            if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable();
-          }
-          google.script.run
-            .withSuccessHandler(res => {
-              Swal.fire('Terhapus', res.message, 'success');
-              loadAppData();
-            })
-            .deletePendaftaran(id, actorName, actorRole);
+        if (!r.isConfirmed) return;
+        const actorName = typeof getCurrentActorName === 'function' ? getCurrentActorName() : '';
+        const actorRole = typeof getCurrentActorRole === 'function' ? getCurrentActorRole() : '';
+        appData.pendaftaran = Array.isArray(appData.pendaftaran) ? appData.pendaftaran : [];
+        appData.sampahPendaftaran = Array.isArray(appData.sampahPendaftaran) ? appData.sampahPendaftaran : [];
+
+        const prevIdx = appData.pendaftaran.findIndex(p => String(p.ID || p.id).trim() === String(id).trim());
+        const removedSnapshot = prevIdx !== -1 ? Object.assign({}, appData.pendaftaran[prevIdx]) : null;
+        let optimisticTrashed = null;
+
+        if (prevIdx !== -1 && removedSnapshot) {
+          optimisticTrashed = Object.assign({}, removedSnapshot, {
+            'Deleted At': new Date().toISOString().slice(0, 19).replace('T', ' '),
+            'Deleted By': actorName || 'Admin TU',
+            'Deleted Role': actorRole || 'Admin TU'
+          });
+          appData.pendaftaran.splice(prevIdx, 1);
+          appData.sampahPendaftaran.unshift(optimisticTrashed);
+          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+          if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable({ preserveScroll: true });
+          if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+          if (typeof renderInvoiceTable === 'function') renderInvoiceTable({ preserveScroll: true });
         }
+
+        const rollbackSoftDelete = (errMsg) => {
+          if (optimisticTrashed) {
+            appData.sampahPendaftaran = appData.sampahPendaftaran.filter(s => s !== optimisticTrashed);
+          }
+          if (removedSnapshot) {
+            const restoreIdx = Math.min(prevIdx, appData.pendaftaran.length);
+            appData.pendaftaran.splice(restoreIdx, 0, removedSnapshot);
+          }
+          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+          if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable({ preserveScroll: true });
+          if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+          if (typeof renderInvoiceTable === 'function') renderInvoiceTable({ preserveScroll: true });
+          Swal.fire('Gagal Menghapus', errMsg || 'Terjadi kesalahan saat memindahkan berkas ke Tong Sampah.', 'error');
+        };
+
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res && res.success === false) {
+              rollbackSoftDelete(res.message);
+              return;
+            }
+            if (res && res.trashedItem && optimisticTrashed) {
+              const tIdx = appData.sampahPendaftaran.indexOf(optimisticTrashed);
+              if (tIdx !== -1) appData.sampahPendaftaran[tIdx] = res.trashedItem;
+              if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+            }
+            syncSampahPendaftaranBadge();
+            Swal.fire({
+              title: 'Dipindahkan ke Tong Sampah',
+              text: (res && res.message) || `Berkas ${id} dipindahkan ke Tong Sampah.`,
+              icon: 'success',
+              timer: 2000,
+              showConfirmButton: false
+            });
+            if (res && !res.isLocalFallback && typeof loadAppData === 'function') {
+              loadAppData(true);
+            }
+          })
+          .withFailureHandler(err => {
+            rollbackSoftDelete((err && err.message) || String(err || 'Koneksi ke server gagal.'));
+          })
+          .deletePendaftaran(id, actorName, actorRole);
+      });
+    }
+
+    function openSampahPendaftaranModal() {
+      if (!canManagePendaftaranTrash()) {
+        Swal.fire('Akses Ditolak', 'Hanya Master Admin dan Admin TU yang dapat membuka Tong Sampah Pendaftaran.', 'warning');
+        return;
+      }
+      const modal = document.getElementById('modalSampahPendaftaran');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      renderSampahPendaftaranTable();
+    }
+
+    function closeSampahPendaftaranModal() {
+      const modal = document.getElementById('modalSampahPendaftaran');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function clearSampahPendaftaranSearch() {
+      const input = document.getElementById('searchSampahPendaftaran');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      renderSampahPendaftaranTable();
+    }
+
+    function resetSampahPendaftaranFilters() {
+      const input = document.getElementById('searchSampahPendaftaran');
+      if (input) input.value = '';
+      const prodi = document.getElementById('filterSampahProdi');
+      if (prodi) prodi.value = '';
+      renderSampahPendaftaranTable();
+    }
+
+    function getFilteredSampahPendaftaranList() {
+      const all = (appData && Array.isArray(appData.sampahPendaftaran)) ? appData.sampahPendaftaran : [];
+      const rawSearch = String(document.getElementById('searchSampahPendaftaran')?.value || '').trim().toLowerCase();
+      const filterProdi = String(document.getElementById('filterSampahProdi')?.value || '').trim().toUpperCase();
+
+      const btnClear = document.getElementById('btnClearSearchSampah');
+      if (btnClear) {
+        btnClear.classList.toggle('hidden', !rawSearch);
+        btnClear.classList.toggle('flex', Boolean(rawSearch));
+      }
+      const btnReset = document.getElementById('btnResetSampahFilter');
+      if (btnReset) {
+        const isDirty = Boolean(rawSearch || filterProdi);
+        btnReset.classList.toggle('hidden', !isDirty);
+        btnReset.classList.toggle('inline-flex', isDirty);
+      }
+
+      let list = all.slice();
+      if (filterProdi) {
+        list = list.filter(sp => {
+          const code = typeof resolveInvoiceProdiCode === 'function'
+            ? resolveInvoiceProdiCode(sp)
+            : String(sp['Kode Prodi'] || '').trim().toUpperCase();
+          return code === filterProdi;
+        });
+      }
+      if (rawSearch) {
+        const tokens = rawSearch.split(/\s+/).filter(Boolean);
+        list = list.filter(sp => {
+          const hay = [
+            sp.ID, sp.NPM, sp.NIM, sp['Nama Mahasiswa'], sp['Kode Prodi'],
+            sp['Program Studi'], sp['Mata Kuliah'], sp['Jenis Layanan'],
+            sp['Deleted By'], sp['Deleted Role'], sp['Deleted At']
+          ].filter(Boolean).map(v => String(v).toLowerCase()).join(' ');
+          return tokens.every(t => hay.includes(t));
+        });
+      }
+
+      list.sort((a, b) => String(b['Deleted At'] || '').localeCompare(String(a['Deleted At'] || '')));
+      return list;
+    }
+
+    function renderSampahPendaftaranTable() {
+      syncSampahPendaftaranBadge();
+      const tbody = document.getElementById('tableSampahPendaftaranBody');
+      if (!tbody) return;
+
+      const isMaster = canPermanentDeletePendaftaranTrash();
+      const allTrash = (appData && Array.isArray(appData.sampahPendaftaran)) ? appData.sampahPendaftaran : [];
+      const list = getFilteredSampahPendaftaranList();
+
+      const btnEmpty = document.getElementById('btnEmptySampahPendaftaran');
+      if (btnEmpty) {
+        const showEmpty = isMaster && allTrash.length > 0;
+        btnEmpty.classList.toggle('hidden', !showEmpty);
+        btnEmpty.classList.toggle('inline-flex', showEmpty);
+      }
+
+      const rbacNotice = document.getElementById('sampahRbacNotice');
+      if (rbacNotice) {
+        rbacNotice.innerText = isMaster
+          ? 'Hak akses Master Admin: Pulihkan & Hapus Permanen'
+          : 'Hak akses Admin TU: Pulihkan berkas (Hapus Permanen hanya oleh Master Admin)';
+      }
+
+      const countInfo = document.getElementById('sampahToolbarCountInfo');
+      if (countInfo) {
+        countInfo.innerText = allTrash.length === list.length
+          ? `Menampilkan ${list.length} berkas terhapus`
+          : `Menampilkan ${list.length} dari ${allTrash.length} berkas terhapus`;
+      }
+
+      const selectAll = document.getElementById('sampahSelectAllCb');
+      if (selectAll) {
+        selectAll.checked = false;
+        selectAll.indeterminate = false;
+      }
+
+      tbody.innerHTML = '';
+      if (list.length === 0) {
+        const isFiltered = allTrash.length > 0;
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="p-8 text-center text-slate-400">
+              <div class="w-11 h-11 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2 text-lg">
+                <i class="fas fa-trash-restore" aria-hidden="true"></i>
+              </div>
+              <p class="font-bold text-slate-600 text-xs">${isFiltered ? 'Tidak ada berkas sampah yang cocok dengan pencarian/filter.' : 'Tong Sampah Pendaftaran kosong.'}</p>
+              <p class="text-[11px] text-slate-400 mt-0.5">${isFiltered ? 'Coba hapus kata kunci pencarian atau reset filter.' : 'Berkas yang dihapus oleh admin akan tersimpan sementara di sini dan dapat dipulihkan.'}</p>
+              ${isFiltered ? '<button type="button" onclick="resetSampahPendaftaranFilters()" class="mt-3 px-3.5 py-1.5 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs cursor-pointer">Reset Filter</button>' : ''}
+            </td>
+          </tr>
+        `;
+        updateSampahSelectionUI();
+        return;
+      }
+
+      const frag = document.createDocumentFragment();
+      list.forEach(sp => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50/80 transition align-top';
+
+        const idRaw = String(sp.ID || '').trim();
+        const idAttr = escapeHtml(idRaw).replace(/'/g, '&#39;');
+        const kodeProdi = String(sp['Kode Prodi'] || (typeof resolveInvoiceProdiCode === 'function' ? resolveInvoiceProdiCode(sp) : '') || '-').trim() || '-';
+        const layananStr = String(sp['Jenis Layanan'] || '-').trim() || '-';
+        const matkulStr = String(sp['Mata Kuliah'] || '-').trim() || '-';
+        const deletedBy = String(sp['Deleted By'] || 'Admin TU').trim();
+        const deletedRole = String(sp['Deleted Role'] || 'Admin TU').trim();
+        const deletedAt = String(sp['Deleted At'] || '-').trim();
+
+        const permBtnHtml = isMaster ? `
+          <button type="button" onclick="handlePermanentDeletePendaftaran('${idAttr}')" class="w-full bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 px-2 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-1 transition cursor-pointer" title="Hapus Permanen (Tidak bisa dikembalikan)">
+            <i class="fas fa-trash text-[9px]" aria-hidden="true"></i> <span>Hapus Perm.</span>
+          </button>
+        ` : '';
+
+        tr.innerHTML = `
+          <td class="px-2 py-2.5 text-center">
+            <input type="checkbox" class="sampah-row-cb rounded text-emerald-700 cursor-pointer" value="${escapeHtml(idRaw)}" onchange="updateSampahSelectionUI()">
+          </td>
+          <td class="px-2 py-2.5 min-w-0">
+            <div class="font-mono font-bold text-blue-900 text-[11px] tabular-nums break-all">${escapeHtml(idRaw)}</div>
+            <div class="font-mono text-slate-400 text-[10px] tabular-nums mt-0.5">${escapeHtml(sp.Tanggal || '-')}</div>
+          </td>
+          <td class="px-2 py-2.5 min-w-0">
+            <b class="text-slate-800 block text-xs leading-snug break-words">${escapeHtml(sp['Nama Mahasiswa'] || '-')}</b>
+            <div class="font-mono text-slate-500 text-[10px] tabular-nums mt-0.5 break-all">${escapeHtml(sp.NPM || sp.NIM || '-')}</div>
+            <div class="text-[10px] text-slate-600 mt-0.5"><span class="font-bold">[${escapeHtml(kodeProdi)}]</span> ${escapeHtml(sp.Semester || '-')}</div>
+          </td>
+          <td class="hidden sm:table-cell px-2 py-2.5 min-w-0">
+            <span class="inline-block text-[10px] font-bold text-blue-900 bg-blue-50 border border-blue-200/80 rounded px-1.5 py-0.5 mb-1">${escapeHtml(layananStr)}</span>
+            <div class="text-[11px] font-semibold text-slate-700 leading-snug break-words line-clamp-2">${escapeHtml(matkulStr)}</div>
+          </td>
+          <td class="px-2 py-2.5 min-w-0">
+            <div class="font-bold text-slate-700 text-[11px] leading-snug break-words">${escapeHtml(deletedBy)}</div>
+            <div class="text-[10px] text-slate-500">${escapeHtml(deletedRole)}</div>
+            <div class="font-mono text-[10px] text-slate-400 tabular-nums mt-0.5">${escapeHtml(deletedAt)}</div>
+          </td>
+          <td class="px-2 py-2.5 text-center">
+            <div class="flex flex-col gap-1 items-stretch max-w-[96px] mx-auto">
+              <button type="button" onclick="handleRestorePendaftaran('${idAttr}')" class="w-full bg-emerald-700 hover:bg-emerald-800 text-white px-2 py-1 rounded-lg text-[10px] font-bold inline-flex items-center justify-center gap-1 shadow-2xs transition cursor-pointer">
+                <i class="fas fa-trash-restore text-[9px]" aria-hidden="true"></i> <span>Pulihkan</span>
+              </button>
+              ${permBtnHtml}
+            </div>
+          </td>
+        `;
+        frag.appendChild(tr);
+      });
+      tbody.appendChild(frag);
+      updateSampahSelectionUI();
+    }
+
+    function toggleSampahSelectAll(masterCb) {
+      if (!canManagePendaftaranTrash()) return;
+      document.querySelectorAll('.sampah-row-cb').forEach(cb => { cb.checked = Boolean(masterCb && masterCb.checked); });
+      updateSampahSelectionUI();
+    }
+
+    function updateSampahSelectionUI() {
+      const cbs = Array.from(document.querySelectorAll('.sampah-row-cb'));
+      const checkedCbs = cbs.filter(cb => cb.checked);
+      const btnBulk = document.getElementById('btnBulkRestoreSampah');
+      const labelBulk = document.getElementById('btnBulkRestoreSampahLabel');
+      const selectAll = document.getElementById('sampahSelectAllCb');
+
+      if (btnBulk) {
+        const show = checkedCbs.length > 0 && canManagePendaftaranTrash();
+        btnBulk.classList.toggle('hidden', !show);
+        btnBulk.classList.toggle('inline-flex', show);
+      }
+      if (labelBulk) {
+        labelBulk.innerText = `Pulihkan Terpilih (${checkedCbs.length})`;
+      }
+      if (selectAll) {
+        selectAll.checked = cbs.length > 0 && checkedCbs.length === cbs.length;
+        selectAll.indeterminate = checkedCbs.length > 0 && checkedCbs.length < cbs.length;
+      }
+    }
+
+    function handleRestorePendaftaran(id) {
+      if (!canManagePendaftaranTrash()) {
+        Swal.fire('Akses Ditolak', 'Hanya Master Admin atau Admin TU yang dapat memulihkan berkas.', 'warning');
+        return;
+      }
+      appData.sampahPendaftaran = Array.isArray(appData.sampahPendaftaran) ? appData.sampahPendaftaran : [];
+      appData.pendaftaran = Array.isArray(appData.pendaftaran) ? appData.pendaftaran : [];
+      const sIdx = appData.sampahPendaftaran.findIndex(s => String(s.ID || s.id).trim() === String(id).trim());
+      if (sIdx === -1) return;
+
+      const trashedSnapshot = Object.assign({}, appData.sampahPendaftaran[sIdx]);
+      const restoredPreview = Object.assign({}, trashedSnapshot);
+      delete restoredPreview['Deleted At'];
+      delete restoredPreview['Deleted By'];
+      delete restoredPreview['Deleted Role'];
+
+      // Optimistic restore
+      appData.sampahPendaftaran.splice(sIdx, 1);
+      appData.pendaftaran.unshift(restoredPreview);
+      if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+      renderSampahPendaftaranTable();
+      if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable({ preserveScroll: true });
+      if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+      if (typeof renderInvoiceTable === 'function') renderInvoiceTable({ preserveScroll: true });
+
+      const rollbackRestore = (errMsg) => {
+        appData.pendaftaran = appData.pendaftaran.filter(p => p !== restoredPreview);
+        appData.sampahPendaftaran.splice(Math.min(sIdx, appData.sampahPendaftaran.length), 0, trashedSnapshot);
+        if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        renderSampahPendaftaranTable();
+        if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable({ preserveScroll: true });
+        if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+        if (typeof renderInvoiceTable === 'function') renderInvoiceTable({ preserveScroll: true });
+        Swal.fire('Gagal Memulihkan', errMsg || 'Berkas tidak dapat dipulihkan.', 'error');
+      };
+
+      const actorName = typeof getCurrentActorName === 'function' ? getCurrentActorName() : '';
+      const actorRole = typeof getCurrentActorRole === 'function' ? getCurrentActorRole() : '';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          if (res && res.success === false) {
+            rollbackRestore(res.message);
+            return;
+          }
+          if (res && res.restoredItem) {
+            const pIdx = appData.pendaftaran.indexOf(restoredPreview);
+            if (pIdx !== -1) appData.pendaftaran[pIdx] = res.restoredItem;
+            if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+            if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable({ preserveScroll: true });
+          }
+          Swal.fire({
+            title: 'Berkas Dipulihkan',
+            text: (res && res.message) || `Berkas ${id} berhasil dikembalikan ke daftar aktif.`,
+            icon: 'success',
+            timer: 2000,
+            showConfirmButton: false
+          });
+          if (res && !res.isLocalFallback && typeof loadAppData === 'function') {
+            loadAppData(true);
+          }
+        })
+        .withFailureHandler(err => {
+          rollbackRestore((err && err.message) || String(err || 'Koneksi ke server gagal.'));
+        })
+        .restorePendaftaran(id, actorName, actorRole);
+    }
+
+    function handleBulkRestoreSampah() {
+      if (!canManagePendaftaranTrash()) return;
+      const selectedIds = Array.from(document.querySelectorAll('.sampah-row-cb:checked')).map(cb => String(cb.value || '').trim()).filter(Boolean);
+      if (selectedIds.length === 0) return;
+
+      const actorName = typeof getCurrentActorName === 'function' ? getCurrentActorName() : '';
+      const actorRole = typeof getCurrentActorRole === 'function' ? getCurrentActorRole() : '';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          if (!res || res.success === false) {
+            Swal.fire('Gagal Memulihkan', (res && res.message) || 'Tidak ada berkas yang dapat dipulihkan.', 'warning');
+            return;
+          }
+          if (!res.isLocalFallback) {
+            const restoredSet = new Set((res.restoredIds || []).map(x => String(x).trim()));
+            appData.sampahPendaftaran = (appData.sampahPendaftaran || []).filter(s => !restoredSet.has(String(s.ID || s.id).trim()));
+            if (Array.isArray(res.restoredItems) && res.restoredItems.length > 0) {
+              appData.pendaftaran = res.restoredItems.concat(appData.pendaftaran || []);
+            }
+          }
+          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+          renderSampahPendaftaranTable();
+          if (typeof renderPendaftaranTable === 'function') renderPendaftaranTable({ preserveScroll: true });
+          if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+          if (typeof renderInvoiceTable === 'function') renderInvoiceTable({ preserveScroll: true });
+
+          Swal.fire('Pemulihan Selesai', res.message || `Berhasil memulihkan ${(res.restoredIds || selectedIds).length} berkas.`, 'success');
+          if (!res.isLocalFallback && typeof loadAppData === 'function') {
+            loadAppData(true);
+          }
+        })
+        .withFailureHandler(err => {
+          Swal.fire('Gagal Memulihkan', (err && err.message) || String(err || 'Koneksi ke server gagal.'), 'error');
+        })
+        .bulkRestorePendaftaran(selectedIds, actorName, actorRole);
+    }
+
+    function handlePermanentDeletePendaftaran(id) {
+      if (!canPermanentDeletePendaftaranTrash()) {
+        Swal.fire('Akses Ditolak', 'Hanya Master Admin yang berhak menghapus berkas secara permanen.', 'error');
+        return;
+      }
+      Swal.fire({
+        title: `Hapus Permanen ${id}?`,
+        text: 'Tindakan ini tidak dapat dibatalkan! Berkas akan dihapus selamanya dari sheet Sampah_Pendaftaran.',
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Hapus Permanen',
+        confirmButtonColor: '#be123c',
+        cancelButtonText: 'Batal'
+      }).then(r => {
+        if (!r.isConfirmed) return;
+        const actorName = typeof getCurrentActorName === 'function' ? getCurrentActorName() : '';
+        const actorRole = typeof getCurrentActorRole === 'function' ? getCurrentActorRole() : '';
+        const prevTrash = (appData.sampahPendaftaran || []).slice();
+        appData.sampahPendaftaran = prevTrash.filter(s => String(s.ID || s.id).trim() !== String(id).trim());
+        if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        renderSampahPendaftaranTable();
+
+        const rollbackPerm = (msg) => {
+          appData.sampahPendaftaran = prevTrash;
+          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+          renderSampahPendaftaranTable();
+          Swal.fire('Gagal Hapus Permanen', msg || 'Terjadi kesalahan saat menghapus berkas.', 'error');
+        };
+
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res && res.success === false) {
+              rollbackPerm(res.message);
+              return;
+            }
+            Swal.fire({
+              title: 'Dihapus Permanen',
+              text: (res && res.message) || `Berkas ${id} telah dihapus permanen.`,
+              icon: 'success',
+              timer: 1800,
+              showConfirmButton: false
+            });
+            if (res && !res.isLocalFallback && typeof loadAppData === 'function') {
+              loadAppData(true);
+            }
+          })
+          .withFailureHandler(err => {
+            rollbackPerm((err && err.message) || String(err || 'Koneksi ke server gagal.'));
+          })
+          .permanentDeletePendaftaran(id, actorName, actorRole);
+      });
+    }
+
+    function handleEmptySampahPendaftaran() {
+      if (!canPermanentDeletePendaftaranTrash()) {
+        Swal.fire('Akses Ditolak', 'Hanya Master Admin yang berhak mengosongkan Tong Sampah.', 'error');
+        return;
+      }
+      const total = (appData && Array.isArray(appData.sampahPendaftaran)) ? appData.sampahPendaftaran.length : 0;
+      if (total === 0) return;
+
+      Swal.fire({
+        title: `Kosongkan Tong Sampah (${total} Berkas)?`,
+        text: 'Seluruh berkas di Tong Sampah akan dihapus permanen selamanya dan tidak bisa dipulihkan.',
+        icon: 'error',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Kosongkan Permanen',
+        confirmButtonColor: '#be123c',
+        cancelButtonText: 'Batal'
+      }).then(r => {
+        if (!r.isConfirmed) return;
+        const actorName = typeof getCurrentActorName === 'function' ? getCurrentActorName() : '';
+        const actorRole = typeof getCurrentActorRole === 'function' ? getCurrentActorRole() : '';
+        const prevTrash = (appData.sampahPendaftaran || []).slice();
+        appData.sampahPendaftaran = [];
+        if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        renderSampahPendaftaranTable();
+
+        const rollbackEmpty = (msg) => {
+          appData.sampahPendaftaran = prevTrash;
+          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+          renderSampahPendaftaranTable();
+          Swal.fire('Gagal Mengosongkan', msg || 'Terjadi kesalahan saat mengosongkan Tong Sampah.', 'error');
+        };
+
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res && res.success === false) {
+              rollbackEmpty(res.message);
+              return;
+            }
+            Swal.fire('Tong Sampah Kosong', (res && res.message) || 'Seluruh berkas sampah telah dihapus permanen.', 'success');
+            if (res && !res.isLocalFallback && typeof loadAppData === 'function') {
+              loadAppData(true);
+            }
+          })
+          .withFailureHandler(err => {
+            rollbackEmpty((err && err.message) || String(err || 'Koneksi ke server gagal.'));
+          })
+          .emptySampahPendaftaran(actorName, actorRole);
       });
     }
 
@@ -12111,25 +13588,32 @@
       const select = document.getElementById('activeSheetSelector');
       if (!select) return;
       const allowStaffSheet = (typeof isMasterAdmin === 'function') && isMasterAdmin();
+      const allowTrashSheet = (typeof canManagePendaftaranTrash === 'function') && canManagePendaftaranTrash();
       let staffOpt = select.querySelector('option[value="User_Staff"]');
+      let trashOpt = select.querySelector('option[value="Sampah_Pendaftaran"]');
 
       if (!allowStaffSheet) {
-        if (staffOpt) {
-          staffOpt.remove();
-        }
-        if (select.value === 'User_Staff' || !select.value) {
-          select.value = 'Pendaftaran';
-        }
+        if (staffOpt) staffOpt.remove();
+        if (select.value === 'User_Staff' || !select.value) select.value = 'Pendaftaran';
       } else if (!staffOpt) {
         staffOpt = document.createElement('option');
         staffOpt.value = 'User_Staff';
         staffOpt.textContent = 'User Staff';
         const mhsOpt = select.querySelector('option[value="User_Mahasiswa"]');
-        if (mhsOpt) {
-          select.insertBefore(staffOpt, mhsOpt);
-        } else {
-          select.appendChild(staffOpt);
-        }
+        if (mhsOpt) select.insertBefore(staffOpt, mhsOpt);
+        else select.appendChild(staffOpt);
+      }
+
+      if (!allowTrashSheet) {
+        if (trashOpt) trashOpt.remove();
+        if (select.value === 'Sampah_Pendaftaran' || !select.value) select.value = 'Pendaftaran';
+      } else if (!trashOpt) {
+        trashOpt = document.createElement('option');
+        trashOpt.value = 'Sampah_Pendaftaran';
+        trashOpt.textContent = 'Sampah Pendaftaran';
+        const jdwOpt = select.querySelector('option[value="Jadwal_Ujian"]');
+        if (jdwOpt) select.insertBefore(trashOpt, jdwOpt);
+        else select.appendChild(trashOpt);
       }
     }
 
@@ -12138,6 +13622,10 @@
       const select = document.getElementById('activeSheetSelector');
       let sheetName = select ? select.value : 'Pendaftaran';
       if (sheetName === 'User_Staff' && !(typeof isMasterAdmin === 'function' && isMasterAdmin())) {
+        sheetName = 'Pendaftaran';
+        if (select) select.value = 'Pendaftaran';
+      }
+      if (sheetName === 'Sampah_Pendaftaran' && !(typeof canManagePendaftaranTrash === 'function' && canManagePendaftaranTrash())) {
         sheetName = 'Pendaftaran';
         if (select) select.value = 'Pendaftaran';
       }
@@ -12159,6 +13647,7 @@
       let rows = [];
       const master = appData.master || {};
       if (sheetName === 'Pendaftaran') rows = appData.pendaftaran || [];
+      else if (sheetName === 'Sampah_Pendaftaran') rows = appData.sampahPendaftaran || [];
       else if (sheetName === 'Jadwal_Ujian') rows = appData.jadwal || [];
       else if (sheetName === 'Master_Ruangan') rows = master.ruangan || appData.ruangan || [];
       else if (sheetName === 'User_Staff') rows = appData.users_staff || [];
@@ -12292,9 +13781,14 @@
         Swal.fire('Akses Dibatasi', 'Sheet User Staff hanya dapat diakses dan diekspor oleh Master Admin.', 'warning');
         return;
       }
+      if (sheetName === 'Sampah_Pendaftaran' && !(typeof canManagePendaftaranTrash === 'function' && canManagePendaftaranTrash())) {
+        Swal.fire('Akses Dibatasi', 'Sheet Sampah Pendaftaran hanya dapat diakses oleh Master Admin dan Admin TU.', 'warning');
+        return;
+      }
       let rows = [];
       const master = appData.master || {};
       if (sheetName === 'Pendaftaran') rows = appData.pendaftaran || [];
+      else if (sheetName === 'Sampah_Pendaftaran') rows = appData.sampahPendaftaran || [];
       else if (sheetName === 'Jadwal_Ujian') rows = appData.jadwal || [];
       else if (sheetName === 'Master_Ruangan') rows = master.ruangan || appData.ruangan || [];
       else if (sheetName === 'User_Staff') rows = appData.users_staff || [];
