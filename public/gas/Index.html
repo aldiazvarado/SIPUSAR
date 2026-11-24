@@ -16797,6 +16797,8 @@
       fitSuratPreviewSheets();
     }
 
+    let suratPreviewRafId = null;
+
     function fitSuratPreviewSheets() {
       const root = document.getElementById('suratDosenPreviewRoot');
       const scrollArea = document.getElementById('suratDosenPreviewScrollArea');
@@ -16820,8 +16822,14 @@
       const hostRectH = host.clientHeight || 0;
       if (hostRectW <= 40) return;
 
-      const padX = window.innerWidth < 640 ? 20 : 32;
-      const padY = window.innerWidth < 640 ? 20 : 32;
+      let padX = window.innerWidth < 640 ? 24 : 36;
+      let padY = window.innerWidth < 640 ? 24 : 36;
+      if (typeof window.getComputedStyle === 'function' && scrollArea) {
+        const cs = window.getComputedStyle(scrollArea);
+        padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) + 6;
+        padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0) + 6;
+      }
+
       const availableWidth = Math.max(120, hostRectW - padX);
       const availableHeight = Math.max(160, hostRectH - padY);
 
@@ -16843,40 +16851,57 @@
       suratPreviewState.zoomLevel = Math.round(scale * 100);
 
       let maxScaledW = 0;
-      sheets.forEach((sheet, idx) => {
+      sheets.forEach((sheet) => {
         const slot = sheet.parentNode;
         if (slot && slot.classList && slot.classList.contains('hidden')) return;
         const naturalW = sheet.offsetWidth || naturalFallbackWidth;
         const naturalH = sheet.offsetHeight || naturalFallbackHeight;
         const scaledW = Math.floor(naturalW * scale);
-        const scaledH = Math.ceil(naturalH * scale);
+        const scaledH = Math.floor(naturalH * scale);
         if (scaledW > maxScaledW) maxScaledW = scaledW;
         if (slot && slot.classList && slot.classList.contains('surat-preview-page-slot')) {
-          slot.style.width = `${scaledW}px`;
-          slot.style.height = `${scaledH}px`;
+          const nextW = `${scaledW}px`;
+          const nextH = `${scaledH}px`;
+          if (slot.style.width !== nextW) slot.style.width = nextW;
+          if (slot.style.height !== nextH) slot.style.height = nextH;
         }
-        sheet.style.transform = `scale(${scale.toFixed(4)})`;
+        const nextTransform = `scale(${scale.toFixed(4)})`;
+        if (sheet.style.transform !== nextTransform) sheet.style.transform = nextTransform;
       });
 
-      root.style.minWidth = maxScaledW > availableWidth ? `${maxScaledW}px` : '100%';
+      const nextMinWidth = maxScaledW > availableWidth ? `${maxScaledW}px` : '100%';
+      if (root.style.minWidth !== nextMinWidth) root.style.minWidth = nextMinWidth;
 
       const scaleLabel = document.getElementById('suratPreviewScaleLabel');
-      if (scaleLabel) {
-        scaleLabel.innerText = `${Math.round(scale * 100)}%`;
+      const nextLabel = `${Math.round(scale * 100)}%`;
+      if (scaleLabel && scaleLabel.innerText !== nextLabel) {
+        scaleLabel.innerText = nextLabel;
       }
       syncSuratPreviewToolbarUi();
     }
 
-    function initSuratPreviewAutoFit() {
-      const scrollArea = document.getElementById('suratDosenPreviewScrollArea') || document.getElementById('suratDosenPreviewViewport');
-      if (typeof ResizeObserver === 'function' && scrollArea && !suratPreviewResizeObserver) {
-        suratPreviewResizeObserver = new ResizeObserver(() => {
+    function scheduleFitSuratPreviewSheets() {
+      if (typeof requestAnimationFrame === 'function') {
+        if (suratPreviewRafId !== null) cancelAnimationFrame(suratPreviewRafId);
+        suratPreviewRafId = requestAnimationFrame(() => {
+          suratPreviewRafId = null;
           fitSuratPreviewSheets();
         });
-        suratPreviewResizeObserver.observe(scrollArea);
+      } else {
+        fitSuratPreviewSheets();
+      }
+    }
+
+    function initSuratPreviewAutoFit() {
+      const target = document.getElementById('suratDosenPreviewViewport') || document.getElementById('suratDosenPreviewScrollArea');
+      if (typeof ResizeObserver === 'function' && target && !suratPreviewResizeObserver) {
+        suratPreviewResizeObserver = new ResizeObserver(() => {
+          scheduleFitSuratPreviewSheets();
+        });
+        suratPreviewResizeObserver.observe(target);
       }
       if (!suratPreviewResizeBound && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-        window.addEventListener('resize', fitSuratPreviewSheets);
+        window.addEventListener('resize', scheduleFitSuratPreviewSheets);
         suratPreviewResizeBound = true;
       }
     }
