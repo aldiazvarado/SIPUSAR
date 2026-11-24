@@ -8,7 +8,15 @@
  */
 
 function setupDatabase() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var ss = null;
+  try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) {}
+  if (!ss) {
+    try {
+      var sid = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
+      if (sid) ss = SpreadsheetApp.openById(sid);
+    } catch (e2) {}
+  }
+  if (!ss) throw new Error('Spreadsheet tidak ditemukan untuk setupDatabase().');
   
   var sheetNames = [
     'User_Staff',

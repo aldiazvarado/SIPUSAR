@@ -588,13 +588,7 @@ function savePersistentLogs(logsArray) {
 
 function getSheetData(sheetName) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!ss) {
-      try {
-        var sheetId = PropertiesService.getScriptProperties().getProperty('SPREADSHEET_ID');
-        if (sheetId) ss = SpreadsheetApp.openById(sheetId);
-      } catch(e) {}
-    }
+    var ss = getActiveSpreadsheetSafe();
     if (!ss) return [];
 
     // Penanganan khusus sheet Log_Aktivitas (Revisi Poin 1)
@@ -862,6 +856,36 @@ function normalizeExistingClassesInSheet() {
   }
 }
 
+function pickLoginField_(row, candidateKeys) {
+  if (!row || typeof row !== 'object') return '';
+  for (var i = 0; i < candidateKeys.length; i++) {
+    var k = candidateKeys[i];
+    if (row[k] !== undefined && row[k] !== null && String(row[k]).trim() !== '') {
+      return row[k];
+    }
+  }
+  var rowKeys = Object.keys(row);
+  for (var c = 0; c < candidateKeys.length; c++) {
+    var targetNorm = String(candidateKeys[c] || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (var j = 0; j < rowKeys.length; j++) {
+      var rkNorm = String(rowKeys[j] || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (rkNorm === targetNorm && row[rowKeys[j]] !== undefined && row[rowKeys[j]] !== null && String(row[rowKeys[j]]).trim() !== '') {
+        return row[rowKeys[j]];
+      }
+    }
+  }
+  return '';
+}
+
+function toSafePrimitiveStr_(val, fallback) {
+  if (val === undefined || val === null) return fallback || '';
+  if (val instanceof Date) {
+    try { return Utilities.formatDate(val, getSpreadsheetTimeZoneSafe(), 'yyyy-MM-dd'); } catch (e) { return String(val); }
+  }
+  var s = String(val).trim();
+  return s || (fallback || '');
+}
+
 function loginUser(username, password) {
   try {
     var rawUser = String(username || '').trim();
@@ -874,6 +898,14 @@ function loginUser(username, password) {
       };
     }
 
+    var ss = getActiveSpreadsheetSafe();
+    if (!ss) {
+      return {
+        success: false,
+        message: 'Koneksi Google Spreadsheet belum terhubung. Pastikan Apps Script terikat ke Spreadsheet atau SPREADSHEET_ID telah disetel di Script Properties.'
+      };
+    }
+
     var cleanUser = rawUser.toLowerCase();
     // Ekstrak prefix jika user memasukkan email (misal: aldiaz.siakad@uika-bogor.ac.id -> aldiaz)
     var emailPrefix = cleanUser.indexOf('@') !== -1 ? cleanUser.split('@')[0] : cleanUser;
@@ -881,30 +913,28 @@ function loginUser(username, password) {
 
     // 1. Cek di Sheet User_Staff (Master Admin, Admin TU, Dekan, Wakil Dekan, KaProdi, SekProdi)
     var staffList = [];
-    try { staffList = getSheetData('User_Staff'); } catch(e) {}
-    
+    try { staffList = getSheetDataRaw(ss, 'User_Staff') || []; } catch(e) { staffList = []; }
+
     // Auto-setup jika sheet User_Staff belum terisi
     if (!staffList || staffList.length === 0) {
       try {
         if (typeof setupDatabase === 'function') {
           setupDatabase();
-          staffList = getSheetData('User_Staff');
+          staffList = getSheetDataRaw(ss, 'User_Staff') || [];
         }
       } catch(e) {}
     }
 
     var foundStaff = (staffList || []).find(function(u) {
-      var uName = String(u.Username || '').trim().toLowerCase();
-      var uNik = String(u.NIK || '').trim().toLowerCase();
-      var uEmail = String(u.Email || '').trim().toLowerCase();
-      var uPass = String(u.Password || '').trim();
+      var uName = String(pickLoginField_(u, ['Username', 'User', 'Akun']) || '').trim().toLowerCase();
+      var uNik = String(pickLoginField_(u, ['NIK', 'NIP', 'No Induk']) || '').trim().toLowerCase();
+      var uEmail = String(pickLoginField_(u, ['Email', 'E-mail']) || '').trim().toLowerCase();
+      var uPass = String(pickLoginField_(u, ['Password', 'Kata Sandi', 'Sandi', 'Pass']) || '').trim();
 
       var isMatchUser = (
-        uName === cleanUser || 
-        uNik === cleanUser || 
-        uEmail === cleanUser || 
-        uName === emailPrefix || 
-        uName === simplePrefix
+        (uName && (uName === cleanUser || uName === emailPrefix || uName === simplePrefix)) ||
+        (uNik && uNik === cleanUser) ||
+        (uEmail && uEmail === cleanUser)
       );
 
       // Password wajib cocok persis dengan kolom Password di sheet User_Staff
@@ -913,33 +943,36 @@ function loginUser(username, password) {
     });
 
     if (foundStaff) {
+      var staffUser = toSafePrimitiveStr_(pickLoginField_(foundStaff, ['Username', 'User', 'NIK']), rawUser);
+      var staffRole = toSafePrimitiveStr_(pickLoginField_(foundStaff, ['Role', 'Jabatan']), 'Staff');
+      var staffNama = toSafePrimitiveStr_(pickLoginField_(foundStaff, ['Nama Lengkap', 'Nama', 'Nama Staff']), staffUser);
+      var staffProdi = toSafePrimitiveStr_(pickLoginField_(foundStaff, ['Kode Prodi', 'Prodi']), 'ALL');
+      var staffNik = toSafePrimitiveStr_(pickLoginField_(foundStaff, ['NIK', 'NIP']), '');
       return {
         success: true,
         user: {
-          username: String(foundStaff.Username).trim(),
-          role: foundStaff.Role || 'Staff',
-          nama: foundStaff['Nama Lengkap'] || foundStaff.Username,
-          kodeProdi: foundStaff['Kode Prodi'] || 'ALL',
-          prodi: foundStaff['Kode Prodi'] || 'ALL',
-          nik: String(foundStaff.NIK || '').trim()
+          username: staffUser,
+          role: staffRole,
+          nama: staffNama,
+          kodeProdi: staffProdi,
+          prodi: staffProdi,
+          nik: staffNik
         }
       };
     }
 
     // 2. Cek di Sheet User_Mahasiswa (Mahasiswa)
     var mhsList = [];
-    try { mhsList = getSheetData('User_Mahasiswa'); } catch(e) {}
+    try { mhsList = getSheetDataRaw(ss, 'User_Mahasiswa') || []; } catch(e) { mhsList = []; }
 
     var foundMhs = (mhsList || []).find(function(u) {
-      var uName = String(u.Username || '').trim().toLowerCase();
-      var uNpm = String(u.NPM || u.NIM || '').trim().toLowerCase();
-      var uPass = String(u.Password || '').trim();
+      var uName = String(pickLoginField_(u, ['Username', 'User']) || '').trim().toLowerCase();
+      var uNpm = String(pickLoginField_(u, ['NPM', 'NIM']) || '').trim().toLowerCase();
+      var uPass = String(pickLoginField_(u, ['Password', 'Kata Sandi', 'Sandi', 'Pass']) || '').trim();
 
       var isMatchUser = (
-        uName === cleanUser || 
-        uNpm === cleanUser || 
-        uName === emailPrefix || 
-        uNpm === emailPrefix
+        (uName && (uName === cleanUser || uName === emailPrefix)) ||
+        (uNpm && (uNpm === cleanUser || uNpm === emailPrefix))
       );
 
       // Password wajib cocok persis dengan kolom Password di sheet User_Mahasiswa
@@ -948,27 +981,33 @@ function loginUser(username, password) {
     });
 
     if (foundMhs) {
-      var mhsAngkatan = foundMhs.Angkatan || foundMhs.angkatan || '';
-      var mhsSemester = foundMhs.Semester || foundMhs.semester || '';
-      if (!mhsSemester && mhsAngkatan) {
-        mhsSemester = calculateSemesterFromAngkatanBackend(mhsAngkatan);
+      var mhsAngkatanRaw = pickLoginField_(foundMhs, ['Angkatan', 'Tahun Angkatan']);
+      var mhsAngkatanNum = parseInt(String(mhsAngkatanRaw || '').trim(), 10);
+      if (isNaN(mhsAngkatanNum) || mhsAngkatanNum < 2000) mhsAngkatanNum = 2024;
+      var mhsSemester = toSafePrimitiveStr_(pickLoginField_(foundMhs, ['Semester']), '');
+      if (!mhsSemester && mhsAngkatanNum) {
+        mhsSemester = toSafePrimitiveStr_(calculateSemesterFromAngkatanBackend(mhsAngkatanNum), 'Semester 5');
       }
-      var rawKelas = foundMhs.Kelas || foundMhs.kelas || 'Reguler A';
+      var rawKelas = toSafePrimitiveStr_(pickLoginField_(foundMhs, ['Kelas']), 'Reguler A');
       var cleanKls = normalizeClassName(rawKelas);
       var mhsKatKelas = detectCategoryFromClass(cleanKls);
+      var mhsNpm = toSafePrimitiveStr_(pickLoginField_(foundMhs, ['NPM', 'NIM', 'Username']), rawUser);
+      var mhsUser = toSafePrimitiveStr_(pickLoginField_(foundMhs, ['Username', 'NPM', 'NIM']), mhsNpm);
+      var mhsNama = toSafePrimitiveStr_(pickLoginField_(foundMhs, ['Nama Lengkap', 'Nama Mahasiswa', 'Nama']), mhsUser);
+      var mhsProdi = toSafePrimitiveStr_(pickLoginField_(foundMhs, ['Kode Prodi', 'Prodi']), 'MNJ');
 
       return {
         success: true,
         user: {
-          username: String(foundMhs.Username || foundMhs.NPM).trim(),
+          username: mhsUser,
           role: 'Mahasiswa',
-          nama: foundMhs['Nama Lengkap'] || foundMhs.Username,
-          kodeProdi: foundMhs['Kode Prodi'] || 'MNJ',
-          prodi: foundMhs['Kode Prodi'] || 'MNJ',
-          npm: String(foundMhs.NPM || foundMhs.Username).trim(),
-          kelas: cleanKls,
-          kategoriKelas: mhsKatKelas,
-          angkatan: mhsAngkatan || 2024,
+          nama: mhsNama,
+          kodeProdi: mhsProdi,
+          prodi: mhsProdi,
+          npm: mhsNpm,
+          kelas: toSafePrimitiveStr_(cleanKls, 'Reguler A'),
+          kategoriKelas: toSafePrimitiveStr_(mhsKatKelas, 'Reguler'),
+          angkatan: mhsAngkatanNum,
           semester: mhsSemester || 'Semester 5'
         }
       };
@@ -1098,7 +1137,7 @@ function changePassword(username, oldPassword, newPassword, actor, userRole) {
   }
 }
 
-var GAS_SCRIPT_VERSION = '2026.11.23-dedup-pendaftaran-v1';
+var GAS_SCRIPT_VERSION = '2026.11.24-gas-login-fix-v1';
 
 function getBackendVersionInfo() {
   return {
