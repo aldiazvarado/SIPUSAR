@@ -19130,7 +19130,7 @@ ${extraDocRels}
     function setSuratExportIncludeSignatures(includeSig) {
       suratDosenState.includeSignaturesInExport = Boolean(includeSig);
       syncSuratWorkflowUiControls();
-      renderSuratPengantarPreview();
+      if (typeof renderSuratDosenPreview === 'function') renderSuratDosenPreview();
     }
 
     function syncSuratWorkflowUiControls() {
