@@ -101,7 +101,11 @@ function handleApiRequest(action, args) {
     syncJadwalParticipantsToSheet: syncJadwalParticipantsToSheet,
     optimizeSpreadsheetStorage: optimizeSpreadsheetStorage,
     archiveSemesterData: archiveSemesterData,
-    getBackendVersionInfo: getBackendVersionInfo
+    getBackendVersionInfo: getBackendVersionInfo,
+    saveSuratPengantarRecord: saveSuratPengantarRecord,
+    verifySuratPengantarStep: verifySuratPengantarStep,
+    deleteSuratPengantarRecord: deleteSuratPengantarRecord,
+    saveDigitalSpecimen: saveDigitalSpecimen
   };
   var fn = allowedFunctions[action];
   if (!fn) {
@@ -173,7 +177,7 @@ function computeSheetSnapshotHash(ss) {
     var targetSs = ss || getActiveSpreadsheetSafe();
     if (!targetSs) return '0';
     var parts = [];
-    var dynamicSheets = ['Periode_Pendaftaran', 'Master_Tahun_Akademik', 'Jadwal_Ujian', 'Pendaftaran', 'Log_Aktivitas'];
+    var dynamicSheets = ['Periode_Pendaftaran', 'Master_Tahun_Akademik', 'Jadwal_Ujian', 'Pendaftaran', 'Surat_Pengantar', 'Spesimen_TTD', 'Log_Aktivitas'];
     for (var s = 0; s < dynamicSheets.length; s++) {
       var name = dynamicSheets[s];
       var sh = targetSs.getSheetByName(name);
@@ -409,6 +413,8 @@ function getOrCreateSheet(ss, sheetName) {
     'Master_Kelas': ["ID", "Nama Kelas", "Kategori", "Semester", "Kode Prodi"],
     'Master_Dosen': ["ID", "NIK/NIDN", "Nama Dosen", "Kode Prodi"],
     'Notifikasi': ["ID", "Waktu", "Judul", "Pesan", "Tipe", "TargetRole", "TargetNPM", "Dibaca"],
+    'Surat_Pengantar': ["ID", "Nomor Surat", "Kode Arsip", "Kode Prodi", "Program Studi", "Jenis Layanan", "Dosen Pengampu", "Mata Kuliah", "Semester", "Tahun Akademik", "Tanggal Masehi", "Tanggal Hijriah", "Lampiran", "Tenggat Nilai", "Kaprodi Nama", "Kaprodi NIK", "Mahasiswa JSON", "Status Verifikasi", "Locked", "Paraf SekProdi", "TTD KaProdi", "Paraf Image", "TTD Image", "Meta JSON"],
+    'Spesimen_TTD': ["ID", "Username", "Nama Lengkap", "Role", "Kode Prodi", "Jenis Spesimen", "Data Gambar", "Updated At", "Updated By"],
     'Log_Aktivitas': ["ID", "Waktu", "Pengguna", "Role", "Aksi", "Target", "Keterangan"]
   };
   var headers = defaultHeadersMap[sheetName] || ["ID", "Nama", "Keterangan"];
@@ -461,7 +467,7 @@ function getSheetDataRaw(ss, sheetName) {
                                 keyLower === 'tanggal selesai';
       var isTimeOnlyCol = (keyLower === 'jam mulai' || keyLower === 'jam selesai' ||
                           (keyLower.indexOf('jam') !== -1 && keyLower.indexOf('mulai') === -1 && keyLower.indexOf('selesai') === -1 && keyLower.indexOf('tanggal') === -1));
-      var isDateOnlyCol = (keyLower === 'tanggal ujian' || keyLower === 'tanggal');
+      var isDateOnlyCol = (keyLower === 'tanggal ujian' || keyLower === 'tanggal' || keyLower === 'tanggal masehi');
 
       if (val instanceof Date) {
         if (isPeriodDateTimeCol) {
@@ -1444,6 +1450,25 @@ function getInitialData(userRole, username, userProdi) {
       }
     }
 
+    var suratPengantar = [];
+    try { suratPengantar = getSheetData('Surat_Pengantar') || []; } catch(e) { suratPengantar = []; }
+    var spesimenTtd = [];
+    try { spesimenTtd = getSheetData('Spesimen_TTD') || []; } catch(e) { spesimenTtd = []; }
+    var officialSigners = (staffList || []).filter(function(s) {
+      var r = String(s.Role || '').trim().toLowerCase();
+      return r.indexOf('ketua program studi') !== -1 || r.indexOf('kaprodi') !== -1 ||
+             r.indexOf('sekretaris program studi') !== -1 || r.indexOf('sekprodi') !== -1;
+    }).map(function(s) {
+      return {
+        ID: s.ID || '',
+        Username: s.Username || '',
+        Role: s.Role || '',
+        'Nama Lengkap': s['Nama Lengkap'] || '',
+        NIK: s.NIK || '',
+        'Kode Prodi': s['Kode Prodi'] || 'ALL'
+      };
+    });
+
     return {
       success: true,
       version: getCompositeSyncVersion(getActiveSpreadsheetSafe()),
@@ -1462,6 +1487,9 @@ function getInitialData(userRole, username, userProdi) {
       jadwal: jadwal,
       ruangan: ruangan,
       notifications: notifikasi,
+      suratPengantar: suratPengantar,
+      spesimenTtd: spesimenTtd,
+      officialSigners: officialSigners,
       users_staff: staffList,
       users_mahasiswa: mhsList,
       users: usersList,
@@ -1470,7 +1498,8 @@ function getInitialData(userRole, username, userProdi) {
         scriptVersion: GAS_SCRIPT_VERSION,
         supportsActorIdentity: true,
         supportsArchiveSemester: true,
-        supportsTrashPendaftaran: true
+        supportsTrashPendaftaran: true,
+        supportsSuratWorkflow: true
       }
     };
   } catch (err) {
@@ -5002,3 +5031,608 @@ function archiveSemesterData(tahunAkademikTarget, actor, userRole) {
     lock.releaseLock();
   }
 }
+
+// =========================================================================
+// [MODUL SURAT PENGANTAR DOSEN: RECORD, VERIFIKASI BERTINGKAT & SPESIMEN 1-KLIK]
+// =========================================================================
+var SURAT_PENGANTAR_HEADERS = [
+  "ID", "Nomor Surat", "Kode Arsip", "Kode Prodi", "Program Studi", "Jenis Layanan",
+  "Dosen Pengampu", "Mata Kuliah", "Semester", "Tahun Akademik", "Tanggal Masehi",
+  "Tanggal Hijriah", "Lampiran", "Tenggat Nilai", "Kaprodi Nama", "Kaprodi NIK",
+  "Mahasiswa JSON", "Status Verifikasi", "Locked", "Paraf SekProdi", "TTD KaProdi",
+  "Paraf Image", "TTD Image", "Meta JSON"
+];
+
+var SPESIMEN_TTD_HEADERS = [
+  "ID", "Username", "Nama Lengkap", "Role", "Kode Prodi", "Jenis Spesimen",
+  "Data Gambar", "Updated At", "Updated By"
+];
+
+function ensureSheetHeadersExact_(ss, sheetName, requiredHeaders) {
+  var sheet = getOrCreateSheet(ss, sheetName);
+  if (!sheet) return null;
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) {
+    sheet.appendRow(requiredHeaders);
+    var hdrRange = sheet.getRange(1, 1, 1, requiredHeaders.length);
+    hdrRange.setBackground('#1E3A8A').setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
+    sheet.setFrozenRows(1);
+    return sheet;
+  }
+  var existingHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0].map(function(h) { return String(h || '').trim(); });
+  var missing = requiredHeaders.filter(function(req) { return existingHeaders.indexOf(req) === -1; });
+  if (missing.length > 0) {
+    var startCol = existingHeaders.length + 1;
+    for (var i = 0; i < missing.length; i++) {
+      var colIdx = startCol + i;
+      var cell = sheet.getRange(1, colIdx);
+      cell.setValue(missing[i]).setBackground('#1E3A8A').setFontColor('#FFFFFF').setFontWeight('bold').setHorizontalAlignment('center');
+    }
+  }
+  return sheet;
+}
+
+function normalizeSuratRoleLower_(role) {
+  return String(role || '').trim().toLowerCase();
+}
+
+function isSuratAdminRole_(role) {
+  var r = normalizeSuratRoleLower_(role);
+  return r === 'master admin' || r === 'master_admin' || r === 'admin tu' || r === 'admintu' || r === 'admin';
+}
+
+function isSuratMasterAdmin_(role) {
+  var r = normalizeSuratRoleLower_(role);
+  return r === 'master admin' || r === 'master_admin';
+}
+
+function isSuratSekprodiRole_(role) {
+  var r = normalizeSuratRoleLower_(role);
+  return r.indexOf('sekretaris program studi') !== -1 || r === 'sekprodi';
+}
+
+function isSuratKaprodiRole_(role) {
+  var r = normalizeSuratRoleLower_(role);
+  return r.indexOf('ketua program studi') !== -1 || r === 'kaprodi';
+}
+
+function resolveUserProdiForSurat_(ss, usernameOrActor, passedProdi) {
+  var p = String(passedProdi || '').trim().toUpperCase();
+  if (p) return p;
+  try {
+    var key = String(usernameOrActor || '').trim().toLowerCase();
+    var staff = getSheetDataRaw(ss, 'User_Staff') || [];
+    for (var i = 0; i < staff.length; i++) {
+      var u = staff[i];
+      var uName = String(u.Username || '').trim().toLowerCase();
+      var uNama = String(u['Nama Lengkap'] || '').trim().toLowerCase();
+      if (key && (uName === key || uNama === key)) {
+        return String(u['Kode Prodi'] || 'ALL').trim().toUpperCase();
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+
+function hasProdiScopeAccess_(userProdi, targetProdi) {
+  var up = String(userProdi || '').trim().toUpperCase();
+  var tp = String(targetProdi || '').trim().toUpperCase();
+  if (!up || up === 'ALL' || !tp) return true;
+  var tokens = up.split(/[,\s;/]+/).filter(Boolean);
+  return tokens.indexOf('ALL') !== -1 || tokens.indexOf(tp) !== -1;
+}
+
+function appendSuratNotificationSafe_(ss, judul, pesan, targetRole) {
+  try {
+    var notifSheet = getOrCreateSheet(ss, 'Notifikasi');
+    if (!notifSheet) return;
+    var now = new Date();
+    var id = 'NTF-SRT-' + Utilities.formatDate(now, 'Asia/Jakarta', 'yyMMddHHmmss');
+    var waktu = Utilities.formatDate(now, 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+    notifSheet.appendRow([id, waktu, judul, pesan, 'Surat Pengantar', targetRole || 'Semua', 'Semua', 'Belum']);
+  } catch (e) {}
+}
+
+function findActiveSpecimenForSigner_(ss, targetUsername, jenisSpesimen, kodeProdi) {
+  var rows = getSheetDataRaw(ss, 'Spesimen_TTD') || [];
+  var cleanUser = String(targetUsername || '').trim().toLowerCase();
+  var cleanJenis = String(jenisSpesimen || '').trim().toLowerCase();
+  var cleanProdi = String(kodeProdi || '').trim().toUpperCase();
+
+  var match = rows.find(function(r) {
+    return cleanUser &&
+      String(r.Username || '').trim().toLowerCase() === cleanUser &&
+      String(r['Jenis Spesimen'] || '').trim().toLowerCase() === cleanJenis &&
+      String(r['Data Gambar'] || '').indexOf('data:image/') === 0;
+  });
+  if (match) return String(match['Data Gambar'] || '');
+
+  match = rows.find(function(r) {
+    return String(r['Jenis Spesimen'] || '').trim().toLowerCase() === cleanJenis &&
+      (!cleanProdi || String(r['Kode Prodi'] || '').trim().toUpperCase() === cleanProdi) &&
+      String(r['Data Gambar'] || '').indexOf('data:image/') === 0;
+  });
+  return match ? String(match['Data Gambar'] || '') : '';
+}
+
+function saveSuratPengantarRecord(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    if (!payload || typeof payload !== 'object') throw new Error('Payload surat pengantar tidak valid.');
+
+    var ss = getActiveSpreadsheetSafe();
+    if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
+
+    var actorRole = String(payload.actorRole || payload.role || '').trim();
+    if (!isSuratAdminRole_(actorRole)) {
+      throw new Error('Akses ditolak: Hanya Master Admin atau Admin TU yang dapat mengonfirmasi & menyimpan surat pengantar.');
+    }
+
+    var sheet = ensureSheetHeadersExact_(ss, 'Surat_Pengantar', SURAT_PENGANTAR_HEADERS);
+    var headerMap = getHeaderIndexMap(sheet);
+    var resolvedMeta = resolveActorIdentity_(ss, payload.actorName || payload.actor || payload.username, actorRole);
+    var nowStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+
+    var targetId = String(payload.id || '').trim();
+    var values = sheet.getDataRange().getValues();
+    var existingRowIdx = -1;
+    var existingObj = null;
+
+    if (targetId) {
+      for (var i = 1; i < values.length; i++) {
+        if (String(values[i][0] || '').trim() === targetId) {
+          existingRowIdx = i + 1;
+          existingObj = {};
+          for (var c = 0; c < values[0].length; c++) {
+            existingObj[String(values[0][c]).trim()] = values[i][c];
+          }
+          break;
+        }
+      }
+    }
+
+    if (existingObj) {
+      var lockedVal = String(existingObj.Locked || '').trim().toLowerCase();
+      var stVal = String(existingObj['Status Verifikasi'] || '').trim().toLowerCase();
+      if ((lockedVal === 'ya' || stVal === 'menunggu ttd kaprodi' || stVal === 'terverifikasi final') && !isSuratMasterAdmin_(actorRole)) {
+        throw new Error('Dokumen sudah dikunci karena telah diparaf Sek.Prodi atau ditandatangani KaProdi.');
+      }
+      if (lockedVal === 'ya') {
+        throw new Error('Dokumen sedang dikunci. Gunakan "Buka Kunci / Revisi" terlebih dahulu untuk menyunting ulang.');
+      }
+    }
+
+    if (!targetId) {
+      var dateStamp = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMdd');
+      var seq = values.length;
+      targetId = 'SRT-' + dateStamp + '-' + ('000' + seq).slice(-3);
+      var existingIds = {};
+      for (var k = 1; k < values.length; k++) existingIds[String(values[k][0] || '').trim()] = true;
+      while (existingIds[targetId]) {
+        seq++;
+        targetId = 'SRT-' + dateStamp + '-' + ('000' + seq).slice(-3);
+      }
+    }
+
+    var existingMeta = {};
+    if (existingObj && existingObj['Meta JSON']) {
+      try { existingMeta = JSON.parse(String(existingObj['Meta JSON'])); } catch (e) {}
+    }
+
+    var metaObj = Object.assign({}, existingMeta, payload.meta || {}, {
+      createdBy: existingMeta.createdBy || resolvedMeta.actor,
+      createdRole: existingMeta.createdRole || resolvedMeta.role,
+      createdAt: existingMeta.createdAt || nowStr,
+      updatedBy: resolvedMeta.actor,
+      updatedRole: resolvedMeta.role,
+      updatedAt: nowStr,
+      parafBy: '',
+      parafUsername: '',
+      parafRole: '',
+      parafAt: '',
+      ttdBy: '',
+      ttdUsername: '',
+      ttdRole: '',
+      ttdAt: '',
+      revisionNote: ''
+    });
+
+    var mhsJson = typeof payload.mahasiswaJson === 'string'
+      ? payload.mahasiswaJson
+      : JSON.stringify(Array.isArray(payload.rows) ? payload.rows : []);
+
+    var rowDataMap = {
+      'ID': targetId,
+      'Nomor Surat': String(payload.nomorSurat || '').trim(),
+      'Kode Arsip': String(payload.kodeArsip || '').trim(),
+      'Kode Prodi': String(payload.kodeProdi || 'MNJ').trim().toUpperCase(),
+      'Program Studi': String(payload.programStudi || payload.prodiNama || '').trim(),
+      'Jenis Layanan': String(payload.layanan || payload.jenisLayanan || 'UTS Susulan').trim(),
+      'Dosen Pengampu': String(payload.dosen || payload.dosenNama || '').trim(),
+      'Mata Kuliah': String(payload.mataKuliah || '').trim(),
+      'Semester': String(payload.semester || 'Ganjil').trim(),
+      'Tahun Akademik': String(payload.tahunAkademik || '2026/2027').trim(),
+      'Tanggal Masehi': String(payload.tanggalMasehi || '').trim(),
+      'Tanggal Hijriah': String(payload.tanggalHijriah || '').trim(),
+      'Lampiran': String(payload.lampiran || '1 (satu) Berkas').trim(),
+      'Tenggat Nilai': String(payload.tenggatNilai || '1 (satu) minggu').trim(),
+      'Kaprodi Nama': String(payload.kaprodiNama || '').trim(),
+      'Kaprodi NIK': String(payload.kaprodiNikNidn || '').trim(),
+      'Mahasiswa JSON': mhsJson,
+      'Status Verifikasi': 'Menunggu Paraf Sek.Prodi',
+      'Locked': 'Tidak',
+      'Paraf SekProdi': '',
+      'TTD KaProdi': '',
+      'Paraf Image': '',
+      'TTD Image': '',
+      'Meta JSON': JSON.stringify(metaObj)
+    };
+
+    var totalCols = Math.max(sheet.getLastColumn(), SURAT_PENGANTAR_HEADERS.length);
+    var rowArr = new Array(totalCols).fill('');
+    Object.keys(rowDataMap).forEach(function(colName) {
+      var colIdx = headerMap[colName];
+      if (colIdx) rowArr[colIdx - 1] = rowDataMap[colName];
+    });
+
+    if (existingRowIdx > 0) {
+      sheet.getRange(existingRowIdx, 1, 1, totalCols).setValues([rowArr]);
+    } else {
+      sheet.appendRow(rowArr);
+      var newRowNum = sheet.getLastRow();
+      if (headerMap['Tanggal Masehi']) sheet.getRange(newRowNum, headerMap['Tanggal Masehi']).setNumberFormat('@');
+      if (headerMap['Kaprodi NIK']) sheet.getRange(newRowNum, headerMap['Kaprodi NIK']).setNumberFormat('@');
+    }
+
+    SpreadsheetApp.flush();
+    invalidateCache('Surat_Pengantar');
+    bumpSyncVersion(resolvedMeta.actor, 'Konfirmasi Surat Pengantar ' + targetId);
+    addActivityLog(
+      resolvedMeta.actor,
+      existingRowIdx > 0 ? 'Konfirmasi Ulang Surat Pengantar' : 'Konfirmasi Surat Pengantar',
+      targetId + ' (' + rowDataMap['Nomor Surat'] + ')',
+      'Form surat dikonfirmasi selesai untuk ' + rowDataMap['Dosen Pengampu'] + ' - ' + rowDataMap['Mata Kuliah'] + ' [' + rowDataMap['Kode Prodi'] + '], menunggu Paraf Sek.Prodi.',
+      resolvedMeta.role
+    );
+    appendSuratNotificationSafe_(
+      ss,
+      'Surat Pengantar Menunggu Paraf Sek.Prodi (' + rowDataMap['Kode Prodi'] + ')',
+      'Surat ' + rowDataMap['Nomor Surat'] + ' untuk ' + rowDataMap['Dosen Pengampu'] + ' (' + rowDataMap['Mata Kuliah'] + ') telah selesai diisi oleh ' + resolvedMeta.actor + ' dan menunggu verifikasi Paraf Sek.Prodi.',
+      'Sekretaris Program Studi'
+    );
+
+    return {
+      success: true,
+      id: targetId,
+      record: rowDataMap,
+      message: 'Surat Pengantar berhasil dikonfirmasi & disimpan ke antrean Paraf Sek.Prodi.'
+    };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function verifySuratPengantarStep(id, stepType, actor, userRole, specimenDataUri, note) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var cleanId = String(id || '').trim();
+    var step = String(stepType || '').trim().toUpperCase();
+    if (!cleanId) throw new Error('ID record surat tidak boleh kosong.');
+
+    var ss = getActiveSpreadsheetSafe();
+    if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
+
+    var sheet = ensureSheetHeadersExact_(ss, 'Surat_Pengantar', SURAT_PENGANTAR_HEADERS);
+    var headerMap = getHeaderIndexMap(sheet);
+    var values = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+    var recObj = null;
+
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][0] || '').trim() === cleanId) {
+        rowIndex = i + 1;
+        recObj = {};
+        for (var c = 0; c < values[0].length; c++) {
+          recObj[String(values[0][c]).trim()] = values[i][c];
+        }
+        break;
+      }
+    }
+    if (rowIndex === -1 || !recObj) throw new Error('Record surat ' + cleanId + ' tidak ditemukan.');
+
+    var actorRole = String(userRole || '').trim();
+    var resolvedMeta = resolveActorIdentity_(ss, actor, actorRole);
+    var actorProdi = resolveUserProdiForSurat_(ss, actor || resolvedMeta.actor, '');
+    var targetProdi = String(recObj['Kode Prodi'] || '').trim().toUpperCase();
+    var currentStatus = String(recObj['Status Verifikasi'] || 'Menunggu Paraf Sek.Prodi').trim();
+    var nowStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+
+    var metaObj = {};
+    if (recObj['Meta JSON']) {
+      try { metaObj = JSON.parse(String(recObj['Meta JSON'])); } catch (e) {}
+    }
+
+    var imgStr = String(specimenDataUri || '').trim();
+    if (imgStr && imgStr.length > 48000) {
+      throw new Error('Ukuran gambar spesimen terlalu besar untuk sel Spreadsheet (maks 48.000 karakter).');
+    }
+
+    if (step === 'PARAF_SEKPRODI') {
+      if (!isSuratSekprodiRole_(actorRole) && !isSuratMasterAdmin_(actorRole)) {
+        throw new Error('Akses ditolak: Hanya Sekretaris Program Studi atau Master Admin yang berhak melakukan Paraf.');
+      }
+      if (!isSuratMasterAdmin_(actorRole) && !hasProdiScopeAccess_(actorProdi, targetProdi)) {
+        throw new Error('Akses ditolak: Surat ini milik Program Studi ' + targetProdi + '.');
+      }
+      if (currentStatus !== 'Menunggu Paraf Sek.Prodi') {
+        throw new Error('Tahap tidak sesuai: Status surat saat ini adalah "' + currentStatus + '".');
+      }
+      if (!imgStr) {
+        imgStr = findActiveSpecimenForSigner_(ss, actor, 'Paraf', targetProdi);
+      }
+      if (!imgStr || imgStr.indexOf('data:image/') !== 0) {
+        throw new Error('Spesimen Paraf belum tersedia. Silakan gambar di canvas atau unggah PNG transparan terlebih dahulu.');
+      }
+
+      var parafSummary = resolvedMeta.actor + ' (' + nowStr + ')';
+      metaObj.parafBy = resolvedMeta.actor;
+      metaObj.parafUsername = String(actor || '').trim();
+      metaObj.parafRole = resolvedMeta.role;
+      metaObj.parafAt = nowStr;
+      metaObj.revisionNote = '';
+
+      sheet.getRange(rowIndex, headerMap['Status Verifikasi']).setValue('Menunggu TTD KaProdi');
+      sheet.getRange(rowIndex, headerMap['Locked']).setValue('Ya');
+      sheet.getRange(rowIndex, headerMap['Paraf SekProdi']).setValue(parafSummary);
+      sheet.getRange(rowIndex, headerMap['Paraf Image']).setValue(imgStr);
+      sheet.getRange(rowIndex, headerMap['Meta JSON']).setValue(JSON.stringify(metaObj));
+
+      SpreadsheetApp.flush();
+      invalidateCache('Surat_Pengantar');
+      bumpSyncVersion(resolvedMeta.actor, 'Paraf Sek.Prodi ' + cleanId);
+      addActivityLog(resolvedMeta.actor, 'Paraf Sek.Prodi', cleanId + ' (' + recObj['Nomor Surat'] + ')', 'Surat diparaf 1-klik oleh ' + resolvedMeta.actor + '. Edit dikunci, menunggu TTD KaProdi.', resolvedMeta.role);
+      appendSuratNotificationSafe_(
+        ss,
+        'Surat Siap TTD KaProdi (' + targetProdi + ')',
+        'Surat ' + (recObj['Nomor Surat'] || cleanId) + ' telah diparaf Sek.Prodi (' + resolvedMeta.actor + ') dan menunggu TTD Final Ketua Program Studi.',
+        'Ketua Program Studi'
+      );
+      return { success: true, status: 'Menunggu TTD KaProdi', locked: 'Ya', parafSummary: parafSummary, parafImage: imgStr, meta: metaObj, message: 'Paraf Sek.Prodi berhasil diterapkan. Dokumen dikunci & diteruskan ke KaProdi.' };
+    }
+
+    if (step === 'TTD_KAPRODI') {
+      if (!isSuratKaprodiRole_(actorRole) && !isSuratMasterAdmin_(actorRole)) {
+        throw new Error('Akses ditolak: Hanya Ketua Program Studi atau Master Admin yang berhak melakukan TTD Final.');
+      }
+      if (!isSuratMasterAdmin_(actorRole) && !hasProdiScopeAccess_(actorProdi, targetProdi)) {
+        throw new Error('Akses ditolak: Surat ini milik Program Studi ' + targetProdi + '.');
+      }
+      if (currentStatus !== 'Menunggu TTD KaProdi') {
+        throw new Error('Surat wajib diparaf Sek.Prodi terlebih dahulu sebelum TTD Final KaProdi.');
+      }
+      if (!imgStr) {
+        imgStr = findActiveSpecimenForSigner_(ss, actor, 'TTD', targetProdi);
+      }
+      if (!imgStr || imgStr.indexOf('data:image/') !== 0) {
+        throw new Error('Spesimen TTD belum tersedia. Silakan gambar di canvas atau unggah PNG transparan terlebih dahulu.');
+      }
+
+      var ttdSummary = resolvedMeta.actor + ' (' + nowStr + ')';
+      metaObj.ttdBy = resolvedMeta.actor;
+      metaObj.ttdUsername = String(actor || '').trim();
+      metaObj.ttdRole = resolvedMeta.role;
+      metaObj.ttdAt = nowStr;
+
+      sheet.getRange(rowIndex, headerMap['Status Verifikasi']).setValue('Terverifikasi Final');
+      sheet.getRange(rowIndex, headerMap['Locked']).setValue('Ya');
+      sheet.getRange(rowIndex, headerMap['TTD KaProdi']).setValue(ttdSummary);
+      sheet.getRange(rowIndex, headerMap['TTD Image']).setValue(imgStr);
+      sheet.getRange(rowIndex, headerMap['Meta JSON']).setValue(JSON.stringify(metaObj));
+
+      SpreadsheetApp.flush();
+      invalidateCache('Surat_Pengantar');
+      bumpSyncVersion(resolvedMeta.actor, 'TTD Final KaProdi ' + cleanId);
+      addActivityLog(resolvedMeta.actor, 'TTD Final KaProdi', cleanId + ' (' + recObj['Nomor Surat'] + ')', 'Surat ditandatangani final 1-klik oleh ' + resolvedMeta.actor + '. PDF/Cetak/Word final terbuka.', resolvedMeta.role);
+      appendSuratNotificationSafe_(
+        ss,
+        'Surat Terverifikasi Final (' + targetProdi + ')',
+        'Surat ' + (recObj['Nomor Surat'] || cleanId) + ' telah ditandatangani final oleh KaProdi (' + resolvedMeta.actor + '). PDF, Cetak, dan Word final siap diunduh.',
+        'Admin TU'
+      );
+      return { success: true, status: 'Terverifikasi Final', locked: 'Ya', ttdSummary: ttdSummary, ttdImage: imgStr, meta: metaObj, message: 'TTD Final KaProdi berhasil diterapkan. Ekspor PDF/Cetak/Word final telah dibuka.' };
+    }
+
+    if (step === 'REQUEST_REVISION' || step === 'REOPEN_DRAFT') {
+      if (step === 'REOPEN_DRAFT' && !isSuratMasterAdmin_(actorRole)) {
+        throw new Error('Akses ditolak: Hanya Master Admin yang berhak membuka kunci dokumen yang sudah diverifikasi.');
+      }
+      if (step === 'REQUEST_REVISION' && !isSuratSekprodiRole_(actorRole) && !isSuratKaprodiRole_(actorRole) && !isSuratMasterAdmin_(actorRole)) {
+        throw new Error('Akses ditolak untuk permintaan revisi.');
+      }
+      var cleanNote = String(note || '').trim() || (step === 'REOPEN_DRAFT' ? 'Dibuka kunci oleh Master Admin untuk penyuntingan ulang.' : 'Dikembalikan untuk perbaikan data surat.');
+      var nextStatus = step === 'REOPEN_DRAFT' ? 'Menunggu Paraf Sek.Prodi' : 'Perlu Revisi';
+
+      metaObj.parafBy = '';
+      metaObj.parafUsername = '';
+      metaObj.parafRole = '';
+      metaObj.parafAt = '';
+      metaObj.ttdBy = '';
+      metaObj.ttdUsername = '';
+      metaObj.ttdRole = '';
+      metaObj.ttdAt = '';
+      metaObj.revisionNote = cleanNote;
+      metaObj.revisionBy = resolvedMeta.actor;
+      metaObj.revisionAt = nowStr;
+
+      sheet.getRange(rowIndex, headerMap['Status Verifikasi']).setValue(nextStatus);
+      sheet.getRange(rowIndex, headerMap['Locked']).setValue('Tidak');
+      sheet.getRange(rowIndex, headerMap['Paraf SekProdi']).setValue('');
+      sheet.getRange(rowIndex, headerMap['TTD KaProdi']).setValue('');
+      sheet.getRange(rowIndex, headerMap['Paraf Image']).setValue('');
+      sheet.getRange(rowIndex, headerMap['TTD Image']).setValue('');
+      sheet.getRange(rowIndex, headerMap['Meta JSON']).setValue(JSON.stringify(metaObj));
+
+      SpreadsheetApp.flush();
+      invalidateCache('Surat_Pengantar');
+      bumpSyncVersion(resolvedMeta.actor, (step === 'REOPEN_DRAFT' ? 'Buka Kunci ' : 'Revisi ') + cleanId);
+      addActivityLog(resolvedMeta.actor, step === 'REOPEN_DRAFT' ? 'Buka Kunci Surat Pengantar' : 'Kembalikan Revisi Surat', cleanId + ' (' + recObj['Nomor Surat'] + ')', 'Catatan: ' + cleanNote, resolvedMeta.role);
+      return { success: true, status: nextStatus, locked: 'Tidak', meta: metaObj, message: step === 'REOPEN_DRAFT' ? 'Kunci dokumen dibuka. Status kembali ke Menunggu Paraf Sek.Prodi.' : 'Surat dikembalikan ke Admin TU untuk revisi.' };
+    }
+
+    throw new Error('Jenis verifikasi tidak dikenali: ' + step);
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deleteSuratPengantarRecord(id, actor, userRole) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    var cleanId = String(id || '').trim();
+    if (!cleanId) throw new Error('ID record surat tidak valid.');
+    var actorRole = String(userRole || '').trim();
+    if (!isSuratAdminRole_(actorRole)) {
+      throw new Error('Akses ditolak: Hanya Master Admin atau Admin TU yang dapat menghapus record surat.');
+    }
+
+    var ss = getActiveSpreadsheetSafe();
+    var sheet = ensureSheetHeadersExact_(ss, 'Surat_Pengantar', SURAT_PENGANTAR_HEADERS);
+    var values = sheet.getDataRange().getValues();
+    var headerMap = getHeaderIndexMap(sheet);
+    var rowIndex = -1;
+    var nomorSurat = '';
+    var lockedVal = '';
+
+    for (var i = 1; i < values.length; i++) {
+      if (String(values[i][0] || '').trim() === cleanId) {
+        rowIndex = i + 1;
+        nomorSurat = String(values[i][(headerMap['Nomor Surat'] || 2) - 1] || '');
+        lockedVal = String(values[i][(headerMap['Locked'] || 19) - 1] || '').trim().toLowerCase();
+        break;
+      }
+    }
+    if (rowIndex === -1) throw new Error('Record surat ' + cleanId + ' tidak ditemukan.');
+    if (lockedVal === 'ya' && !isSuratMasterAdmin_(actorRole)) {
+      throw new Error('Record yang sudah diparaf/TTD tidak dapat dihapus oleh Admin TU.');
+    }
+
+    sheet.deleteRow(rowIndex);
+    SpreadsheetApp.flush();
+    var resolvedMeta = resolveActorIdentity_(ss, actor, actorRole);
+    invalidateCache('Surat_Pengantar');
+    bumpSyncVersion(resolvedMeta.actor, 'Hapus Surat Pengantar ' + cleanId);
+    addActivityLog(resolvedMeta.actor, 'Hapus Record Surat Pengantar', cleanId + ' (' + nomorSurat + ')', 'Record surat dihapus dari sheet Surat_Pengantar.', resolvedMeta.role);
+    return { success: true, id: cleanId, message: 'Record surat ' + cleanId + ' berhasil dihapus.' };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function saveDigitalSpecimen(payload) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    if (!payload || typeof payload !== 'object') throw new Error('Payload spesimen tidak valid.');
+    var ss = getActiveSpreadsheetSafe();
+    if (!ss) throw new Error('Spreadsheet aktif tidak ditemukan.');
+
+    var actorRole = String(payload.actorRole || '').trim();
+    var actorUsername = String(payload.actorUsername || payload.actor || '').trim();
+    var targetUsername = String(payload.targetUsername || actorUsername || '').trim();
+    var targetNama = String(payload.targetNama || payload.actorName || targetUsername).trim();
+    var targetRole = String(payload.targetRole || actorRole || '').trim();
+    var kodeProdi = String(payload.kodeProdi || 'MNJ').trim().toUpperCase();
+    var jenisSpesimen = String(payload.jenisSpesimen || '').trim().toLowerCase() === 'paraf' ? 'Paraf' : 'TTD';
+    var imageDataUri = String(payload.imageDataUri || '').trim();
+
+    if (!isSuratMasterAdmin_(actorRole)) {
+      if (jenisSpesimen === 'Paraf' && !isSuratSekprodiRole_(actorRole)) {
+        throw new Error('Hanya Sekretaris Program Studi atau Master Admin yang dapat menyimpan spesimen Paraf.');
+      }
+      if (jenisSpesimen === 'TTD' && !isSuratKaprodiRole_(actorRole)) {
+        throw new Error('Hanya Ketua Program Studi atau Master Admin yang dapat menyimpan spesimen TTD.');
+      }
+      if (actorUsername && targetUsername && actorUsername.toLowerCase() !== targetUsername.toLowerCase()) {
+        throw new Error('Anda hanya diperbolehkan mengelola spesimen milik akun Anda sendiri.');
+      }
+    }
+
+    if (imageDataUri.indexOf('data:image/') !== 0) {
+      throw new Error('Format spesimen harus berupa Data URI gambar PNG transparan.');
+    }
+    if (imageDataUri.length > 48000) {
+      throw new Error('Ukuran spesimen melebihi batas sel Google Sheets (48.000 karakter). Gunakan gambar yang lebih ringkas.');
+    }
+
+    var sheet = ensureSheetHeadersExact_(ss, 'Spesimen_TTD', SPESIMEN_TTD_HEADERS);
+    var headerMap = getHeaderIndexMap(sheet);
+    var values = sheet.getDataRange().getValues();
+    var rowIndex = -1;
+    var existingId = '';
+
+    for (var i = 1; i < values.length; i++) {
+      var rUser = String(values[i][(headerMap['Username'] || 2) - 1] || '').trim().toLowerCase();
+      var rProdi = String(values[i][(headerMap['Kode Prodi'] || 5) - 1] || '').trim().toUpperCase();
+      var rJenis = String(values[i][(headerMap['Jenis Spesimen'] || 6) - 1] || '').trim().toLowerCase();
+      if (rJenis === jenisSpesimen.toLowerCase() && ((targetUsername && rUser === targetUsername.toLowerCase()) || (!targetUsername && rProdi === kodeProdi))) {
+        rowIndex = i + 1;
+        existingId = String(values[i][0] || '').trim();
+        break;
+      }
+    }
+
+    var resolvedMeta = resolveActorIdentity_(ss, payload.actorName || actorUsername, actorRole);
+    var nowStr = Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+    var spmId = existingId || ('SPM-' + Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMdd-HHmmss'));
+
+    var rowObj = {
+      'ID': spmId,
+      'Username': targetUsername,
+      'Nama Lengkap': targetNama,
+      'Role': targetRole,
+      'Kode Prodi': kodeProdi,
+      'Jenis Spesimen': jenisSpesimen,
+      'Data Gambar': imageDataUri,
+      'Updated At': nowStr,
+      'Updated By': resolvedMeta.actor
+    };
+
+    var totalCols = Math.max(sheet.getLastColumn(), SPESIMEN_TTD_HEADERS.length);
+    var rowArr = new Array(totalCols).fill('');
+    Object.keys(rowObj).forEach(function(colName) {
+      var colIdx = headerMap[colName];
+      if (colIdx) rowArr[colIdx - 1] = rowObj[colName];
+    });
+
+    if (rowIndex > 0) {
+      sheet.getRange(rowIndex, 1, 1, totalCols).setValues([rowArr]);
+    } else {
+      sheet.appendRow(rowArr);
+    }
+
+    SpreadsheetApp.flush();
+    invalidateCache('Spesimen_TTD');
+    bumpSyncVersion(resolvedMeta.actor, 'Simpan Spesimen ' + jenisSpesimen + ' (' + kodeProdi + ')');
+    addActivityLog(resolvedMeta.actor, 'Simpan Spesimen ' + jenisSpesimen, targetNama + ' [' + kodeProdi + ']', 'Spesimen ' + jenisSpesimen + ' digital diperbarui di sheet Spesimen_TTD.', resolvedMeta.role);
+
+    return {
+      success: true,
+      specimen: rowObj,
+      message: 'Spesimen ' + jenisSpesimen + ' untuk ' + targetNama + ' berhasil disimpan di Spreadsheet.'
+    };
+  } catch (err) {
+    return { success: false, message: err.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+

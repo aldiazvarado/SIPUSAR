@@ -31,6 +31,8 @@ function setupDatabase() {
     'Periode_Pendaftaran',
     'Pendaftaran',
     'Notifikasi',
+    'Surat_Pengantar',
+    'Spesimen_TTD',
     'Log_Aktivitas'
   ];
 
@@ -295,7 +297,19 @@ function setupDatabase() {
     ]
   );
 
-  var successMsg = "Inisialisasi Database Berhasil! Seluruh Sheet terpisah User_Staff, User_Mahasiswa, Master_Ruangan, Jadwal_Ujian, Master Data, Notifikasi, Log Aktivitas & Pendaftaran (10 Data Mockup) FEB UIKA Bogor telah siap 100%.";
+  // 10. POPULATE SHEET: Surat_Pengantar (Record Surat Pengantar Dosen & Daftar Hadir + Verifikasi Bertingkat)
+  populateSheetData(ss, 'Surat_Pengantar',
+    ["ID", "Nomor Surat", "Kode Arsip", "Kode Prodi", "Program Studi", "Jenis Layanan", "Dosen Pengampu", "Mata Kuliah", "Semester", "Tahun Akademik", "Tanggal Masehi", "Tanggal Hijriah", "Lampiran", "Tenggat Nilai", "Kaprodi Nama", "Kaprodi NIK", "Mahasiswa JSON", "Status Verifikasi", "Locked", "Paraf SekProdi", "TTD KaProdi", "Paraf Image", "TTD Image", "Meta JSON"],
+    []
+  );
+
+  // 11. POPULATE SHEET: Spesimen_TTD (Spesimen Paraf & TTD Digital per Akun / Prodi)
+  populateSheetData(ss, 'Spesimen_TTD',
+    ["ID", "Username", "Nama Lengkap", "Role", "Kode Prodi", "Jenis Spesimen", "Data Gambar", "Updated At", "Updated By"],
+    []
+  );
+
+  var successMsg = "Inisialisasi Database Berhasil! Seluruh Sheet terpisah User_Staff, User_Mahasiswa, Master_Ruangan, Jadwal_Ujian, Master Data, Notifikasi, Surat_Pengantar, Spesimen_TTD, Log Aktivitas & Pendaftaran FEB UIKA Bogor telah siap 100%.";
   Logger.log(successMsg);
   console.log(successMsg);
   try {

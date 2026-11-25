@@ -998,6 +998,13 @@
         return;
       }
 
+      if (action === "saveSuratPengantarRecord" || action === "verifySuratPengantarStep" || action === "deleteSuratPengantarRecord" || action === "saveDigitalSpecimen") {
+        if (typeof handleLocalSuratGasFallback === 'function') {
+          handleLocalSuratGasFallback(action, args, onSuccess);
+          return;
+        }
+      }
+
       // Default fallback
       if (onSuccess) {
         onSuccess({ success: true, message: "Aksi [" + action + "] berhasil diproses di memori lokal." });
@@ -1537,8 +1544,6 @@
           <span>Masuk Sistem</span>
           <i class="fas fa-arrow-right text-xs"></i>
         </button>
-
-        <div id="loginStatusLog" aria-live="polite" class="hidden rounded-xl border border-slate-200 bg-slate-50/95 px-3 py-2 text-[11px] font-mono text-slate-700 space-y-1 max-h-36 overflow-y-auto"></div>
       </form>
     </div>
   </div>
@@ -1559,11 +1564,7 @@
     }
 
     function sipResetLoginLog() {
-      const box = document.getElementById('loginStatusLog');
-      if (box) {
-        box.innerHTML = '';
-        box.classList.add('hidden');
-      }
+      // Log proses login disembunyikan dari UI dan dicatat di Console (F12) saja
     }
 
     function sipAppendLoginLog(stage, message, level) {
@@ -1572,50 +1573,6 @@
         const logFn = lvl === 'error' ? console.error : (lvl === 'warning' ? console.warn : console.info);
         logFn('[SIP-LOGIN][' + stage + ']', message);
       } catch (eLog) {}
-
-      const box = document.getElementById('loginStatusLog');
-      if (!box) return;
-      box.classList.remove('hidden');
-
-      const row = document.createElement('div');
-      row.className = 'flex items-start gap-2 leading-snug';
-
-      const dot = document.createElement('span');
-      let dotCls = 'inline-block w-2 h-2 rounded-full mt-1 shrink-0 bg-blue-600';
-      let txtCls = 'text-slate-700 break-words min-w-0';
-      if (lvl === 'success') {
-        dotCls = 'inline-block w-2 h-2 rounded-full mt-1 shrink-0 bg-emerald-600';
-        txtCls = 'text-emerald-800 font-semibold break-words min-w-0';
-      } else if (lvl === 'warning') {
-        dotCls = 'inline-block w-2 h-2 rounded-full mt-1 shrink-0 bg-amber-500';
-        txtCls = 'text-amber-800 font-semibold break-words min-w-0';
-      } else if (lvl === 'error') {
-        dotCls = 'inline-block w-2 h-2 rounded-full mt-1 shrink-0 bg-rose-600';
-        txtCls = 'text-rose-800 font-semibold break-words min-w-0';
-      } else if (lvl === 'loading') {
-        dotCls = 'inline-block w-2 h-2 rounded-full mt-1 shrink-0 bg-indigo-600 animate-pulse';
-        txtCls = 'text-indigo-900 font-semibold break-words min-w-0';
-      }
-      dot.className = dotCls;
-
-      const timeEl = document.createElement('span');
-      timeEl.className = 'text-slate-400 shrink-0';
-      try {
-        const d = new Date();
-        timeEl.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
-      } catch (eTime) {
-        timeEl.textContent = '--:--:--';
-      }
-
-      const msgEl = document.createElement('span');
-      msgEl.className = txtCls;
-      msgEl.textContent = '[' + stage + '] ' + String(message || '');
-
-      row.appendChild(dot);
-      row.appendChild(timeEl);
-      row.appendChild(msgEl);
-      box.appendChild(row);
-      box.scrollTop = box.scrollHeight;
     }
 
     function sipHandleEarlyLoginClick(e) {
@@ -2319,33 +2276,95 @@
         <div id="kartuDigitalCardsContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6"></div>
       </div>
 
-      <!-- TAB: SURAT PENGANTAR DOSEN & DAFTAR HADIR (KHUSUS MASTER ADMIN & ADMIN TU) -->
+      <!-- TAB: SURAT PENGANTAR DOSEN & DAFTAR HADIR (MASTER ADMIN, ADMIN TU, SEK.PRODI, KAPRODI) -->
       <div id="tabContentSuratdosen" class="hidden space-y-4">
         <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 no-print">
-          <div class="min-w-0">
-            <h3 class="text-base font-bold text-slate-800">Surat Pengantar Dosen &amp; Formulir Daftar Hadir Ujian</h3>
-            <p class="text-xs text-slate-500 mt-0.5">Generator otomatis 2 halaman resmi FEB UIKA Bogor berukuran F4 (8.5 &times; 13 in) siap Simpan PDF, Word (.docx), dan Cetak/Print.</p>
+          <div class="min-w-0 space-y-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <h3 class="text-base font-bold text-slate-800">Surat Pengantar Dosen &amp; Formulir Daftar Hadir Ujian</h3>
+              <span id="suratActiveRecordMetaText" class="text-xs font-mono tabular-nums font-bold text-slate-500">Draft Baru</span>
+            </div>
+            <p class="text-xs text-slate-500">Alur verifikasi 3 tahap: 1. Form Isian Selesai &rarr; 2. Paraf Sek.Prodi (Edit dikunci) &rarr; 3. TTD Final KaProdi (PDF/Cetak/Word F4 terbuka).</p>
           </div>
-          <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full lg:w-auto shrink-0">
-            <button type="button" onclick="resetSuratDosenState()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 border border-slate-200 transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-rotate-left"></i> <span>Reset Filter</span>
+          <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto shrink-0">
+            <button id="btnManageSpesimenTtd" type="button" onclick="openSpesimenTtdModal()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 min-h-[40px] py-2 rounded-xl text-xs items-center justify-center gap-1.5 border border-slate-300 transition whitespace-nowrap shrink-0 cursor-pointer">
+              <i class="fas fa-signature text-blue-900"></i> <span>Spesimen Paraf / TTD</span>
             </button>
+            <button id="btnNewSuratDraft" type="button" onclick="createNewSuratDraft()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 min-h-[40px] py-2 rounded-xl text-xs items-center justify-center gap-1.5 border border-slate-200 transition whitespace-nowrap shrink-0 cursor-pointer">
+              <i class="fas fa-file-circle-plus"></i> <span>Surat Baru</span>
+            </button>
+            <button id="btnKonfirmasiSimpanSurat" type="button" onclick="confirmAndSaveSuratPengantar()" class="hidden bg-blue-900 hover:bg-blue-800 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs items-center justify-center gap-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+              <i class="fas fa-check-to-slot"></i> <span>Konfirmasi &amp; Simpan</span>
+            </button>
+            <div class="inline-flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 min-h-[40px] shrink-0" role="group" aria-label="Mode Paraf dan Tanda Tangan Ekspor">
+              <button id="btnSuratModeWithTtd" type="button" onclick="setSuratExportIncludeSignatures(true)" class="px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer bg-blue-900 text-white shadow-xs">Dengan Paraf &amp; TTD</button>
+              <button id="btnSuratModeNoTtd" type="button" onclick="setSuratExportIncludeSignatures(false)" class="px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer text-slate-600 hover:text-slate-900">Tanpa Paraf &amp; TTD</button>
+            </div>
             <button id="btnDownloadSuratWord" type="button" onclick="downloadSuratPengantarWord()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
               <i class="fas fa-file-word"></i> <span>Word (.docx)</span>
             </button>
             <button id="btnDownloadSuratPdf" type="button" onclick="downloadSuratPengantarPdf()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-md transition whitespace-nowrap shrink-0 cursor-pointer">
               <i class="fas fa-file-pdf"></i> <span>Simpan PDF</span>
             </button>
-            <button type="button" onclick="printSuratPengantarDosen()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+            <button id="btnPrintSuratDosen" type="button" onclick="printSuratPengantarDosen()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
               <i class="fas fa-print"></i> <span>Cetak / Print</span>
             </button>
           </div>
         </div>
 
+        <!-- PANEL RECORD SURAT PENGANTAR & VERIFIKASI BERTINGKAT -->
+        <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden no-print">
+          <div class="p-4 border-b border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div class="space-y-0.5">
+              <div class="flex flex-wrap items-center gap-2">
+                <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-800">Record Surat Pengantar Dosen &amp; Daftar Hadir Ujian</h4>
+                <span id="suratRecordsCounterText" class="text-xs font-mono tabular-nums text-slate-500">0 record</span>
+              </div>
+              <p class="text-[11px] text-slate-500">Pilih record untuk pratinjau dokumen F4 atau lakukan verifikasi 1-klik sesuai tahap peran aktif.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="inline-flex flex-wrap items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 text-[11px] font-bold">
+                <button type="button" data-surat-rec-filter="ALL" onclick="setSuratRecordStatusFilter('ALL')" class="surat-rec-filter-btn px-2.5 py-1.5 rounded-lg bg-slate-800 text-white cursor-pointer whitespace-nowrap">Semua</button>
+                <button type="button" data-surat-rec-filter="Menunggu Paraf Sek.Prodi" onclick="setSuratRecordStatusFilter('Menunggu Paraf Sek.Prodi')" class="surat-rec-filter-btn px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer whitespace-nowrap">Menunggu Paraf</button>
+                <button type="button" data-surat-rec-filter="Menunggu TTD KaProdi" onclick="setSuratRecordStatusFilter('Menunggu TTD KaProdi')" class="surat-rec-filter-btn px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer whitespace-nowrap">Menunggu TTD</button>
+                <button type="button" data-surat-rec-filter="Terverifikasi Final" onclick="setSuratRecordStatusFilter('Terverifikasi Final')" class="surat-rec-filter-btn px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer whitespace-nowrap">Final</button>
+                <button type="button" data-surat-rec-filter="Perlu Revisi" onclick="setSuratRecordStatusFilter('Perlu Revisi')" class="surat-rec-filter-btn px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer whitespace-nowrap">Revisi</button>
+              </div>
+              <select id="suratRecordProdiFilter" onchange="renderSuratRecordsTable()" class="border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
+                <option value="">Semua Prodi</option>
+                <option value="MNJ">MNJ</option>
+                <option value="AKT">AKT</option>
+                <option value="BD">BD</option>
+                <option value="PI">PI</option>
+                <option value="PKD">PKD</option>
+              </select>
+              <input type="text" id="suratRecordSearchInput" oninput="renderSuratRecordsTable()" placeholder="Cari nomor / dosen / matkul..." class="border border-slate-300 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900 w-48 sm:w-56">
+            </div>
+          </div>
+          <div class="overflow-x-auto max-h-72 overflow-y-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead class="bg-slate-50 text-slate-600 uppercase text-[11px] font-bold border-b border-slate-200 sticky top-0 z-10">
+                <tr>
+                  <th class="px-3 py-2.5 whitespace-nowrap">ID &amp; Nomor Surat</th>
+                  <th class="px-3 py-2.5 whitespace-nowrap">Prodi &amp; Layanan</th>
+                  <th class="px-3 py-2.5">Dosen &amp; Mata Kuliah</th>
+                  <th class="px-3 py-2.5 text-right whitespace-nowrap">Mhs</th>
+                  <th class="px-3 py-2.5 whitespace-nowrap">Verifikasi 3 Tahap</th>
+                  <th class="px-3 py-2.5 text-right whitespace-nowrap">Aksi</th>
+                </tr>
+              </thead>
+              <tbody id="suratRecordsTableBody" class="divide-y divide-slate-200/80"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- BANNER STATUS WORKFLOW & AKSI 1-KLIK RECORD AKTIF -->
+        <div id="suratRecordWorkflowBanner" class="hidden bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm no-print"></div>
+
         <!-- MOBILE & TABLET PANE SWITCHER (< xl) -->
         <div id="suratMobileTabBar" class="xl:hidden bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-sm grid grid-cols-2 gap-1.5 no-print">
           <button id="btnSuratPaneForm" type="button" onclick="setSuratMobilePane('form')" class="min-h-[42px] px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer bg-blue-900 text-white shadow-sm">
-            <i class="fas fa-pen-to-square"></i> <span>1. Form Isian</span>
+            <i class="fas fa-pen-to-square"></i> <span id="suratPaneFormLabel">1. Form Isian</span>
           </button>
           <button id="btnSuratPanePreview" type="button" onclick="setSuratMobilePane('preview')" class="min-h-[42px] px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer bg-slate-100 text-slate-700 hover:bg-slate-200">
             <i class="fas fa-file-lines"></i> <span>2. Pratinjau Surat</span>
@@ -2353,178 +2372,193 @@
         </div>
 
         <div class="grid grid-cols-1 xl:grid-cols-12 gap-5 lg:gap-6 items-start">
-          <!-- PANEL KIRI: FILTER OTOMATIS, SELEKSI MAHASISWA & METADATA SURAT -->
+          <!-- PANEL KIRI: RINGKASAN VERIFIKASI / FILTER OTOMATIS, SELEKSI MAHASISWA & METADATA SURAT -->
           <div id="suratFormPane" class="xl:block xl:col-span-5 space-y-4 no-print">
-            <!-- 1. FILTER & PILIH DOSEN / MATKUL -->
-            <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-              <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">1. Pilih Target Dosen &amp; Mata Kuliah</h4>
-                <span id="suratDosenComboCount" class="text-[11px] font-mono tabular-nums font-bold text-blue-900">0 paket terdeteksi</span>
+            <!-- LOCKED BANNER SAAT RECORD SUDAH DIPARAF / FINAL -->
+            <div id="suratFormLockedNotice" class="hidden bg-amber-50 border border-amber-200 text-amber-900 p-3.5 rounded-2xl text-xs space-y-1">
+              <div class="flex items-center justify-between gap-2 font-bold">
+                <span><i class="fas fa-lock mr-1.5"></i> Penyuntingan Form Dikunci</span>
+                <span id="suratFormLockedBadgeText" class="font-mono tabular-nums text-[11px]">Menunggu TTD KaProdi</span>
               </div>
-
-              <div>
-                <label class="block text-[11px] font-bold text-slate-600 mb-1">Paket Terdeteksi dari Pendaftaran Aktif</label>
-                <select id="suratQuickCombo" onchange="applySuratQuickCombo(this.value)" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-900">
-                  <option value="">-- Pilih Kombinasi Dosen &amp; Matkul Otomatis --</option>
-                </select>
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Jenis Layanan</label>
-                  <select id="suratFilterLayanan" onchange="onSuratFilterChange('layanan')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
-                    <option value="">Semua Layanan</option>
-                    <option value="UTS Susulan">UTS Susulan</option>
-                    <option value="UAS Susulan">UAS Susulan</option>
-                    <option value="Remedial Teaching">Remedial Teaching</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Program Studi</label>
-                  <select id="suratFilterProdi" onchange="onSuratFilterChange('prodi')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
-                    <option value="">Semua Program Studi</option>
-                    <option value="MNJ">Manajemen [MNJ]</option>
-                    <option value="AKT">Akuntansi [AKT]</option>
-                    <option value="BD">Bisnis Digital [BD]</option>
-                    <option value="PI">Perdagangan Internasional [PI]</option>
-                    <option value="PKD">Perbankan &amp; Keuangan Digital [PKD]</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label class="block text-[11px] font-bold text-slate-600 mb-1">Dosen Pengampu (Tujuan Surat)</label>
-                <select id="suratSelectDosen" onchange="onSuratFilterChange('dosen')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
-                  <option value="">-- Pilih Dosen Pengampu --</option>
-                </select>
-                <input type="text" id="suratInputDosenManual" oninput="suratDosenState.dosen = this.value; renderSuratDosenPreview()" placeholder="Atau ketik / koreksi nama &amp; gelar dosen..." class="mt-1.5 w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-900">
-              </div>
-
-              <div>
-                <label class="block text-[11px] font-bold text-slate-600 mb-1">Mata Kuliah</label>
-                <select id="suratSelectMatkul" onchange="onSuratFilterChange('matkul')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
-                  <option value="">-- Pilih Mata Kuliah --</option>
-                </select>
-                <input type="text" id="suratInputMatkulManual" oninput="suratDosenState.mataKuliah = this.value; renderSuratDosenPreview()" placeholder="Atau ketik / koreksi nama mata kuliah..." class="mt-1.5 w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-900">
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Semester / Kelas</label>
-                  <select id="suratFilterKelas" onchange="onSuratFilterChange('kelas')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
-                    <option value="">Semua Semester &amp; Kelas</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Status Pendaftaran</label>
-                  <select id="suratFilterStatus" onchange="onSuratFilterChange('status')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
-                    <option value="ALL">Semua (Disetujui &amp; Pending)</option>
-                    <option value="Disetujui">Disetujui Saja</option>
-                    <option value="Pending">Pending Saja</option>
-                  </select>
-                </div>
-              </div>
+              <p id="suratFormLockedDesc" class="text-[11px] text-amber-800">Surat telah melewati verifikasi Paraf Sek.Prodi sehingga isi surat tidak dapat diubah lagi. Ekspor PDF/Cetak/Word final akan terbuka setelah TTD KaProdi.</p>
             </div>
 
-            <!-- 2. DAFTAR MAHASISWA TERPILIH (BISA CENTANG / EDIT / TAMBAH BARIS) -->
-            <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                <div>
-                  <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">2. Daftar Mahasiswa pada Surat</h4>
-                  <p id="suratSelectedSummaryText" class="text-[11px] text-slate-500 font-mono tabular-nums">0 terpilih dari 0 baris</p>
+            <!-- RINGKASAN READ-ONLY KHUSUS SEK.PRODI & KAPRODI -->
+            <div id="suratSignerReadonlyPanel" class="hidden bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3"></div>
+
+            <!-- WRAPPER FORM INPUT KHUSUS MASTER ADMIN & ADMIN TU -->
+            <div id="suratFormEditableGroup" class="space-y-4">
+              <!-- 1. FILTER & PILIH DOSEN / MATKUL -->
+              <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">1. Pilih Target Dosen &amp; Mata Kuliah</h4>
+                  <span id="suratDosenComboCount" class="text-[11px] font-mono tabular-nums font-bold text-blue-900">0 paket terdeteksi</span>
                 </div>
-                <div class="flex items-center gap-1.5">
-                  <button type="button" onclick="toggleAllSuratRows(true)" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-700 cursor-pointer">Pilih Semua</button>
-                  <button type="button" onclick="toggleAllSuratRows(false)" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-600 cursor-pointer">Kosongkan</button>
-                  <button type="button" onclick="addManualSuratStudentRow()" class="px-2.5 py-1 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-[11px] font-bold cursor-pointer">+ Baris</button>
-                </div>
-              </div>
 
-              <div id="suratStudentRowsContainer" class="space-y-2 max-h-72 overflow-y-auto pr-1"></div>
-
-              <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
-                <label class="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer select-none">
-                  <input type="checkbox" id="suratPadMinRowsCheckbox" checked onchange="suratDosenState.padToMinRows = this.checked; renderSuratDosenPreview()" class="rounded text-blue-900 cursor-pointer">
-                  <span>Sediakan baris cadangan minimal</span>
-                </label>
-                <select id="suratMinRowsSelect" onchange="suratDosenState.minRows = Number(this.value || 5); renderSuratDosenPreview()" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold bg-white">
-                  <option value="5" selected>5 Baris</option>
-                  <option value="8">8 Baris</option>
-                  <option value="10">10 Baris</option>
-                  <option value="0">Sesuai Terpilih</option>
-                </select>
-              </div>
-            </div>
-
-            <!-- 3. METADATA NOMOR SURAT, HIJRIAH & KAPRODI -->
-            <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
-              <div class="border-b border-slate-100 pb-2">
-                <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">3. Metadata Surat &amp; Pejabat Penandatangan</h4>
-              </div>
-
-              <div class="space-y-2.5">
                 <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Nomor Surat</label>
-                  <div class="flex items-stretch w-full border border-slate-300 rounded-xl overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-900">
-                    <input type="text" id="suratInputNomorUrut" oninput="onSuratNomorPartChange('urut', this.value)" placeholder="xxx" aria-label="Nomor urut surat" class="flex-1 min-w-[4.25rem] px-2.5 py-2 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
-                    <span id="suratNomorLockedMid" class="px-2 py-2 text-[11px] font-mono text-slate-600 bg-slate-100 border-x border-slate-200 flex items-center select-none whitespace-nowrap shrink-0">/K.7/MA/FEB-UIKA/</span>
-                    <input type="text" id="suratInputNomorTahun" oninput="onSuratNomorPartChange('tahun', this.value)" maxlength="4" placeholder="2026" aria-label="Tahun nomor surat" class="w-16 sm:w-20 shrink-0 px-2 py-2 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Paket Terdeteksi dari Pendaftaran Aktif</label>
+                  <select id="suratQuickCombo" onchange="applySuratQuickCombo(this.value)" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-900">
+                    <option value="">-- Pilih Kombinasi Dosen &amp; Matkul Otomatis --</option>
+                  </select>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Jenis Layanan</label>
+                    <select id="suratFilterLayanan" onchange="onSuratFilterChange('layanan')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
+                      <option value="">Semua Layanan</option>
+                      <option value="UTS Susulan">UTS Susulan</option>
+                      <option value="UAS Susulan">UAS Susulan</option>
+                      <option value="Remedial Teaching">Remedial Teaching</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Program Studi</label>
+                    <select id="suratFilterProdi" onchange="onSuratFilterChange('prodi')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
+                      <option value="">Semua Program Studi</option>
+                      <option value="MNJ">Manajemen [MNJ]</option>
+                      <option value="AKT">Akuntansi [AKT]</option>
+                      <option value="BD">Bisnis Digital [BD]</option>
+                      <option value="PI">Perdagangan Internasional [PI]</option>
+                      <option value="PKD">Perbankan &amp; Keuangan Digital [PKD]</option>
+                    </select>
                   </div>
                 </div>
+
                 <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Kode Arsip Pojok Kiri Bawah</label>
-                  <div class="flex items-stretch w-full border border-slate-300 rounded-xl overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-900">
-                    <span id="suratKodeArsipLockedPrefix" class="px-2.5 py-2 text-[11px] font-mono text-slate-600 bg-slate-100 border-r border-slate-200 flex items-center select-none whitespace-nowrap shrink-0">TU/MA/</span>
-                    <input type="text" id="suratInputKodeArsipXX" oninput="onSuratKodeArsipPartChange('xx', this.value)" placeholder="XX" aria-label="Kode bulan atau arsip" class="flex-1 min-w-[4.25rem] px-2.5 py-2 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
-                    <span class="px-1.5 py-2 text-[11px] font-mono text-slate-500 bg-slate-100 border-x border-slate-200 flex items-center select-none">/</span>
-                    <input type="text" id="suratInputKodeArsipTahun" oninput="onSuratKodeArsipPartChange('tahun', this.value)" maxlength="4" placeholder="2026" aria-label="Tahun kode arsip" class="w-16 sm:w-20 shrink-0 px-2 py-2 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Dosen Pengampu (Tujuan Surat)</label>
+                  <select id="suratSelectDosen" onchange="onSuratFilterChange('dosen')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
+                    <option value="">-- Pilih Dosen Pengampu --</option>
+                  </select>
+                  <input type="text" id="suratInputDosenManual" oninput="suratDosenState.dosen = this.value; renderSuratDosenPreview()" placeholder="Atau ketik / koreksi nama &amp; gelar dosen..." class="mt-1.5 w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-900">
+                </div>
+
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Mata Kuliah</label>
+                  <select id="suratSelectMatkul" onchange="onSuratFilterChange('matkul')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
+                    <option value="">-- Pilih Mata Kuliah --</option>
+                  </select>
+                  <input type="text" id="suratInputMatkulManual" oninput="suratDosenState.mataKuliah = this.value; renderSuratDosenPreview()" placeholder="Atau ketik / koreksi nama mata kuliah..." class="mt-1.5 w-full border border-slate-200 rounded-xl px-3 py-1.5 text-xs bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-900">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Semester / Kelas</label>
+                    <select id="suratFilterKelas" onchange="onSuratFilterChange('kelas')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
+                      <option value="">Semua Semester &amp; Kelas</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Status Pendaftaran</label>
+                    <select id="suratFilterStatus" onchange="onSuratFilterChange('status')" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
+                      <option value="ALL">Semua (Disetujui &amp; Pending)</option>
+                      <option value="Disetujui">Disetujui Saja</option>
+                      <option value="Pending">Pending Saja</option>
+                    </select>
                   </div>
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Tanggal Surat (Masehi)</label>
-                  <input type="date" id="suratInputTanggalMasehi" onchange="onSuratDateChange(this.value)" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-900">
+              <!-- 2. DAFTAR MAHASISWA TERPILIH (BISA CENTANG / EDIT / TAMBAH BARIS) -->
+              <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                  <div>
+                    <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">2. Daftar Mahasiswa pada Surat</h4>
+                    <p id="suratSelectedSummaryText" class="text-[11px] text-slate-500 font-mono tabular-nums">0 terpilih dari 0 baris</p>
+                  </div>
+                  <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="toggleAllSuratRows(true)" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-700 cursor-pointer">Pilih Semua</button>
+                    <button type="button" onclick="toggleAllSuratRows(false)" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-600 cursor-pointer">Kosongkan</button>
+                    <button type="button" onclick="addManualSuratStudentRow()" class="px-2.5 py-1 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-[11px] font-bold cursor-pointer">+ Baris</button>
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Tanggal Hijriah (Otomatis + Edit)</label>
-                  <input type="text" id="suratInputTanggalHijriah" oninput="suratDosenState.tanggalHijriah = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-900">
-                </div>
-              </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Semester</label>
-                  <select id="suratInputSemester" onchange="suratDosenState.semester = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
-                    <option value="Ganjil">Ganjil</option>
-                    <option value="Genap">Genap</option>
+                <div id="suratStudentRowsContainer" class="space-y-2 max-h-72 overflow-y-auto pr-1"></div>
+
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+                  <label class="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer select-none">
+                    <input type="checkbox" id="suratPadMinRowsCheckbox" checked onchange="suratDosenState.padToMinRows = this.checked; renderSuratDosenPreview()" class="rounded text-blue-900 cursor-pointer">
+                    <span>Sediakan baris cadangan minimal</span>
+                  </label>
+                  <select id="suratMinRowsSelect" onchange="suratDosenState.minRows = Number(this.value || 5); renderSuratDosenPreview()" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold bg-white">
+                    <option value="5" selected>5 Baris</option>
+                    <option value="8">8 Baris</option>
+                    <option value="10">10 Baris</option>
+                    <option value="0">Sesuai Terpilih</option>
                   </select>
                 </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Tahun Akademik</label>
-                  <input type="text" id="suratInputTahunAkademik" oninput="suratDosenState.tahunAkademik = this.value; renderSuratDosenPreview()" value="2026/2027" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-900">
-                </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Lampiran</label>
-                  <input type="text" id="suratInputLampiran" oninput="suratDosenState.lampiran = this.value; renderSuratDosenPreview()" value="1 (satu) Berkas" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-900">
-                </div>
               </div>
 
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Ketua Program Studi</label>
-                  <input type="text" id="suratInputKaprodiNama" oninput="suratDosenState.kaprodiNama = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900">
+              <!-- 3. METADATA NOMOR SURAT, HIJRIAH & KAPRODI -->
+              <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm space-y-3">
+                <div class="border-b border-slate-100 pb-2">
+                  <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">3. Metadata Surat &amp; Pejabat Penandatangan</h4>
                 </div>
-                <div>
-                  <label class="block text-[11px] font-bold text-slate-600 mb-1">NIK / NIDN Kaprodi</label>
-                  <input type="text" id="suratInputKaprodiNik" oninput="suratDosenState.kaprodiNikNidn = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-900">
-                </div>
-              </div>
 
-              <div>
-                <label class="block text-[11px] font-bold text-slate-600 mb-1">Batas Pengumpulan Nilai</label>
-                <input type="text" id="suratInputTenggatNilai" oninput="suratDosenState.tenggatNilai = this.value; renderSuratDosenPreview()" value="1 (satu) minggu" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-900">
+                <div class="space-y-2.5">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Nomor Surat</label>
+                    <div class="flex items-stretch w-full border border-slate-300 rounded-xl overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-900">
+                      <input type="text" id="suratInputNomorUrut" oninput="onSuratNomorPartChange('urut', this.value)" placeholder="xxx" aria-label="Nomor urut surat" class="flex-1 min-w-[4.25rem] px-2.5 py-2 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                      <span id="suratNomorLockedMid" class="px-2 py-2 text-[11px] font-mono text-slate-600 bg-slate-100 border-x border-slate-200 flex items-center select-none whitespace-nowrap shrink-0">/K.7/MA/FEB-UIKA/</span>
+                      <input type="text" id="suratInputNomorTahun" oninput="onSuratNomorPartChange('tahun', this.value)" maxlength="4" placeholder="2026" aria-label="Tahun nomor surat" class="w-16 sm:w-20 shrink-0 px-2 py-2 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Kode Arsip Pojok Kiri Bawah</label>
+                    <div class="flex items-stretch w-full border border-slate-300 rounded-xl overflow-hidden bg-white focus-within:ring-2 focus-within:ring-blue-900">
+                      <span id="suratKodeArsipLockedPrefix" class="px-2.5 py-2 text-[11px] font-mono text-slate-600 bg-slate-100 border-r border-slate-200 flex items-center select-none whitespace-nowrap shrink-0">TU/MA/</span>
+                      <input type="text" id="suratInputKodeArsipXX" oninput="onSuratKodeArsipPartChange('xx', this.value)" placeholder="XX" aria-label="Kode bulan atau arsip" class="flex-1 min-w-[4.25rem] px-2.5 py-2 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                      <span class="px-1.5 py-2 text-[11px] font-mono text-slate-500 bg-slate-100 border-x border-slate-200 flex items-center select-none">/</span>
+                      <input type="text" id="suratInputKodeArsipTahun" oninput="onSuratKodeArsipPartChange('tahun', this.value)" maxlength="4" placeholder="2026" aria-label="Tahun kode arsip" class="w-16 sm:w-20 shrink-0 px-2 py-2 text-xs font-mono tabular-nums font-bold text-slate-900 text-center bg-white focus:outline-none">
+                    </div>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Tanggal Surat (Masehi)</label>
+                    <input type="date" id="suratInputTanggalMasehi" onchange="onSuratDateChange(this.value)" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-900">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Tanggal Hijriah (Otomatis + Edit)</label>
+                    <input type="text" id="suratInputTanggalHijriah" oninput="suratDosenState.tanggalHijriah = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-900">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Semester</label>
+                    <select id="suratInputSemester" onchange="suratDosenState.semester = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-900">
+                      <option value="Ganjil">Ganjil</option>
+                      <option value="Genap">Genap</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Tahun Akademik</label>
+                    <input type="text" id="suratInputTahunAkademik" oninput="suratDosenState.tahunAkademik = this.value; renderSuratDosenPreview()" value="2026/2027" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-900">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Lampiran</label>
+                    <input type="text" id="suratInputLampiran" oninput="suratDosenState.lampiran = this.value; renderSuratDosenPreview()" value="1 (satu) Berkas" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-900">
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">Ketua Program Studi</label>
+                    <input type="text" id="suratInputKaprodiNama" oninput="suratDosenState.kaprodiNama = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-900">
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-600 mb-1">NIK / NIDN Kaprodi</label>
+                    <input type="text" id="suratInputKaprodiNik" oninput="suratDosenState.kaprodiNikNidn = this.value; renderSuratDosenPreview()" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-900">
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-[11px] font-bold text-slate-600 mb-1">Batas Pengumpulan Nilai</label>
+                  <input type="text" id="suratInputTenggatNilai" oninput="suratDosenState.tenggatNilai = this.value; renderSuratDosenPreview()" value="1 (satu) minggu" class="w-full border border-slate-300 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-900">
+                </div>
               </div>
             </div>
           </div>
@@ -2553,15 +2587,6 @@
                     <button type="button" onclick="adjustSuratPreviewZoom(-10)" title="Perkecil Pratinjau" aria-label="Perkecil Pratinjau" class="px-2 min-h-[30px] text-xs font-bold text-slate-700 hover:bg-slate-200 transition cursor-pointer"><i class="fas fa-minus text-[10px]"></i></button>
                     <span id="suratPreviewScaleLabel" class="px-2 text-[11px] font-mono tabular-nums font-bold text-slate-700 min-w-[3.25rem] text-center select-none">Fit</span>
                     <button type="button" onclick="adjustSuratPreviewZoom(10)" title="Perbesar Pratinjau" aria-label="Perbesar Pratinjau" class="px-2 min-h-[30px] text-xs font-bold text-slate-700 hover:bg-slate-200 transition cursor-pointer"><i class="fas fa-plus text-[10px]"></i></button>
-                  </div>
-
-                  <div class="hidden sm:inline-flex items-center gap-1 pl-1 border-l border-slate-200">
-                    <button type="button" onclick="downloadSuratPengantarPdf()" title="Simpan PDF" class="px-2 min-h-[30px] rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-900 border border-blue-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer">
-                      <i class="fas fa-file-pdf"></i><span>PDF</span>
-                    </button>
-                    <button type="button" onclick="printSuratPengantarDosen()" title="Cetak Surat" class="px-2 min-h-[30px] rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer">
-                      <i class="fas fa-print"></i><span>Cetak</span>
-                    </button>
                   </div>
                 </div>
               </div>
@@ -2846,6 +2871,8 @@
                 <option value="Master_Matkul">Master Matkul</option>
                 <option value="Master_Kelas">Master Kelas</option>
                 <option value="Master_Dosen">Master Dosen</option>
+                <option value="Surat_Pengantar">Surat Pengantar Dosen</option>
+                <option value="Spesimen_TTD">Spesimen Paraf &amp; TTD</option>
                 <option value="Log_Aktivitas">Log Aktivitas</option>
               </select>
             </div>
@@ -4235,6 +4262,108 @@
     </div>
   </div>
 
+  <!-- MODAL: KELOLA SPESIMEN PARAF & TANDA TANGAN DIGITAL (1-KLIK) -->
+  <div id="modalSpesimenTtd" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4 no-print">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto border border-slate-200">
+      <div class="flex justify-between items-start gap-3 border-b border-slate-100 pb-3">
+        <div>
+          <h3 class="text-base font-extrabold text-slate-800">Spesimen Paraf &amp; Tanda Tangan Digital (1-Klik)</h3>
+          <p class="text-xs text-slate-500 mt-0.5">Gambar di canvas atau unggah PNG transparan sekali saja, tersimpan di Spreadsheet untuk verifikasi 1-klik.</p>
+        </div>
+        <button type="button" onclick="closeSpesimenTtdModal()" aria-label="Tutup Modal Spesimen" class="text-slate-400 hover:text-slate-700 p-1.5 rounded-lg cursor-pointer"><i class="fas fa-times"></i></button>
+      </div>
+
+      <div id="spesimenTargetSelectorWrap" class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 mb-1">Akun Pejabat &amp; Program Studi</label>
+          <select id="spesimenSignerSelect" onchange="onSpesimenSignerTargetChange()" class="w-full border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-blue-900"></select>
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-600 mb-1">Jenis Spesimen</label>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button type="button" id="btnSpesimenKindParaf" onclick="setSpesimenKind('Paraf')" class="min-h-[36px] px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer">Paraf Sek.Prodi</button>
+            <button type="button" id="btnSpesimenKindTtd" onclick="setSpesimenKind('TTD')" class="min-h-[36px] px-3 py-1.5 rounded-xl border text-xs font-bold cursor-pointer">TTD KaProdi</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div class="p-3 rounded-2xl border border-slate-200 bg-white space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-600">Spesimen Tersimpan Saat Ini</span>
+            <span id="spesimenSavedTimestamp" class="text-[10px] font-mono tabular-nums text-slate-400">Belum ada</span>
+          </div>
+          <div id="spesimenSavedPreviewBox" class="h-24 rounded-xl border border-dashed border-slate-300 flex items-center justify-center p-2" style="background-image: linear-gradient(45deg, #f8fafc 25%, transparent 25%), linear-gradient(-45deg, #f8fafc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f8fafc 75%), linear-gradient(-45deg, transparent 75%, #f8fafc 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;">
+            <span class="text-[11px] text-slate-400">Belum ada spesimen tersimpan</span>
+          </div>
+        </div>
+
+        <div class="p-3 rounded-2xl border border-slate-200 bg-white space-y-2">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-600 block">Simulasi Posisi di Surat F4</span>
+          <div class="h-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 flex flex-col justify-end relative font-serif text-[11px] text-slate-900">
+            <div class="text-[10px] text-slate-500">Ketua Program Studi,</div>
+            <div class="relative h-10 flex items-center justify-center">
+              <img id="spesimenSimParafImg" alt="Simulasi Paraf" class="hidden absolute left-0 bottom-0 max-h-6 max-w-[38px] object-contain" />
+              <img id="spesimenSimTtdImg" alt="Simulasi TTD" class="hidden max-h-9 max-w-[110px] object-contain" />
+            </div>
+            <div id="spesimenSimSignerName" class="font-bold underline truncate">Nama Ketua Program Studi</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        <div class="inline-flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+          <button type="button" id="btnSpesimenMethodCanvas" onclick="setSpesimenInputMethod('canvas')" class="px-3 py-1.5 rounded-lg bg-blue-900 text-white cursor-pointer">1. Gambar di Canvas</button>
+          <button type="button" id="btnSpesimenMethodUpload" onclick="setSpesimenInputMethod('upload')" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 cursor-pointer">2. Unggah PNG Transparan</button>
+        </div>
+
+        <div id="spesimenCanvasSection" class="space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] font-bold text-slate-600">Warna Tinta:</span>
+              <button type="button" onclick="setSpesimenInkColor('#0f172a')" data-spesimen-ink="#0f172a" class="spesimen-ink-btn w-6 h-6 rounded-full bg-slate-900 border-2 border-blue-600 cursor-pointer" title="Hitam Resmi"></button>
+              <button type="button" onclick="setSpesimenInkColor('#1e3a8a')" data-spesimen-ink="#1e3a8a" class="spesimen-ink-btn w-6 h-6 rounded-full bg-blue-900 border-2 border-transparent cursor-pointer" title="Biru Pena"></button>
+              <select id="spesimenStrokeWidth" onchange="spesimenModalState.strokeWidth = Number(this.value || 3)" class="border border-slate-300 rounded-lg px-2 py-1 text-[11px] font-semibold bg-white">
+                <option value="2">Tipis</option>
+                <option value="3" selected>Sedang</option>
+                <option value="4.5">Tebal</option>
+              </select>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="undoSpesimenCanvas()" class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-[11px] font-bold text-slate-700 cursor-pointer"><i class="fas fa-undo mr-1"></i>Undo</button>
+              <button type="button" onclick="clearSpesimenCanvas()" class="px-2.5 py-1 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-[11px] font-bold text-rose-700 cursor-pointer"><i class="fas fa-eraser mr-1"></i>Bersihkan</button>
+            </div>
+          </div>
+          <div class="rounded-2xl border-2 border-dashed border-slate-300 bg-white overflow-hidden relative">
+            <canvas id="spesimenDrawCanvas" width="520" height="200" class="w-full h-44 touch-none cursor-crosshair block"></canvas>
+            <span id="spesimenCanvasHint" class="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-slate-400">Goreskan paraf atau tanda tangan di area ini</span>
+          </div>
+        </div>
+
+        <div id="spesimenUploadSection" class="hidden space-y-2.5">
+          <div class="p-4 rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 text-center space-y-2">
+            <input type="file" id="spesimenPngFileInput" accept="image/png" onchange="handleSpesimenPngUpload(this)" class="block w-full text-xs text-slate-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-blue-900 file:text-white hover:file:bg-blue-800 cursor-pointer">
+            <label class="inline-flex items-center gap-2 text-xs text-slate-700 font-semibold cursor-pointer">
+              <input type="checkbox" id="spesimenAutoRemoveWhiteCb" checked onchange="reprocessUploadedSpecimenPng()" class="rounded text-blue-900 cursor-pointer">
+              <span>Hapus latar putih otomatis menjadi transparan jika PNG belum transparan</span>
+            </label>
+          </div>
+          <div id="spesimenUploadPreviewBox" class="hidden h-28 rounded-xl border border-slate-200 flex items-center justify-center p-2" style="background-image: linear-gradient(45deg, #f8fafc 25%, transparent 25%), linear-gradient(-45deg, #f8fafc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f8fafc 75%), linear-gradient(-45deg, transparent 75%, #f8fafc 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;"></div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+        <span id="spesimenSizeInfoText" class="text-[11px] font-mono tabular-nums text-slate-500">Siap disimpan ke Spreadsheet</span>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeSpesimenTtdModal()" class="px-4 min-h-[40px] py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-xs font-bold text-slate-700 cursor-pointer">Tutup</button>
+          <button type="button" id="btnSaveSpesimenDigital" onclick="saveCurrentSpesimenDigital()" class="px-4 min-h-[40px] py-2 rounded-xl bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold shadow-sm cursor-pointer">
+            <i class="fas fa-floppy-disk mr-1"></i> Simpan Spesimen ke Spreadsheet
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- JAVASCRIPT LENGKAP -->
   <script>
     let currentUser = null;
@@ -4833,7 +4962,7 @@
       const showLoginFailed = (msg, title = 'Login Gagal') => {
         resetBtn();
         const finalMsg = msg || 'Username atau kata sandi yang Anda masukkan tidak sesuai. Coba lagi atau hubungi admin jika belum memiliki akun.';
-        logStep('GAGAL', finalMsg, 'error');
+        logStep('GAGAL', finalMsg, 'warning');
         if (pInput) pInput.value = '';
         setLoginErrorAlert('error', finalMsg);
         showLoginSwalSafe({
@@ -5148,7 +5277,7 @@
     function isSuratDosenAllowed() {
       if (!currentUser || !currentUser.role) return false;
       const role = currentUser.role.toString().trim().toLowerCase();
-      return ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes(role);
+      return ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin', 'ketua program studi', 'kaprodi', 'sekretaris program studi', 'sekprodi'].includes(role);
     }
 
     function hideElem(id) {
@@ -5221,17 +5350,16 @@
         if (subMhs) subMhs.innerText = 'Pengumuman resmi dan informasi penting terkait pendaftaran dan jadwal ujian.';
       }
       // 2. Role KAPRODI & SEKPRODI:
-      // Menu tampil: Dashboard Executive, Pendaftaran, Notifikasi
-      // Sembunyikan: Invoice & Kwitansi, Database Website, Master Ruangan, Jadwal Ujian, Kartu Ujian, Surat Pengantar Dosen, Jadwal Periode, Master Data, Kelola & Alat, Endpoint API GAS
-      // Sembunyikan tombol aksi: [+ Tambah Pendaftaran], [Input Jadwal Ujian], [Hapus Notifikasi], [Terbitkan Notifikasi], [Tambah Periode Baru], [Tambah Tahun Akademik]
+      // Menu tampil: Dashboard Executive, Pendaftaran, Surat Pengantar Dosen, Notifikasi
+      // Sembunyikan: Invoice & Kwitansi, Database Website, Master Ruangan, Jadwal Ujian, Kartu Ujian, Jadwal Periode, Master Data, Kelola & Alat, Endpoint API GAS
       else if (isKaprodiOrSekprodi) {
         showElem('tabBtnExecutive');
         showElem('tabBtnPendaftaran');
+        showElem('tabBtnSuratdosen', 'flex');
         showElem('tabBtnNotifikasi');
 
         hideElem('tabBtnJadwal');
         hideElem('tabBtnKartu');
-        hideElem('tabBtnSuratdosen');
         hideElem('tabBtnPeriode');
         hideElem('tabBtnInvoice');
         hideElem('tabBtnMaster');
@@ -5338,9 +5466,9 @@
 
       // ==========================================
       // [ATURAN MUTLAK: SURAT PENGANTAR DOSEN]
-      // Menu Tab "Surat Pengantar Dosen" HANYA untuk Master Admin & Admin TU
+      // Menu Tab "Surat Pengantar Dosen" terbuka untuk Master Admin, Admin TU, Sek.Prodi, dan KaProdi
       // ==========================================
-      if (isAdminTU) {
+      if (isSuratDosenAllowed()) {
         showElem('tabBtnSuratdosen', 'flex');
       } else {
         hideElem('tabBtnSuratdosen');
@@ -5516,12 +5644,16 @@
         if (res && res.success) {
           const localPendaftaran = appData.pendaftaran || [];
           const localSampah = appData.sampahPendaftaran || [];
+          const localSurat = Array.isArray(appData.suratPengantar) ? appData.suratPengantar : [];
+          const localSpesimen = Array.isArray(appData.spesimenTtd) ? appData.spesimenTtd : [];
           const isFallback = Boolean(res.isLocalFallback);
           appData = res;
           if (!appData.master) appData.master = {};
           if (!Array.isArray(appData.master.periode)) appData.master.periode = [];
           if (!Array.isArray(appData.pendaftaran)) appData.pendaftaran = [];
           if (!Array.isArray(appData.sampahPendaftaran)) appData.sampahPendaftaran = [];
+          if (!Array.isArray(appData.suratPengantar)) appData.suratPengantar = [];
+          if (!Array.isArray(appData.spesimenTtd)) appData.spesimenTtd = [];
 
           if (isFallback) {
             const trashedIdSet = new Set(localSampah.map(s => String(s.ID || s.id || '').trim()).filter(Boolean));
@@ -5535,6 +5667,12 @@
             });
             if (localSampah.length > 0 && appData.sampahPendaftaran.length === 0) {
               appData.sampahPendaftaran = localSampah;
+            }
+            if (localSurat.length > 0 && appData.suratPengantar.length === 0) {
+              appData.suratPengantar = localSurat;
+            }
+            if (localSpesimen.length > 0 && appData.spesimenTtd.length === 0) {
+              appData.spesimenTtd = localSpesimen;
             }
           }
 
@@ -14329,6 +14467,9 @@
               } else if (!strVal) {
                 val = '-';
               }
+            } else if (['Paraf Image', 'TTD Image', 'Data Gambar'].includes(key)) {
+              const strVal = String(val).trim();
+              val = strVal.startsWith('data:image') ? '[Spesimen PNG Digital]' : (strVal || '-');
             } else if (typeof val === 'object') {
               try {
                 val = JSON.stringify(val);
@@ -14437,6 +14578,8 @@
       else if (sheetName === 'Master_Kelas') rows = master.kelas || [];
       else if (sheetName === 'Master_Dosen') rows = master.dosen || [];
       else if (sheetName === 'Master_Tahun_Akademik') rows = master.tahunAkademik || [];
+      else if (sheetName === 'Surat_Pengantar') rows = appData.suratPengantar || [];
+      else if (sheetName === 'Spesimen_TTD') rows = appData.spesimenTtd || [];
       else if (sheetName === 'Log_Aktivitas') rows = master.logs || appData.activityLogs || [];
 
       if (!rows || rows.length === 0) {
@@ -14459,7 +14602,7 @@
           let rawVal = r[k] !== undefined && r[k] !== null ? r[k] : '';
           let cellHtml = '';
 
-          // Kolom khusus Bukti Foto
+          // Kolom khusus Bukti Foto atau Spesimen PNG
           if (k === 'Bukti Foto' || k.toLowerCase().includes('bukti')) {
             const strVal = String(rawVal).trim();
             if (strVal.startsWith('http://') || strVal.startsWith('https://')) {
@@ -14476,6 +14619,16 @@
             } else {
               cellHtml = `<span class="text-slate-400 italic text-[11px]">-</span>`;
             }
+          } else if (['Paraf Image', 'TTD Image', 'Data Gambar'].includes(k)) {
+            const strVal = String(rawVal).trim();
+            if (strVal.startsWith('data:image/')) {
+              cellHtml = `<img src="${strVal}" alt="${escapeHtml(k)}" class="h-8 max-w-[90px] object-contain bg-slate-50 border border-slate-200 rounded px-1">`;
+            } else {
+              cellHtml = `<span class="text-slate-400 italic text-[11px]">-</span>`;
+            }
+          } else if (['Mahasiswa JSON', 'Meta JSON'].includes(k)) {
+            const strVal = String(rawVal || '');
+            cellHtml = `<span class="font-mono text-[11px] text-slate-500">${escapeHtml(strVal.length > 64 ? strVal.slice(0, 64) + '...' : (strVal || '-'))}</span>`;
           } else if (typeof rawVal === 'number') {
             if (k.toLowerCase().includes('nominal') || k.toLowerCase().includes('biaya')) {
               totalNominal += rawVal;
@@ -16400,6 +16553,21 @@
     const initialSuratYearStr = String(parseIsoDateLocalSurat(initialSuratTodayIso).getFullYear());
 
     const suratDosenState = {
+      currentRecordId: '',
+      recordStatus: 'Draft Baru',
+      isLocked: false,
+      includeSignaturesInExport: true,
+      parafImage: '',
+      ttdImage: '',
+      parafSummary: '',
+      ttdSummary: '',
+      parafBy: '',
+      parafAt: '',
+      ttdBy: '',
+      ttdAt: '',
+      createdBy: '',
+      createdAt: '',
+      revisionNote: '',
       comboKey: '',
       layanan: 'UTS Susulan',
       kodeProdi: 'MNJ',
@@ -16573,6 +16741,10 @@
     }
 
     function onSuratNomorPartChange(part, val) {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        syncSuratInputsFromState();
+        return;
+      }
       if (part === 'urut') suratDosenState.nomorUrut = String(val || '');
       else if (part === 'tahun') suratDosenState.nomorTahun = String(val || '');
       refreshSuratComposedCodes();
@@ -16580,6 +16752,10 @@
     }
 
     function onSuratKodeArsipPartChange(part, val) {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        syncSuratInputsFromState();
+        return;
+      }
       if (part === 'xx') suratDosenState.kodeArsipXX = String(val || '');
       else if (part === 'tahun') suratDosenState.kodeArsipTahun = String(val || '');
       refreshSuratComposedCodes();
@@ -16782,6 +16958,10 @@
     }
 
     function applySuratQuickCombo(comboKey) {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        syncSuratInputsFromState();
+        return;
+      }
       suratDosenState.comboKey = comboKey || '';
       if (!comboKey) {
         renderSuratDosenPreview();
@@ -16802,6 +16982,10 @@
     }
 
     function onSuratFilterChange(source) {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        syncSuratInputsFromState();
+        return;
+      }
       if (source === 'layanan') {
         suratDosenState.layanan = document.getElementById('suratFilterLayanan')?.value || '';
         suratDosenState.comboKey = '';
@@ -16829,6 +17013,10 @@
     }
 
     function onSuratDateChange(isoVal) {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        syncSuratInputsFromState();
+        return;
+      }
       suratDosenState.tanggalMasehi = isoVal || getLocalIsoTodayForSurat();
       suratDosenState.tanggalHijriah = formatTanggalHijriahSurat(suratDosenState.tanggalMasehi);
       const newYear = String(parseIsoDateLocalSurat(suratDosenState.tanggalMasehi).getFullYear());
@@ -16848,6 +17036,20 @@
     function resetSuratDosenState() {
       const todayIso = getLocalIsoTodayForSurat();
       const todayYear = String(parseIsoDateLocalSurat(todayIso).getFullYear());
+      suratDosenState.currentRecordId = '';
+      suratDosenState.recordStatus = 'Draft Baru';
+      suratDosenState.isLocked = false;
+      suratDosenState.parafImage = '';
+      suratDosenState.ttdImage = '';
+      suratDosenState.parafSummary = '';
+      suratDosenState.ttdSummary = '';
+      suratDosenState.parafBy = '';
+      suratDosenState.parafAt = '';
+      suratDosenState.ttdBy = '';
+      suratDosenState.ttdAt = '';
+      suratDosenState.createdBy = '';
+      suratDosenState.createdAt = '';
+      suratDosenState.revisionNote = '';
       suratDosenState.comboKey = '';
       suratDosenState.layanan = 'UTS Susulan';
       suratDosenState.dosen = '';
@@ -16868,6 +17070,10 @@
     }
 
     function toggleSuratRowSelected(idx, checked) {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        renderSuratStudentRowsChecklist();
+        return;
+      }
       if (suratDosenState.rows[idx]) {
         suratDosenState.rows[idx].selected = Boolean(checked);
         updateSuratSelectedSummary();
@@ -16876,6 +17082,9 @@
     }
 
     function updateSuratRowField(idx, field, val) {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        return;
+      }
       if (suratDosenState.rows[idx]) {
         suratDosenState.rows[idx][field] = val;
         renderSuratDosenPreview();
@@ -16883,18 +17092,27 @@
     }
 
     function removeSuratRow(idx) {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        return;
+      }
       suratDosenState.rows.splice(idx, 1);
       renderSuratStudentRowsChecklist();
       renderSuratDosenPreview();
     }
 
     function toggleAllSuratRows(checked) {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        return;
+      }
       suratDosenState.rows.forEach(r => { r.selected = Boolean(checked); });
       renderSuratStudentRowsChecklist();
       renderSuratDosenPreview();
     }
 
     function addManualSuratStudentRow() {
+      if (suratDosenState.isLocked || (typeof isSuratCanEditDraft === 'function' && !isSuratCanEditDraft())) {
+        return;
+      }
       suratDosenState.rows.push({
         uid: 'MANUAL_' + Date.now(),
         selected: true,
@@ -16992,7 +17210,20 @@
         targetRows.push({ nama: '', npm: '', semesterKelas: '' });
       }
 
+      const includeSignatures = suratDosenState.includeSignaturesInExport !== false;
+
       return {
+        currentRecordId: suratDosenState.currentRecordId || '',
+        statusVerifikasi: suratDosenState.recordStatus || 'Draft Baru',
+        isLocked: Boolean(suratDosenState.isLocked),
+        isFinalVerified: String(suratDosenState.recordStatus || '').trim() === 'Terverifikasi Final',
+        includeSignatures: includeSignatures,
+        parafImage: includeSignatures ? (suratDosenState.parafImage || '') : '',
+        ttdImage: includeSignatures ? (suratDosenState.ttdImage || '') : '',
+        parafBy: suratDosenState.parafBy || '',
+        parafAt: suratDosenState.parafAt || '',
+        ttdBy: suratDosenState.ttdBy || '',
+        ttdAt: suratDosenState.ttdAt || '',
         nomorSurat: composeSuratNomorSurat(prodiMeta.kodeSurat),
         kodeArsip: composeSuratKodeArsip(prodiMeta.kodeSurat),
         lampiran: suratDosenState.lampiran || '1 (satu) Berkas',
@@ -17087,9 +17318,16 @@
       const p2TableWrapStyle = forWord ? "margin-left: 1.95cm; width: 17.2cm; margin-bottom: 22pt;" : "padding: 0 64px 0 102px; margin-bottom: 30px;";
       const p2DosenSigStyle = forWord ? "margin-left: 10.65cm; margin-top: 20pt; font-size: 11pt; line-height: 1.28;" : "margin-left: 431px; margin-top: 34px; font-size: 11pt; line-height: 1.28;";
 
+      const parafImgHtml = (m.parafImage && String(m.parafImage).startsWith('data:image/'))
+        ? `<img src="${m.parafImage}" alt="Paraf Sek.Prodi" style="position: absolute; left: -44px; bottom: 2px; max-height: 36px; max-width: 42px; width: auto; height: auto; object-fit: contain; pointer-events: none;" />`
+        : '';
+      const ttdImgHtml = (m.ttdImage && String(m.ttdImage).startsWith('data:image/'))
+        ? `<img src="${m.ttdImage}" alt="TTD KaProdi" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); max-height: 62px; max-width: 195px; width: auto; height: auto; object-fit: contain; pointer-events: none;" />`
+        : '';
+
       const kaprodiSpacerHtml = forWord
         ? '<table style="border-collapse:collapse;"><tr><td style="height: 50pt; mso-height-rule: exactly; font-size: 1pt; line-height: 1pt;">&nbsp;</td></tr></table>'
-        : '<div style="height: 66px;"></div>';
+        : `<div style="position: relative; height: 66px; overflow: visible;">${parafImgHtml}${ttdImgHtml}</div>`;
       const dosenSpacerHtml = forWord
         ? '<table style="border-collapse:collapse;"><tr><td style="height: 73pt; mso-height-rule: exactly; font-size: 1pt; line-height: 1pt;">&nbsp;</td></tr></table>'
         : '<div style="height: 98px;"></div>';
@@ -17519,18 +17757,33 @@
     function renderSuratDosenWorkspace() {
       setSuratMobilePane(suratPreviewState.mobilePane || 'form');
       const entries = extractCourseRegistrationsForSurat();
+      const canEdit = typeof isSuratCanEditDraft === 'function' ? isSuratCanEditDraft() : true;
+      const savedRecords = Array.isArray(appData && appData.suratPengantar) ? appData.suratPengantar : [];
+
+      if (suratDosenState.currentRecordId) {
+        const latestRec = savedRecords.find(r => String(r.ID || r.id || '').trim() === String(suratDosenState.currentRecordId).trim());
+        if (latestRec && typeof applySuratRecordToState === 'function') {
+          applySuratRecordToState(latestRec);
+        }
+      } else if (!canEdit && savedRecords.length > 0 && typeof pickDefaultRecordForVerifier === 'function') {
+        const defRec = pickDefaultRecordForVerifier(savedRecords);
+        if (defRec && typeof applySuratRecordToState === 'function') {
+          applySuratRecordToState(defRec);
+        }
+      }
+
       // Auto-sync tahun akademik / semester dari periode aktif jika masih default & belum ada pilihan manual
       const activePeriode = (appData.master && Array.isArray(appData.master.periode))
         ? appData.master.periode.find(p => String(p.Status || '').toLowerCase() === 'aktif')
         : null;
-      if (activePeriode && !suratDosenState.comboKey && !suratDosenState.dosen) {
+      if (canEdit && !suratDosenState.currentRecordId && activePeriode && !suratDosenState.comboKey && !suratDosenState.dosen) {
         if (activePeriode['Tahun Akademik']) suratDosenState.tahunAkademik = activePeriode['Tahun Akademik'];
         if (activePeriode.Semester) suratDosenState.semester = activePeriode.Semester;
         if (activePeriode['Jenis Layanan']) suratDosenState.layanan = normalizeJenisLayananName(activePeriode['Jenis Layanan']) || suratDosenState.layanan;
       }
 
       // Jika belum ada dosen terpilih sama sekali dan ada paket di pendaftaran, pilih paket pertama secara otomatis agar user langsung melihat hasil nyata
-      if (!suratDosenState.dosen && !suratDosenState.mataKuliah && entries.length > 0) {
+      if (canEdit && !suratDosenState.currentRecordId && !suratDosenState.dosen && !suratDosenState.mataKuliah && entries.length > 0) {
         const combos = buildSuratQuickCombos(entries);
         if (combos.length > 0) {
           const first = combos[0];
@@ -17544,12 +17797,17 @@
 
       populateSuratFilterOptions(entries);
       syncSuratInputsFromState();
-      if (suratDosenState.rows.length === 0 && (suratDosenState.dosen || suratDosenState.mataKuliah)) {
+      if (suratDosenState.rows.length === 0 && (suratDosenState.dosen || suratDosenState.mataKuliah) && !suratDosenState.currentRecordId) {
         rebuildSuratStudentRowsFromFilters();
       } else {
         renderSuratStudentRowsChecklist();
         renderSuratDosenPreview();
       }
+      if (typeof renderSuratRecordsTable === 'function') renderSuratRecordsTable();
+      if (typeof renderSuratRecordWorkflowBanner === 'function') renderSuratRecordWorkflowBanner();
+      if (typeof renderSuratSignerReadonlyPanel === 'function') renderSuratSignerReadonlyPanel();
+      if (typeof syncSuratWorkflowUiControls === 'function') syncSuratWorkflowUiControls();
+
       if (typeof requestAnimationFrame === 'function') {
         requestAnimationFrame(() => fitSuratPreviewSheets());
       }
@@ -17565,6 +17823,16 @@
       const entries = extractCourseRegistrationsForSurat().filter(e => String(e.regId) === String(regId));
       if (entries.length > 0) {
         const first = entries[0];
+        suratDosenState.currentRecordId = '';
+        suratDosenState.recordStatus = 'Draft Baru';
+        suratDosenState.isLocked = false;
+        suratDosenState.parafImage = '';
+        suratDosenState.ttdImage = '';
+        suratDosenState.parafBy = '';
+        suratDosenState.parafAt = '';
+        suratDosenState.ttdBy = '';
+        suratDosenState.ttdAt = '';
+        suratDosenState.revisionNote = '';
         suratDosenState.comboKey = `${first.layanan}|||${first.kodeProdi}|||${first.dosen}|||${first.mataKuliah}`;
         suratDosenState.layanan = first.layanan;
         suratDosenState.dosen = first.dosen;
@@ -17582,7 +17850,8 @@
     function buildSuratSafeFileName(model, ext) {
       const safeSlug = (str) => String(str || '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'Dokumen';
       const cleanExt = String(ext || 'pdf').replace(/^\.+/, '');
-      return `Surat_Pengantar_${safeSlug(model.perihalSingkat)}_${safeSlug(model.mataKuliah)}_${safeSlug(model.dosenNama)}.${cleanExt}`;
+      const sigSuffix = (model && model.includeSignatures === false) ? '_Tanpa_TTD' : '';
+      return `Surat_Pengantar_${safeSlug(model.perihalSingkat)}_${safeSlug(model.mataKuliah)}_${safeSlug(model.dosenNama)}${sigSuffix}.${cleanExt}`;
     }
 
     function ensurePdfLibrariesLoaded() {
@@ -17615,8 +17884,32 @@
       });
     }
 
+    function guardSuratFinalExportAllowed(model) {
+      if (model && model.includeSignatures === false) return true;
+      if (model && model.isFinalVerified) return true;
+      const statusText = (model && model.statusVerifikasi) ? model.statusVerifikasi : 'Draft Baru';
+      Swal.fire({
+        icon: 'warning',
+        title: 'Ekspor Final Terkunci',
+        html: `<div class="text-xs text-slate-600 space-y-2 text-left">
+          <p>Dokumen PDF, Cetak, dan Word (.docx) bertanda tangan digital hanya dapat diunduh setelah menyelesaikan verifikasi 3 tahap:</p>
+          <ol class="list-decimal pl-5 space-y-1 font-medium text-slate-700">
+            <li><b>Konfirmasi &amp; Simpan</b> form isian oleh Master Admin / Admin TU</li>
+            <li><b>Paraf Sek.Prodi</b> (1-klik, mengunci edit)</li>
+            <li><b>TTD Final KaProdi</b> (1-klik, membuka dokumen final)</li>
+          </ol>
+          <p class="pt-1 text-slate-600">Untuk cetak atau tanda tangan basah secara langsung, alihkan mode di atas ke <b>Tanpa Paraf &amp; TTD</b>.</p>
+          <p class="pt-0.5 font-bold text-blue-900">Status saat ini: ${escapeHtml(statusText)}</p>
+        </div>`,
+        confirmButtonColor: '#1e3a8a',
+        confirmButtonText: 'Mengerti'
+      });
+      return false;
+    }
+
     async function downloadSuratPengantarPdf() {
       const model = getSuratDocumentModel();
+      if (!guardSuratFinalExportAllowed(model)) return;
       const fileName = buildSuratSafeFileName(model, 'pdf');
       const btn = document.getElementById('btnDownloadSuratPdf');
       const origHtml = btn ? btn.innerHTML : '';
@@ -17726,6 +18019,7 @@
 
     function printSuratPengantarDosen() {
       const model = getSuratDocumentModel();
+      if (!guardSuratFinalExportAllowed(model)) return;
       let portal = document.getElementById('suratPrintPortal');
       if (!portal) {
         portal = document.createElement('div');
@@ -17807,6 +18101,24 @@
         bytes[i] = bin.charCodeAt(i);
       }
       return bytes;
+    }
+
+    function getPngDimensionsFromBytes(uint8) {
+      if (uint8 && uint8.length >= 24 && uint8[12] === 0x49 && uint8[13] === 0x48 && uint8[14] === 0x44 && uint8[15] === 0x52) {
+        const w = ((uint8[16] << 24) >>> 0) + (uint8[17] << 16) + (uint8[18] << 8) + uint8[19];
+        const h = ((uint8[20] << 24) >>> 0) + (uint8[21] << 16) + (uint8[22] << 8) + uint8[23];
+        if (w > 0 && h > 0) return { width: w, height: h };
+      }
+      return { width: 240, height: 110 };
+    }
+
+    function fitPngEmuWithin(uint8, maxCx, maxCy) {
+      const dim = getPngDimensionsFromBytes(uint8);
+      const ratio = Math.min(maxCx / dim.width, maxCy / dim.height);
+      return {
+        cx: Math.max(91440, Math.round(dim.width * ratio)),
+        cy: Math.max(91440, Math.round(dim.height * ratio))
+      };
     }
 
     function buildOoxmlRun(text, opts = {}) {
@@ -17945,6 +18257,29 @@
         : `${m.perihalSingkat} ini perlu dilaksanakan karena mahasiswa yang bersangkutan tidak dapat mengikuti ${m.namaUjianNormal} pada waktu yang telah ditentukan.`;
       const tindakLanjutText = `Bersama ini kami lampirkan ${m.labelFormulir}, dan nilai hasil ${m.isRemedial ? 'remedial' : 'ujian'} diharapkan dapat disampaikan kepada Tata Usaha Program Studi paling lambat ${m.tenggatNilai} setelah ${m.isRemedial ? 'Remedial Teaching' : 'Ujian Susulan'} dilaksanakan.`;
 
+      const hasParafImg = Boolean(m.parafImage && String(m.parafImage).startsWith('data:image/'));
+      const hasTtdImg = Boolean(m.ttdImage && String(m.ttdImage).startsWith('data:image/'));
+      const parafBytes = hasParafImg ? base64DataUriToUint8Array(m.parafImage) : null;
+      const ttdBytes = hasTtdImg ? base64DataUriToUint8Array(m.ttdImage) : null;
+      const parafEmu = parafBytes ? fitPngEmuWithin(parafBytes, 390000, 360000) : null;
+      const ttdEmu = ttdBytes ? fitPngEmuWithin(ttdBytes, 1750000, 620000) : null;
+
+      const kaprodiParafCellXml = buildOoxmlCell(
+        parafEmu
+          ? buildOoxmlParagraph(buildOoxmlDrawingInline('rIdImgParaf', parafEmu.cx, parafEmu.cy, 4, 'Paraf Sek.Prodi'), { jc: 'right', before: 0, after: 20, line: 220, lineRule: 'auto' })
+          : buildOoxmlParagraph('', { after: 0 }),
+        560,
+        { vAlign: 'bottom', padV: 0, padH: 20 }
+      );
+      const kaprodiTtdCellXml = buildOoxmlCell(
+        ttdEmu
+          ? buildOoxmlParagraph(buildOoxmlDrawingInline('rIdImgTtd', ttdEmu.cx, ttdEmu.cy, 5, 'TTD KaProdi'), { jc: 'left', before: 0, after: 0, line: 240, lineRule: 'auto' })
+          : buildOoxmlParagraph('', { after: 0 }),
+        4500,
+        { vAlign: 'center', padV: 0, padH: 20 }
+      );
+      const kaprodiSignatureOoxmlTable = `<w:tbl><w:tblPr><w:tblW w:w="5060" w:type="dxa"/><w:tblInd w:w="5080" w:type="dxa"/>${buildOoxmlBordersXml(false)}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="560"/><w:gridCol w:w="4500"/></w:tblGrid><w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="860" w:hRule="exact"/></w:trPr>${kaprodiParafCellXml}${kaprodiTtdCellXml}</w:tr></w:tbl>`;
+
       // Section 1 body paragraphs
       const page1BodyXml = [
         p1TopMetaTable,
@@ -17969,8 +18304,9 @@
         buildOoxmlParagraph(buildOoxmlRun('Demikian, atas perhatian dan kerja sama yang baik, kami ucapkan terima kasih.', { sz: 24 }), { indLeft: 2320, after: 180 }),
         buildOoxmlParagraph(buildOoxmlRun('Billahit’taufiq wal hidayah', { sz: 28, font: cursiveFont, italic: true }), { indLeft: 2320, after: 0 }),
         buildOoxmlParagraph(buildOoxmlRun('Wassalamualaikum Wr.Wb.', { sz: 28, font: cursiveFont, italic: true }), { indLeft: 2320, after: 180 }),
-        buildOoxmlParagraph(buildOoxmlRun(`Ketua Program Studi ${m.prodiNama},`, { sz: 24 }), { indLeft: 5660, after: 900 }),
-        buildOoxmlParagraph(buildOoxmlRun(m.kaprodiNama, { sz: 24, bold: true, underline: true }), { indLeft: 5660, after: 0 }),
+        buildOoxmlParagraph(buildOoxmlRun(`Ketua Program Studi ${m.prodiNama},`, { sz: 24 }), { indLeft: 5660, after: 20 }),
+        kaprodiSignatureOoxmlTable,
+        buildOoxmlParagraph(buildOoxmlRun(m.kaprodiNama, { sz: 24, bold: true, underline: true }), { indLeft: 5660, before: 40, after: 0 }),
         buildOoxmlParagraph(buildOoxmlRun(`NIK/NIDN: ${m.kaprodiNikNidn}`, { sz: 24 }), { indLeft: 5660, after: 40 }),
         buildOoxmlParagraph(buildOoxmlRun('Tembusan Yth:', { sz: 22 }), { indLeft: 700, after: 0 }),
         buildOoxmlParagraph(buildOoxmlRun('1.  Arsip', { sz: 22 }), { indLeft: 700, after: 0 }),
@@ -18127,6 +18463,11 @@
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`;
 
+      const extraDocRels = [
+        parafBytes ? '  <Relationship Id="rIdImgParaf" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image3.png"/>' : '',
+        ttdBytes ? '  <Relationship Id="rIdImgTtd" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image4.png"/>' : ''
+      ].filter(Boolean).join('\n');
+
       const docRelsXml = `${'<' + '?'}xml version="1.0" encoding="UTF-8" standalone="yes"${'?' + '>'}
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rIdStyles" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
@@ -18134,6 +18475,7 @@
   <Relationship Id="rIdHdr2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header2.xml"/>
   <Relationship Id="rIdFtr1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer1.xml"/>
   <Relationship Id="rIdFtr2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" Target="footer2.xml"/>
+${extraDocRels}
 </Relationships>`;
 
       const header1RelsXml = `${'<' + '?'}xml version="1.0" encoding="UTF-8" standalone="yes"${'?' + '>'}
@@ -18160,6 +18502,8 @@
       zip.file('word/_rels/footer2.xml.rels', footerRelsXml);
       zip.file('word/media/image1.png', base64DataUriToUint8Array(KOP_HEADER_FEB_BASE64));
       zip.file('word/media/image2.png', base64DataUriToUint8Array(KOP_FOOTER_FEB_BASE64));
+      if (parafBytes) zip.file('word/media/image3.png', parafBytes);
+      if (ttdBytes) zip.file('word/media/image4.png', ttdBytes);
 
       return zip.generateAsync({
         type: 'blob',
@@ -18170,6 +18514,7 @@
 
     async function downloadSuratPengantarWord() {
       const model = getSuratDocumentModel();
+      if (!guardSuratFinalExportAllowed(model)) return;
       const fileName = buildSuratSafeFileName(model, 'docx');
       const btn = document.getElementById('btnDownloadSuratWord');
       const origHtml = btn ? btn.innerHTML : '';
@@ -18217,5 +18562,1536 @@
       }
     }
   </script>
+
+  <!-- WORKFLOW VERIFIKASI 3 TAHAP & SPESIMEN PARAF/TTD DIGITAL -->
+  <script>
+    let suratRecordStatusFilter = 'ALL';
+
+    function getSuratNormalizedRole() {
+      return String((currentUser && currentUser.role) || '').trim().toLowerCase();
+    }
+
+    function isSuratMasterRole() {
+      const r = getSuratNormalizedRole();
+      return r === 'master admin' || r === 'master_admin';
+    }
+
+    function isSuratAdminTuRole() {
+      const r = getSuratNormalizedRole();
+      return r === 'admin tu' || r === 'admintu' || r === 'admin';
+    }
+
+    function isSuratCanEditDraft() {
+      return isSuratMasterRole() || isSuratAdminTuRole();
+    }
+
+    function isSuratRoleSekprodi() {
+      const r = getSuratNormalizedRole();
+      return r.includes('sekretaris') || r.includes('sekprodi') || r.includes('sek.prodi');
+    }
+
+    function isSuratRoleKaprodi() {
+      const r = getSuratNormalizedRole();
+      return r.includes('ketua program studi') || r.includes('kaprodi');
+    }
+
+    function getSuratUserScopeProdi() {
+      if (!currentUser) return '';
+      const direct = String(currentUser.kodeProdi || currentUser['Kode Prodi'] || '').trim().toUpperCase();
+      if (direct) return direct;
+      const uname = String(currentUser.username || '').trim().toLowerCase();
+      const staff = (appData && Array.isArray(appData.users_staff)) ? appData.users_staff : [];
+      const hit = staff.find(s => String(s.Username || s.username || '').trim().toLowerCase() === uname);
+      return hit ? String(hit['Kode Prodi'] || hit.kodeProdi || '').trim().toUpperCase() : '';
+    }
+
+    function hasSuratProdiAccess(kodeProdi) {
+      if (isSuratMasterRole() || isSuratAdminTuRole()) return true;
+      const scope = getSuratUserScopeProdi();
+      if (!scope || scope === 'ALL' || scope === 'SEMUA') return true;
+      return scope === String(kodeProdi || '').trim().toUpperCase();
+    }
+
+    function parseSuratJsonSafe(raw, fallbackVal) {
+      if (raw && typeof raw === 'object') return raw;
+      const str = String(raw || '').trim();
+      if (!str) return fallbackVal;
+      try {
+        return JSON.parse(str);
+      } catch (e) {
+        return fallbackVal;
+      }
+    }
+
+    function normalizeSuratDateIso(rawDate) {
+      const str = String(rawDate || '').trim();
+      if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.slice(0, 10);
+      return getLocalIsoTodayForSurat();
+    }
+
+    function normalizeSuratRecordItem(rec) {
+      if (!rec || typeof rec !== 'object') return null;
+      const id = String(rec.ID || rec.id || '').trim();
+      if (!id) return null;
+      const status = String(rec['Status Verifikasi'] || rec.statusVerifikasi || 'Menunggu Paraf Sek.Prodi').trim();
+      const lockedRaw = String(rec.Locked || rec.locked || '').trim().toLowerCase();
+      const isLocked = lockedRaw === 'ya' || lockedRaw === 'true' || status === 'Menunggu TTD KaProdi' || status === 'Terverifikasi Final';
+      const meta = parseSuratJsonSafe(rec['Meta JSON'] || rec.meta, {});
+      const rows = parseSuratJsonSafe(rec['Mahasiswa JSON'] || rec.rows, []);
+      const kodeProdi = String(rec['Kode Prodi'] || rec.kodeProdi || 'MNJ').trim().toUpperCase();
+      const nomorSurat = String(rec['Nomor Surat'] || rec.nomorSurat || '').trim();
+      const kodeArsip = String(rec['Kode Arsip'] || rec.kodeArsip || '').trim();
+
+      return {
+        id,
+        nomorSurat,
+        kodeArsip,
+        kodeProdi,
+        programStudi: String(rec['Program Studi'] || rec.programStudi || getSuratProdiMeta(kodeProdi).nama).trim(),
+        layanan: String(rec['Jenis Layanan'] || rec.layanan || 'UTS Susulan').trim(),
+        dosen: String(rec['Dosen Pengampu'] || rec.dosen || '').trim(),
+        mataKuliah: String(rec['Mata Kuliah'] || rec.mataKuliah || '').trim(),
+        semester: String(rec.Semester || rec.semester || 'Ganjil').trim(),
+        tahunAkademik: String(rec['Tahun Akademik'] || rec.tahunAkademik || '2026/2027').trim(),
+        tanggalMasehi: normalizeSuratDateIso(rec['Tanggal Masehi'] || rec.tanggalMasehi),
+        tanggalHijriah: String(rec['Tanggal Hijriah'] || rec.tanggalHijriah || '').trim(),
+        lampiran: String(rec.Lampiran || rec.lampiran || '1 (satu) Berkas').trim(),
+        tenggatNilai: String(rec['Tenggat Nilai'] || rec.tenggatNilai || '1 (satu) minggu').trim(),
+        kaprodiNama: String(rec['Kaprodi Nama'] || rec.kaprodiNama || getSuratProdiMeta(kodeProdi).kaprodi).trim(),
+        kaprodiNikNidn: String(rec['Kaprodi NIK'] || rec.kaprodiNikNidn || getSuratProdiMeta(kodeProdi).nikNidn).trim(),
+        rows: Array.isArray(rows) ? rows : [],
+        statusVerifikasi: status,
+        isLocked,
+        parafSummary: String(rec['Paraf SekProdi'] || rec.parafSummary || '').trim(),
+        ttdSummary: String(rec['TTD KaProdi'] || rec.ttdSummary || '').trim(),
+        parafImage: String(rec['Paraf Image'] || rec.parafImage || '').trim(),
+        ttdImage: String(rec['TTD Image'] || rec.ttdImage || '').trim(),
+        meta: meta && typeof meta === 'object' ? meta : {}
+      };
+    }
+
+    function applySuratRecordToState(rawRec) {
+      const rec = normalizeSuratRecordItem(rawRec);
+      if (!rec) return;
+      const meta = rec.meta || {};
+      const nomorParts = rec.nomorSurat.split('/');
+      const arsipParts = rec.kodeArsip.split('/');
+      const parsedUrut = meta.nomorUrut != null ? String(meta.nomorUrut) : (nomorParts[0] && nomorParts[0] !== 'xxx' ? nomorParts[0] : '');
+      const parsedNomorThn = meta.nomorTahun != null ? String(meta.nomorTahun) : (nomorParts[4] || getSuratDefaultYear());
+      const parsedArsipXX = meta.kodeArsipXX != null ? String(meta.kodeArsipXX) : (arsipParts[2] && arsipParts[2] !== 'XX' ? arsipParts[2] : '');
+      const parsedArsipThn = meta.kodeArsipTahun != null ? String(meta.kodeArsipTahun) : (arsipParts[3] || getSuratDefaultYear());
+
+      suratDosenState.currentRecordId = rec.id;
+      suratDosenState.recordStatus = rec.statusVerifikasi;
+      suratDosenState.isLocked = rec.isLocked;
+      suratDosenState.parafImage = rec.parafImage;
+      suratDosenState.ttdImage = rec.ttdImage;
+      suratDosenState.parafSummary = rec.parafSummary;
+      suratDosenState.ttdSummary = rec.ttdSummary;
+      suratDosenState.parafBy = String(meta.parafBy || rec.parafSummary || '').trim();
+      suratDosenState.parafAt = String(meta.parafAt || '').trim();
+      suratDosenState.ttdBy = String(meta.ttdBy || rec.ttdSummary || '').trim();
+      suratDosenState.ttdAt = String(meta.ttdAt || '').trim();
+      suratDosenState.createdBy = String(meta.createdBy || '').trim();
+      suratDosenState.createdAt = String(meta.createdAt || '').trim();
+      suratDosenState.revisionNote = String(meta.revisionNote || '').trim();
+
+      suratDosenState.comboKey = String(meta.comboKey || '');
+      suratDosenState.layanan = rec.layanan;
+      suratDosenState.kodeProdi = rec.kodeProdi;
+      suratDosenState.dosen = rec.dosen;
+      suratDosenState.mataKuliah = rec.mataKuliah;
+      suratDosenState.kelasSemester = String(meta.kelasSemester || '');
+      suratDosenState.statusFilter = String(meta.statusFilter || 'ALL');
+      suratDosenState.nomorUrut = parsedUrut;
+      suratDosenState.nomorTahun = parsedNomorThn;
+      suratDosenState.kodeArsipXX = parsedArsipXX;
+      suratDosenState.kodeArsipTahun = parsedArsipThn;
+      suratDosenState.nomorSurat = rec.nomorSurat || composeSuratNomorSurat(getSuratProdiMeta(rec.kodeProdi).kodeSurat);
+      suratDosenState.kodeArsip = rec.kodeArsip || composeSuratKodeArsip(getSuratProdiMeta(rec.kodeProdi).kodeSurat);
+      suratDosenState.lampiran = rec.lampiran;
+      suratDosenState.tanggalMasehi = rec.tanggalMasehi;
+      suratDosenState.tanggalHijriah = rec.tanggalHijriah || formatTanggalHijriahSurat(rec.tanggalMasehi);
+      suratDosenState.semester = rec.semester;
+      suratDosenState.tahunAkademik = rec.tahunAkademik;
+      suratDosenState.kaprodiNama = rec.kaprodiNama;
+      suratDosenState.kaprodiNikNidn = rec.kaprodiNikNidn;
+      suratDosenState.tenggatNilai = rec.tenggatNilai;
+      suratDosenState.padToMinRows = meta.padToMinRows !== undefined ? Boolean(meta.padToMinRows) : true;
+      suratDosenState.minRows = meta.minRows !== undefined ? Number(meta.minRows) : 5;
+      suratDosenState.rows = rec.rows.map((r, idx) => ({
+        uid: r.uid || `${rec.id}_${idx}`,
+        selected: r.selected !== false,
+        nama: String(r.nama || ''),
+        npm: String(r.npm || ''),
+        semesterKelas: String(r.semesterKelas || ''),
+        status: String(r.status || 'Disetujui')
+      }));
+    }
+
+    function pickDefaultRecordForVerifier(rawList) {
+      const normalized = (rawList || []).map(normalizeSuratRecordItem).filter(Boolean).filter(r => hasSuratProdiAccess(r.kodeProdi));
+      if (!normalized.length) return null;
+      if (isSuratRoleSekprodi()) {
+        const hit = normalized.find(r => r.statusVerifikasi === 'Menunggu Paraf Sek.Prodi');
+        if (hit) return hit;
+      }
+      if (isSuratRoleKaprodi()) {
+        const hit = normalized.find(r => r.statusVerifikasi === 'Menunggu TTD KaProdi');
+        if (hit) return hit;
+      }
+      return normalized[0];
+    }
+
+    function findActiveSpecimenRecord(kodeProdi, jenisSpesimen, preferredUsername) {
+      const list = Array.isArray(appData && appData.spesimenTtd) ? appData.spesimenTtd : [];
+      const targetKind = String(jenisSpesimen || '').trim().toLowerCase() === 'paraf' ? 'paraf' : 'ttd';
+      const targetUser = String(preferredUsername || '').trim().toLowerCase();
+      const targetProdi = String(kodeProdi || '').trim().toUpperCase();
+
+      if (targetUser) {
+        const byUser = list.find(s =>
+          String(s['Jenis Spesimen'] || s.jenisSpesimen || '').trim().toLowerCase() === targetKind &&
+          String(s.Username || s.username || '').trim().toLowerCase() === targetUser &&
+          String(s['Data Gambar'] || s.imageDataUri || '').startsWith('data:image/')
+        );
+        if (byUser) return byUser;
+      }
+      if (targetProdi) {
+        const byProdi = list.find(s =>
+          String(s['Jenis Spesimen'] || s.jenisSpesimen || '').trim().toLowerCase() === targetKind &&
+          String(s['Kode Prodi'] || s.kodeProdi || '').trim().toUpperCase() === targetProdi &&
+          String(s['Data Gambar'] || s.imageDataUri || '').startsWith('data:image/')
+        );
+        if (byProdi) return byProdi;
+      }
+      return null;
+    }
+
+    function loadSuratRecordIntoWorkspace(recordId, switchMobilePreview = false) {
+      const raw = (appData && Array.isArray(appData.suratPengantar))
+        ? appData.suratPengantar.find(r => String(r.ID || r.id || '').trim() === String(recordId || '').trim())
+        : null;
+      if (!raw) return;
+
+      applySuratRecordToState(raw);
+      const entries = extractCourseRegistrationsForSurat();
+      populateSuratFilterOptions(entries);
+      syncSuratInputsFromState();
+      renderSuratStudentRowsChecklist();
+      renderSuratDosenPreview();
+      renderSuratRecordsTable();
+      renderSuratRecordWorkflowBanner();
+      renderSuratSignerReadonlyPanel();
+      syncSuratWorkflowUiControls();
+
+      if (switchMobilePreview && window.innerWidth < 1280) {
+        setSuratMobilePane(isSuratCanEditDraft() ? 'preview' : 'form');
+      }
+    }
+
+    function createNewSuratDraft() {
+      if (!isSuratCanEditDraft()) return;
+      resetSuratDosenState();
+      const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 1600 });
+      Toast.fire({ icon: 'info', title: 'Draft Surat Baru Disiapkan' });
+    }
+
+    async function confirmAndSaveSuratPengantar() {
+      if (!isSuratCanEditDraft()) {
+        Swal.fire({ icon: 'error', title: 'Akses Ditolak', text: 'Hanya Master Admin atau Admin TU yang dapat mengonfirmasi surat pengantar.' });
+        return;
+      }
+      if (suratDosenState.isLocked) {
+        Swal.fire({ icon: 'warning', title: 'Dokumen Dikunci', text: 'Surat sudah diparaf Sek.Prodi sehingga edit dikunci.' });
+        return;
+      }
+      const dosenName = String(suratDosenState.dosen || '').trim();
+      const matkulName = String(suratDosenState.mataKuliah || '').trim();
+      if (!dosenName || !matkulName) {
+        Swal.fire({ icon: 'warning', title: 'Data Belum Lengkap', text: 'Silakan pilih atau ketik Nama Dosen Pengampu dan Mata Kuliah terlebih dahulu.' });
+        return;
+      }
+
+      const model = getSuratDocumentModel();
+      const selectedCount = suratDosenState.rows.filter(r => r.selected).length;
+      const confirmRes = await Swal.fire({
+        icon: 'question',
+        title: suratDosenState.currentRecordId ? 'Simpan Ulang & Ajukan Verifikasi?' : 'Konfirmasi Form Isian Selesai?',
+        html: `<div class="text-xs text-slate-600 text-left space-y-1.5">
+          <p>Record surat akan disimpan ke database dan masuk tahap <b>2. Menunggu Paraf Sek.Prodi</b>.</p>
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+            <div><b>Nomor:</b> <span class="font-mono">${escapeHtml(model.nomorSurat)}</span></div>
+            <div><b>Prodi:</b> ${escapeHtml(model.prodiNama)} (${escapeHtml(suratDosenState.kodeProdi)})</div>
+            <div><b>Dosen / MK:</b> ${escapeHtml(dosenName)} &mdash; ${escapeHtml(matkulName)}</div>
+            <div><b>Mahasiswa Terpilih:</b> ${selectedCount} mahasiswa</div>
+          </div>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonColor: '#1e3a8a',
+        cancelButtonText: 'Batal',
+        confirmButtonText: 'Ya, Konfirmasi & Simpan'
+      });
+      if (!confirmRes.isConfirmed) return;
+
+      const actorName = (typeof getCurrentActorName === 'function')
+        ? getCurrentActorName(currentUser && currentUser.nama, currentUser && currentUser.role)
+        : (currentUser && (currentUser.nama || currentUser.username)) || 'Admin TU';
+
+      const payload = {
+        id: suratDosenState.currentRecordId || '',
+        nomorSurat: model.nomorSurat,
+        kodeArsip: model.kodeArsip,
+        kodeProdi: suratDosenState.kodeProdi || 'MNJ',
+        programStudi: model.prodiNama,
+        layanan: suratDosenState.layanan || 'UTS Susulan',
+        dosen: dosenName,
+        mataKuliah: matkulName,
+        semester: suratDosenState.semester || 'Ganjil',
+        tahunAkademik: suratDosenState.tahunAkademik || '2026/2027',
+        tanggalMasehi: suratDosenState.tanggalMasehi,
+        tanggalHijriah: model.tanggalHijriahText,
+        lampiran: model.lampiran,
+        tenggatNilai: model.tenggatNilai,
+        kaprodiNama: model.kaprodiNama,
+        kaprodiNikNidn: model.kaprodiNikNidn,
+        rows: suratDosenState.rows,
+        actorName: actorName,
+        actorRole: currentUser && currentUser.role,
+        username: currentUser && currentUser.username,
+        meta: {
+          comboKey: suratDosenState.comboKey || '',
+          kelasSemester: suratDosenState.kelasSemester || '',
+          statusFilter: suratDosenState.statusFilter || 'ALL',
+          nomorUrut: suratDosenState.nomorUrut || '',
+          nomorTahun: suratDosenState.nomorTahun || getSuratDefaultYear(),
+          kodeArsipXX: suratDosenState.kodeArsipXX || '',
+          kodeArsipTahun: suratDosenState.kodeArsipTahun || getSuratDefaultYear(),
+          padToMinRows: Boolean(suratDosenState.padToMinRows),
+          minRows: Number(suratDosenState.minRows || 5)
+        }
+      };
+
+      Swal.fire({ title: 'Menyimpan Record Surat...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      callGasApi('saveSuratPengantarRecord', [payload], (res) => {
+        if (!res || !res.success) {
+          Swal.fire({ icon: 'error', title: 'Gagal Menyimpan', text: (res && res.message) || 'Terjadi kesalahan saat menyimpan record surat.' });
+          return;
+        }
+        if (res.record) {
+          if (!Array.isArray(appData.suratPengantar)) appData.suratPengantar = [];
+          const recId = String(res.record.ID || res.id || '');
+          const idx = appData.suratPengantar.findIndex(item => String(item.ID || item.id) === recId);
+          if (idx >= 0) appData.suratPengantar[idx] = res.record;
+          else appData.suratPengantar.unshift(res.record);
+          saveAppDataCache(appData);
+          loadSuratRecordIntoWorkspace(recId, false);
+        }
+        if (!res.isLocalFallback && typeof loadAppData === 'function') loadAppData(true);
+        Swal.fire({
+          icon: 'success',
+          title: 'Form Dikonfirmasi & Tersimpan',
+          text: res.message || 'Record masuk tahap 2: Menunggu Paraf Sek.Prodi.',
+          timer: 2200,
+          showConfirmButton: false
+        });
+      }, (err) => {
+        Swal.fire({ icon: 'error', title: 'Gagal Menyimpan', text: (err && err.message) || 'Koneksi ke server bermasalah.' });
+      });
+    }
+
+    function setSuratRecordStatusFilter(statusVal) {
+      suratRecordStatusFilter = statusVal || 'ALL';
+      document.querySelectorAll('.surat-rec-filter-btn').forEach(btn => {
+        const active = btn.getAttribute('data-surat-rec-filter') === suratRecordStatusFilter;
+        btn.classList.toggle('bg-slate-800', active);
+        btn.classList.toggle('text-white', active);
+        btn.classList.toggle('text-slate-600', !active);
+        btn.classList.toggle('hover:text-slate-900', !active);
+      });
+      renderSuratRecordsTable();
+    }
+
+    function renderSuratStatusStagesHtml(rec) {
+      const st = rec.statusVerifikasi;
+      const doneForm = true;
+      const doneParaf = st === 'Menunggu TTD KaProdi' || st === 'Terverifikasi Final';
+      const doneTtd = st === 'Terverifikasi Final';
+      const isRevisi = st === 'Perlu Revisi';
+
+      const stepItem = (label, done, active) => {
+        const cls = done
+          ? 'text-emerald-700 font-bold'
+          : (active ? 'text-amber-700 font-bold' : 'text-slate-400');
+        const icon = done ? 'fa-circle-check' : (active ? 'fa-clock' : 'fa-circle');
+        return `<span class="inline-flex items-center gap-1 ${cls}"><i class="fas ${icon} text-[10px]"></i><span>${label}</span></span>`;
+      };
+
+      const mainLine = `<div class="flex flex-wrap items-center gap-2 text-[11px]">
+        ${stepItem('1. Form', doneForm, false)}
+        <span class="text-slate-300">&rarr;</span>
+        ${stepItem('2. Paraf', doneParaf, st === 'Menunggu Paraf Sek.Prodi')}
+        <span class="text-slate-300">&rarr;</span>
+        ${stepItem('3. TTD Final', doneTtd, st === 'Menunggu TTD KaProdi')}
+      </div>`;
+
+      const statusSub = isRevisi
+        ? `<div class="text-[10px] font-bold text-rose-700 mt-0.5"><i class="fas fa-rotate-left mr-1"></i>Perlu Revisi</div>`
+        : (rec.isLocked
+          ? `<div class="text-[10px] font-semibold text-slate-500 mt-0.5"><i class="fas fa-lock mr-1"></i>${doneTtd ? 'Final &bull; Ekspor Terbuka' : 'Edit Dikunci'}</div>`
+          : `<div class="text-[10px] font-semibold text-blue-800 mt-0.5">Menunggu Paraf Sek.Prodi</div>`);
+
+      return mainLine + statusSub;
+    }
+
+    function renderSuratRecordsTable() {
+      const tbody = document.getElementById('suratRecordsTableBody');
+      const counterEl = document.getElementById('suratRecordsCounterText');
+      if (!tbody) return;
+
+      const rawList = Array.isArray(appData && appData.suratPengantar) ? appData.suratPengantar : [];
+      const allRecords = rawList.map(normalizeSuratRecordItem).filter(Boolean).filter(r => hasSuratProdiAccess(r.kodeProdi));
+
+      const prodiFilterEl = document.getElementById('suratRecordProdiFilter');
+      if (prodiFilterEl && !isSuratCanEditDraft()) {
+        const scope = getSuratUserScopeProdi();
+        if (scope && scope !== 'ALL' && scope !== 'SEMUA') {
+          prodiFilterEl.value = scope;
+        }
+      }
+
+      const selectedProdi = String((prodiFilterEl && prodiFilterEl.value) || '').trim().toUpperCase();
+      const searchQ = String((document.getElementById('suratRecordSearchInput') && document.getElementById('suratRecordSearchInput').value) || '').trim().toLowerCase();
+
+      const filtered = allRecords.filter(r => {
+        if (suratRecordStatusFilter !== 'ALL' && r.statusVerifikasi !== suratRecordStatusFilter) return false;
+        if (selectedProdi && r.kodeProdi !== selectedProdi) return false;
+        if (searchQ) {
+          const hay = `${r.id} ${r.nomorSurat} ${r.dosen} ${r.mataKuliah} ${r.programStudi} ${r.layanan}`.toLowerCase();
+          if (!hay.includes(searchQ)) return false;
+        }
+        return true;
+      });
+
+      if (counterEl) {
+        counterEl.innerText = `${filtered.length} dari ${allRecords.length} record`;
+      }
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="px-4 py-7 text-center text-xs text-slate-500">
+              Belum ada record surat pengantar yang sesuai filter. ${isSuratCanEditDraft() ? 'Lengkapi form di bawah lalu klik <b>Konfirmasi &amp; Simpan</b> untuk membuat record.' : ''}
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(r => {
+        const isActive = r.id === suratDosenState.currentRecordId;
+        const mhsCount = r.rows.filter(x => x.selected !== false && (x.nama || x.npm)).length;
+        const canParaf = (isSuratRoleSekprodi() || isSuratMasterRole()) && r.statusVerifikasi === 'Menunggu Paraf Sek.Prodi';
+        const canTtd = (isSuratRoleKaprodi() || isSuratMasterRole()) && r.statusVerifikasi === 'Menunggu TTD KaProdi';
+        const canReopen = isSuratMasterRole() && r.isLocked;
+        const canDelete = isSuratMasterRole() || (isSuratAdminTuRole() && !r.isLocked);
+
+        return `
+          <tr class="${isActive ? 'bg-blue-50/70' : 'hover:bg-slate-50'} transition">
+            <td class="px-3 py-2.5 align-top whitespace-nowrap">
+              <div class="font-mono tabular-nums font-bold text-slate-900">${escapeHtml(r.id)}</div>
+              <div class="font-mono tabular-nums text-[11px] text-slate-600">${escapeHtml(r.nomorSurat)}</div>
+            </td>
+            <td class="px-3 py-2.5 align-top whitespace-nowrap">
+              <div class="font-bold text-slate-800">${escapeHtml(r.kodeProdi)} &middot; ${escapeHtml(r.programStudi)}</div>
+              <div class="text-[11px] text-slate-500">${escapeHtml(r.layanan)} (${escapeHtml(r.semester)})</div>
+            </td>
+            <td class="px-3 py-2.5 align-top">
+              <div class="font-bold text-slate-900">${escapeHtml(r.dosen || '-')}</div>
+              <div class="text-[11px] text-slate-600">${escapeHtml(r.mataKuliah || '-')}</div>
+            </td>
+            <td class="px-3 py-2.5 align-top text-right font-mono tabular-nums font-bold text-slate-800 whitespace-nowrap">${mhsCount}</td>
+            <td class="px-3 py-2.5 align-top whitespace-nowrap">${renderSuratStatusStagesHtml(r)}</td>
+            <td class="px-3 py-2.5 align-top text-right whitespace-nowrap">
+              <div class="inline-flex items-center justify-end gap-1.5">
+                <button type="button" onclick="loadSuratRecordIntoWorkspace('${escapeHtml(r.id)}', true)" class="px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-[11px] font-bold text-slate-800 cursor-pointer">
+                  ${isActive ? 'Aktif' : 'Buka'}
+                </button>
+                ${canParaf ? `<button type="button" onclick="verifySuratRecordOneClick('${escapeHtml(r.id)}', 'PARAF_SEKPRODI')" class="px-2.5 py-1.5 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-[11px] font-bold cursor-pointer"><i class="fas fa-pen-nib mr-1"></i>Paraf 1-Klik</button>` : ''}
+                ${canTtd ? `<button type="button" onclick="verifySuratRecordOneClick('${escapeHtml(r.id)}', 'TTD_KAPRODI')" class="px-2.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-[11px] font-bold cursor-pointer"><i class="fas fa-signature mr-1"></i>TTD 1-Klik</button>` : ''}
+                ${canReopen ? `<button type="button" onclick="reopenSuratDraftAdmin('${escapeHtml(r.id)}')" title="Buka Kunci (Master Admin)" class="px-2 py-1.5 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-[11px] font-bold cursor-pointer"><i class="fas fa-lock-open"></i></button>` : ''}
+                ${canDelete ? `<button type="button" onclick="deleteSuratRecordPrompt('${escapeHtml(r.id)}')" title="Hapus Record" class="px-2 py-1.5 rounded-lg border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold cursor-pointer"><i class="fas fa-trash"></i></button>` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderSuratRecordWorkflowBanner() {
+      const banner = document.getElementById('suratRecordWorkflowBanner');
+      if (!banner) return;
+      const id = suratDosenState.currentRecordId;
+      if (!id) {
+        banner.classList.add('hidden');
+        banner.innerHTML = '';
+        return;
+      }
+      banner.classList.remove('hidden');
+      const st = suratDosenState.recordStatus || 'Menunggu Paraf Sek.Prodi';
+      const doneForm = true;
+      const doneParaf = st === 'Menunggu TTD KaProdi' || st === 'Terverifikasi Final';
+      const doneTtd = st === 'Terverifikasi Final';
+
+      const canParaf = (isSuratRoleSekprodi() || isSuratMasterRole()) && st === 'Menunggu Paraf Sek.Prodi';
+      const canTtd = (isSuratRoleKaprodi() || isSuratMasterRole()) && st === 'Menunggu TTD KaProdi';
+      const canRevise = (isSuratRoleSekprodi() || isSuratRoleKaprodi() || isSuratMasterRole()) && !doneTtd && st !== 'Perlu Revisi';
+      const canReopen = isSuratMasterRole() && suratDosenState.isLocked;
+
+      const stepBox = (num, title, subtitle, isDone, isCurr) => `
+        <div class="flex items-start gap-2.5 p-2.5 rounded-xl border ${isDone ? 'border-emerald-200 bg-emerald-50/60' : (isCurr ? 'border-blue-300 bg-blue-50/70' : 'border-slate-200 bg-slate-50')}">
+          <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 ${isDone ? 'bg-emerald-700 text-white' : (isCurr ? 'bg-blue-900 text-white' : 'bg-slate-200 text-slate-600')}">
+            ${isDone ? '<i class="fas fa-check text-[10px]"></i>' : num}
+          </div>
+          <div class="min-w-0">
+            <div class="text-xs font-bold text-slate-900">${title}</div>
+            <div class="text-[11px] text-slate-600 truncate">${escapeHtml(subtitle)}</div>
+          </div>
+        </div>
+      `;
+
+      banner.innerHTML = `
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 flex-1">
+            ${stepBox('1', 'Form Isian Selesai', suratDosenState.createdBy ? `${suratDosenState.createdBy}` : 'Admin TU / Master Admin', doneForm, st === 'Perlu Revisi')}
+            ${stepBox('2', 'Paraf Sek.Prodi', doneParaf ? (suratDosenState.parafSummary || suratDosenState.parafBy || 'Terparaf') : 'Menunggu Paraf Sek.Prodi', doneParaf, st === 'Menunggu Paraf Sek.Prodi')}
+            ${stepBox('3', 'TTD Final KaProdi', doneTtd ? (suratDosenState.ttdSummary || suratDosenState.ttdBy || 'Terverifikasi Final') : 'Menunggu TTD KaProdi', doneTtd, st === 'Menunggu TTD KaProdi')}
+          </div>
+          <div class="flex flex-wrap items-center gap-2 shrink-0">
+            ${canParaf ? `<button type="button" onclick="verifySuratRecordOneClick('${escapeHtml(id)}', 'PARAF_SEKPRODI')" class="px-4 min-h-[40px] py-2 rounded-xl bg-blue-900 hover:bg-blue-800 text-white text-xs font-bold shadow-sm cursor-pointer"><i class="fas fa-pen-nib mr-1.5"></i>Verifikasi &amp; Paraf (1-Klik)</button>` : ''}
+            ${canTtd ? `<button type="button" onclick="verifySuratRecordOneClick('${escapeHtml(id)}', 'TTD_KAPRODI')" class="px-4 min-h-[40px] py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-sm cursor-pointer"><i class="fas fa-signature mr-1.5"></i>Verifikasi &amp; TTD Final (1-Klik)</button>` : ''}
+            ${canRevise ? `<button type="button" onclick="requestSuratRevisionPrompt('${escapeHtml(id)}')" class="px-3 min-h-[40px] py-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold cursor-pointer"><i class="fas fa-rotate-left mr-1"></i>Kembalikan Revisi</button>` : ''}
+            ${canReopen ? `<button type="button" onclick="reopenSuratDraftAdmin('${escapeHtml(id)}')" class="px-3 min-h-[40px] py-2 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold cursor-pointer"><i class="fas fa-lock-open mr-1"></i>Buka Kunci Edit</button>` : ''}
+          </div>
+        </div>
+        ${suratDosenState.revisionNote ? `<div class="mt-2.5 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800"><b>Catatan Revisi:</b> ${escapeHtml(suratDosenState.revisionNote)}</div>` : ''}
+      `;
+    }
+
+    function renderSuratSignerReadonlyPanel() {
+      const panel = document.getElementById('suratSignerReadonlyPanel');
+      if (!panel) return;
+      if (isSuratCanEditDraft()) {
+        panel.classList.add('hidden');
+        panel.innerHTML = '';
+        return;
+      }
+      panel.classList.remove('hidden');
+
+      if (!suratDosenState.currentRecordId) {
+        panel.innerHTML = `
+          <div class="p-4 text-center text-xs text-slate-500 space-y-1">
+            <p class="font-bold text-slate-700">Belum Ada Record Surat Dipilih</p>
+            <p>Pilih salah satu record pada tabel di atas untuk meninjau dokumen F4 serta menerapkan Paraf / TTD Digital 1-klik.</p>
+          </div>
+        `;
+        return;
+      }
+
+      const model = getSuratDocumentModel();
+      const selectedRows = suratDosenState.rows.filter(r => r.selected !== false && (r.nama || r.npm));
+      panel.innerHTML = `
+        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+          <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">Ringkasan Verifikasi Surat</h4>
+          <span class="font-mono tabular-nums text-xs font-bold text-blue-900">${escapeHtml(suratDosenState.currentRecordId)}</span>
+        </div>
+        <div class="grid grid-cols-1 gap-2 text-xs">
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+            <div><span class="text-slate-500">Nomor Surat:</span> <b class="font-mono">${escapeHtml(model.nomorSurat)}</b></div>
+            <div><span class="text-slate-500">Program Studi:</span> <b>${escapeHtml(model.prodiNama)} (${escapeHtml(suratDosenState.kodeProdi)})</b></div>
+            <div><span class="text-slate-500">Layanan / TA:</span> <b>${escapeHtml(suratDosenState.layanan)} &middot; ${escapeHtml(model.semester)} ${escapeHtml(model.tahunAkademik)}</b></div>
+            <div><span class="text-slate-500">Dosen Tujuan:</span> <b>${escapeHtml(model.dosenNama)}</b></div>
+            <div><span class="text-slate-500">Mata Kuliah:</span> <b>${escapeHtml(model.mataKuliah)}</b></div>
+          </div>
+          <div class="p-2.5 rounded-xl bg-white border border-slate-200 space-y-1.5">
+            <div class="font-bold text-slate-700">Daftar Mahasiswa (${selectedRows.length})</div>
+            <div class="max-h-48 overflow-y-auto divide-y divide-slate-100">
+              ${selectedRows.length ? selectedRows.map((r, i) => `
+                <div class="py-1.5 flex items-center justify-between gap-2 text-[11px]">
+                  <span class="font-semibold text-slate-800 truncate">${i + 1}. ${escapeHtml(r.nama || '-')}</span>
+                  <span class="font-mono tabular-nums text-slate-500 shrink-0">${escapeHtml(r.npm || '-')}</span>
+                </div>
+              `).join('') : '<div class="py-2 text-slate-400">Tidak ada baris mahasiswa</div>'}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function setSuratExportIncludeSignatures(includeSig) {
+      suratDosenState.includeSignaturesInExport = Boolean(includeSig);
+      syncSuratWorkflowUiControls();
+      renderSuratPengantarPreview();
+    }
+
+    function syncSuratWorkflowUiControls() {
+      const canEditRole = isSuratCanEditDraft();
+      const isVerifierRole = isSuratRoleSekprodi() || isSuratRoleKaprodi();
+      const isFinal = String(suratDosenState.recordStatus || '').trim() === 'Terverifikasi Final';
+      const includeSignatures = suratDosenState.includeSignaturesInExport !== false;
+      const canExportNow = isFinal || !includeSignatures;
+      const formLocked = Boolean(suratDosenState.isLocked) || !canEditRole;
+
+      const btnWithTtd = document.getElementById('btnSuratModeWithTtd');
+      const btnNoTtd = document.getElementById('btnSuratModeNoTtd');
+      if (btnWithTtd) {
+        btnWithTtd.setAttribute('aria-pressed', includeSignatures ? 'true' : 'false');
+        btnWithTtd.className = includeSignatures
+          ? 'px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer bg-blue-900 text-white shadow-xs'
+          : 'px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer text-slate-600 hover:text-slate-900';
+      }
+      if (btnNoTtd) {
+        btnNoTtd.setAttribute('aria-pressed', !includeSignatures ? 'true' : 'false');
+        btnNoTtd.className = !includeSignatures
+          ? 'px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer bg-slate-800 text-white shadow-xs'
+          : 'px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer text-slate-600 hover:text-slate-900';
+      }
+
+      const setFlexVisible = (id, show) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('hidden', !show);
+        el.classList.toggle('flex', Boolean(show));
+      };
+
+      setFlexVisible('btnManageSpesimenTtd', isSuratMasterRole() || isVerifierRole);
+      setFlexVisible('btnNewSuratDraft', canEditRole);
+      setFlexVisible('btnKonfirmasiSimpanSurat', canEditRole && !suratDosenState.isLocked);
+
+      const activeMetaEl = document.getElementById('suratActiveRecordMetaText');
+      if (activeMetaEl) {
+        activeMetaEl.innerText = suratDosenState.currentRecordId
+          ? `${suratDosenState.currentRecordId} · ${suratDosenState.recordStatus}`
+          : 'Draft Baru';
+      }
+
+      const paneLabel = document.getElementById('suratPaneFormLabel');
+      if (paneLabel) paneLabel.innerText = canEditRole ? '1. Form Isian' : '1. Ringkasan Surat';
+
+      const editableGroup = document.getElementById('suratFormEditableGroup');
+      if (editableGroup) {
+        editableGroup.classList.toggle('hidden', !canEditRole);
+        editableGroup.querySelectorAll('input, select, button').forEach(ctrl => {
+          ctrl.disabled = formLocked;
+          ctrl.classList.toggle('opacity-60', formLocked);
+          ctrl.classList.toggle('cursor-not-allowed', formLocked);
+        });
+      }
+
+      const lockNotice = document.getElementById('suratFormLockedNotice');
+      const lockBadge = document.getElementById('suratFormLockedBadgeText');
+      const lockDesc = document.getElementById('suratFormLockedDesc');
+      if (lockNotice) {
+        const showLockBanner = canEditRole && Boolean(suratDosenState.isLocked);
+        lockNotice.classList.toggle('hidden', !showLockBanner);
+        if (lockBadge) lockBadge.innerText = suratDosenState.recordStatus || 'Terkunci';
+        if (lockDesc) {
+          lockDesc.innerText = isFinal
+            ? 'Dokumen telah terverifikasi final (Paraf Sek.Prodi & TTD KaProdi). Form terkunci permanen dan PDF/Cetak/Word final siap diunduh.'
+            : 'Surat telah melewati verifikasi Paraf Sek.Prodi sehingga isi surat tidak dapat diubah lagi. Ekspor PDF/Cetak/Word bertanda tangan digital terbuka setelah TTD KaProdi (atau alihkan ke Tanpa Paraf & TTD untuk cetak langsung).';
+        }
+      }
+
+      const exportIds = ['btnDownloadSuratWord', 'btnDownloadSuratPdf', 'btnPrintSuratDosen'];
+      exportIds.forEach(id => {
+        const btn = document.getElementById(id);
+        if (!btn) return;
+        btn.classList.toggle('opacity-55', !canExportNow);
+        btn.title = !includeSignatures
+          ? 'Siap diekspor (Mode Tanpa Paraf & TTD untuk tanda tangan basah)'
+          : (isFinal ? 'Siap diekspor (Dokumen Terverifikasi Final)' : 'Terkunci hingga TTD Final KaProdi (ubah ke Tanpa Paraf & TTD untuk cetak langsung)');
+      });
+    }
+
+    async function verifySuratRecordOneClick(recordId, stepType) {
+      const raw = (appData && Array.isArray(appData.suratPengantar))
+        ? appData.suratPengantar.find(r => String(r.ID || r.id || '').trim() === String(recordId || '').trim())
+        : null;
+      const rec = normalizeSuratRecordItem(raw);
+      if (!rec) {
+        Swal.fire({ icon: 'error', title: 'Record Tidak Ditemukan', text: 'Muat ulang data terlebih dahulu.' });
+        return;
+      }
+
+      const isParaf = stepType === 'PARAF_SEKPRODI';
+      const kind = isParaf ? 'Paraf' : 'TTD';
+      const specimenRec = findActiveSpecimenRecord(rec.kodeProdi, kind, currentUser && currentUser.username);
+      const specimenDataUri = specimenRec ? String(specimenRec['Data Gambar'] || specimenRec.imageDataUri || '').trim() : '';
+
+      if (!specimenDataUri || !specimenDataUri.startsWith('data:image/')) {
+        const promptOpen = await Swal.fire({
+          icon: 'warning',
+          title: `Spesimen ${kind} Belum Tersedia`,
+          text: `Anda perlu menggambar di canvas atau mengunggah PNG transparan spesimen ${kind} untuk Prodi ${rec.kodeProdi} satu kali sebelum verifikasi 1-klik.`,
+          showCancelButton: true,
+          confirmButtonColor: '#1e3a8a',
+          cancelButtonText: 'Batal',
+          confirmButtonText: `Buat Spesimen ${kind} Sekarang`
+        });
+        if (promptOpen.isConfirmed) {
+          openSpesimenTtdModal(kind, rec.kodeProdi);
+        }
+        return;
+      }
+
+      const confirmRes = await Swal.fire({
+        title: isParaf ? 'Terapkan Paraf Sek.Prodi (1-Klik)?' : 'Terapkan TTD Final KaProdi (1-Klik)?',
+        html: `<div class="text-xs text-slate-600 space-y-2.5 text-left">
+          <p>${isParaf
+            ? 'Setelah diparaf, <b>penyuntingan form akan dikunci</b> dan surat diteruskan ke Ketua Program Studi.'
+            : 'Setelah TTD Final KaProdi, surat berstatus <b>Terverifikasi Final</b> dan unduhan PDF/Cetak/Word F4 akan terbuka.'}</p>
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
+            <div><b>ID / Nomor:</b> <span class="font-mono">${escapeHtml(rec.id)} &middot; ${escapeHtml(rec.nomorSurat)}</span></div>
+            <div><b>Dosen / MK:</b> ${escapeHtml(rec.dosen)} &mdash; ${escapeHtml(rec.mataKuliah)}</div>
+          </div>
+          <div class="p-3 rounded-xl border border-dashed border-slate-300 bg-white flex flex-col items-center gap-1">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Spesimen ${kind} yang Akan Diterapkan</span>
+            <img src="${specimenDataUri}" alt="Spesimen ${kind}" style="max-height: 64px; max-width: 180px; object-fit: contain;" />
+          </div>
+        </div>`,
+        showCancelButton: true,
+        confirmButtonColor: isParaf ? '#1e3a8a' : '#047857',
+        cancelButtonText: 'Batal',
+        confirmButtonText: isParaf ? 'Ya, Paraf Sekarang' : 'Ya, TTD Final Sekarang'
+      });
+      if (!confirmRes.isConfirmed) return;
+
+      const actorUsername = (currentUser && (currentUser.username || currentUser.nama)) || '';
+      const actorRole = (currentUser && currentUser.role) || '';
+
+      Swal.fire({ title: `Menerapkan ${kind} Digital...`, allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      callGasApi('verifySuratPengantarStep', [rec.id, stepType, actorUsername, actorRole, specimenDataUri, ''], (res) => {
+        if (!res || !res.success) {
+          Swal.fire({ icon: 'error', title: `Gagal Verifikasi ${kind}`, text: (res && res.message) || 'Terjadi kesalahan verifikasi.' });
+          return;
+        }
+        const targetIdx = (appData.suratPengantar || []).findIndex(item => String(item.ID || item.id) === rec.id);
+        if (targetIdx >= 0) {
+          const item = appData.suratPengantar[targetIdx];
+          item['Status Verifikasi'] = res.status || (isParaf ? 'Menunggu TTD KaProdi' : 'Terverifikasi Final');
+          item['Locked'] = res.locked || 'Ya';
+          if (isParaf) {
+            item['Paraf SekProdi'] = res.parafSummary || '';
+            item['Paraf Image'] = res.parafImage || specimenDataUri;
+          } else {
+            item['TTD KaProdi'] = res.ttdSummary || '';
+            item['TTD Image'] = res.ttdImage || specimenDataUri;
+          }
+          if (res.meta) item['Meta JSON'] = JSON.stringify(res.meta);
+          saveAppDataCache(appData);
+        }
+        loadSuratRecordIntoWorkspace(rec.id, false);
+        if (!res.isLocalFallback && typeof loadAppData === 'function') loadAppData(true);
+        Swal.fire({
+          icon: 'success',
+          title: isParaf ? 'Paraf Sek.Prodi Diterapkan' : 'TTD Final KaProdi Diterapkan',
+          text: res.message || 'Verifikasi berhasil disimpan.',
+          timer: 2200,
+          showConfirmButton: false
+        });
+      }, (err) => {
+        Swal.fire({ icon: 'error', title: 'Gagal Verifikasi', text: (err && err.message) || 'Koneksi gagal.' });
+      });
+    }
+
+    async function requestSuratRevisionPrompt(recordId) {
+      const { value: note, isConfirmed } = await Swal.fire({
+        title: 'Kembalikan untuk Revisi?',
+        input: 'textarea',
+        inputLabel: 'Catatan perbaikan untuk Admin TU / Master Admin',
+        inputPlaceholder: 'Contoh: Koreksi nomor surat atau nama mahasiswa pada baris ke-2...',
+        showCancelButton: true,
+        confirmButtonColor: '#be123c',
+        cancelButtonText: 'Batal',
+        confirmButtonText: 'Kembalikan Revisi'
+      });
+      if (!isConfirmed) return;
+
+      const actorUsername = (currentUser && (currentUser.username || currentUser.nama)) || '';
+      const actorRole = (currentUser && currentUser.role) || '';
+      Swal.fire({ title: 'Memproses Revisi...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      callGasApi('verifySuratPengantarStep', [recordId, 'REQUEST_REVISION', actorUsername, actorRole, '', note || ''], (res) => {
+        if (!res || !res.success) {
+          Swal.fire({ icon: 'error', title: 'Gagal', text: (res && res.message) || 'Gagal mengembalikan revisi.' });
+          return;
+        }
+        const targetIdx = (appData.suratPengantar || []).findIndex(item => String(item.ID || item.id) === String(recordId));
+        if (targetIdx >= 0) {
+          const item = appData.suratPengantar[targetIdx];
+          item['Status Verifikasi'] = 'Perlu Revisi';
+          item['Locked'] = 'Tidak';
+          item['Paraf SekProdi'] = '';
+          item['TTD KaProdi'] = '';
+          item['Paraf Image'] = '';
+          item['TTD Image'] = '';
+          if (res.meta) item['Meta JSON'] = JSON.stringify(res.meta);
+          saveAppDataCache(appData);
+        }
+        loadSuratRecordIntoWorkspace(recordId, false);
+        if (!res.isLocalFallback && typeof loadAppData === 'function') loadAppData(true);
+        Swal.fire({ icon: 'success', title: 'Dikembalikan untuk Revisi', timer: 1800, showConfirmButton: false });
+      });
+    }
+
+    async function reopenSuratDraftAdmin(recordId) {
+      const confirmRes = await Swal.fire({
+        icon: 'warning',
+        title: 'Buka Kunci Dokumen?',
+        text: 'Membuka kunci akan mereset Paraf & TTD pada record ini agar dapat disunting ulang oleh Master Admin / Admin TU.',
+        showCancelButton: true,
+        confirmButtonColor: '#b45309',
+        cancelButtonText: 'Batal',
+        confirmButtonText: 'Ya, Buka Kunci'
+      });
+      if (!confirmRes.isConfirmed) return;
+
+      const actorUsername = (currentUser && (currentUser.username || currentUser.nama)) || '';
+      const actorRole = (currentUser && currentUser.role) || '';
+      Swal.fire({ title: 'Membuka Kunci...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      callGasApi('verifySuratPengantarStep', [recordId, 'REOPEN_DRAFT', actorUsername, actorRole, '', ''], (res) => {
+        if (!res || !res.success) {
+          Swal.fire({ icon: 'error', title: 'Gagal', text: (res && res.message) || 'Gagal membuka kunci.' });
+          return;
+        }
+        const targetIdx = (appData.suratPengantar || []).findIndex(item => String(item.ID || item.id) === String(recordId));
+        if (targetIdx >= 0) {
+          const item = appData.suratPengantar[targetIdx];
+          item['Status Verifikasi'] = 'Menunggu Paraf Sek.Prodi';
+          item['Locked'] = 'Tidak';
+          item['Paraf SekProdi'] = '';
+          item['TTD KaProdi'] = '';
+          item['Paraf Image'] = '';
+          item['TTD Image'] = '';
+          if (res.meta) item['Meta JSON'] = JSON.stringify(res.meta);
+          saveAppDataCache(appData);
+        }
+        loadSuratRecordIntoWorkspace(recordId, false);
+        if (!res.isLocalFallback && typeof loadAppData === 'function') loadAppData(true);
+        Swal.fire({ icon: 'success', title: 'Kunci Dibuka', timer: 1800, showConfirmButton: false });
+      });
+    }
+
+    async function deleteSuratRecordPrompt(recordId) {
+      const confirmRes = await Swal.fire({
+        icon: 'warning',
+        title: 'Hapus Record Surat?',
+        text: `Record ${recordId} akan dihapus permanen dari daftar Surat Pengantar.`,
+        showCancelButton: true,
+        confirmButtonColor: '#be123c',
+        cancelButtonText: 'Batal',
+        confirmButtonText: 'Ya, Hapus'
+      });
+      if (!confirmRes.isConfirmed) return;
+
+      const actorUsername = (currentUser && (currentUser.username || currentUser.nama)) || '';
+      const actorRole = (currentUser && currentUser.role) || '';
+      Swal.fire({ title: 'Menghapus Record...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      callGasApi('deleteSuratPengantarRecord', [recordId, actorUsername, actorRole], (res) => {
+        if (!res || !res.success) {
+          Swal.fire({ icon: 'error', title: 'Gagal Menghapus', text: (res && res.message) || 'Tidak dapat menghapus record.' });
+          return;
+        }
+        appData.suratPengantar = (appData.suratPengantar || []).filter(item => String(item.ID || item.id) !== String(recordId));
+        saveAppDataCache(appData);
+        if (suratDosenState.currentRecordId === recordId) {
+          resetSuratDosenState();
+        } else {
+          renderSuratRecordsTable();
+          renderSuratRecordWorkflowBanner();
+        }
+        if (!res.isLocalFallback && typeof loadAppData === 'function') loadAppData(true);
+        Swal.fire({ icon: 'success', title: 'Record Dihapus', timer: 1600, showConfirmButton: false });
+      });
+    }
+
+    // === ENGINE SPESIMEN PARAF & TTD DIGITAL (CANVAS + PNG TRANSPARAN) ===
+    const spesimenModalState = {
+      kind: 'Paraf',
+      method: 'canvas',
+      inkColor: '#0f172a',
+      strokeWidth: 3,
+      strokes: [],
+      isDrawing: false,
+      currentPoints: [],
+      canvasInitialized: false,
+      uploadedRawDataUrl: '',
+      processedUploadDataUrl: '',
+      targets: []
+    };
+
+    function buildSpecimenSignerTargets() {
+      const list = [];
+      const seen = new Set();
+      const prodiCodes = ['MNJ', 'AKT', 'BD', 'PI', 'PKD'];
+      const staffPool = [].concat(
+        Array.isArray(appData && appData.officialSigners) ? appData.officialSigners : [],
+        Array.isArray(appData && appData.users_staff) ? appData.users_staff : []
+      );
+
+      if (!isSuratMasterRole()) {
+        const myProdi = getSuratUserScopeProdi() || suratDosenState.kodeProdi || 'MNJ';
+        const myKind = isSuratRoleSekprodi() ? 'Paraf' : 'TTD';
+        const myName = (currentUser && currentUser.nama) || (currentUser && currentUser.username) || myKind;
+        list.push({
+          key: `${currentUser && currentUser.username}|${myProdi}|${myKind}`,
+          username: (currentUser && currentUser.username) || '',
+          nama: myName,
+          role: (currentUser && currentUser.role) || (myKind === 'Paraf' ? 'Sekretaris Program Studi' : 'Ketua Program Studi'),
+          kodeProdi: myProdi,
+          kind: myKind
+        });
+        return list;
+      }
+
+      staffPool.forEach(s => {
+        const role = String(s.Role || s.role || '').trim();
+        const rl = role.toLowerCase();
+        const isSek = rl.includes('sekretaris') || rl.includes('sekprodi');
+        const isKap = rl.includes('ketua program studi') || rl.includes('kaprodi');
+        if (!isSek && !isKap) return;
+        const kind = isSek ? 'Paraf' : 'TTD';
+        const kodeProdi = String(s['Kode Prodi'] || s.kodeProdi || 'MNJ').trim().toUpperCase();
+        const username = String(s.Username || s.username || `${kind.toLowerCase()}_${kodeProdi.toLowerCase()}`).trim();
+        const nama = String(s['Nama Lengkap'] || s.nama || username).trim();
+        const key = `${kodeProdi}|${kind}|${username.toLowerCase()}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        list.push({ key, username, nama, role, kodeProdi, kind });
+      });
+
+      prodiCodes.forEach(code => {
+        const meta = getSuratProdiMeta(code);
+        if (!list.some(t => t.kodeProdi === code && t.kind === 'Paraf')) {
+          list.push({
+            key: `${code}|Paraf|sekprodi_${code.toLowerCase()}`,
+            username: `sekprodi_${code.toLowerCase()}`,
+            nama: `Sek.Prodi ${meta.nama}`,
+            role: 'Sekretaris Program Studi',
+            kodeProdi: code,
+            kind: 'Paraf'
+          });
+        }
+        if (!list.some(t => t.kodeProdi === code && t.kind === 'TTD')) {
+          list.push({
+            key: `${code}|TTD|kaprodi_${code.toLowerCase()}`,
+            username: `kaprodi_${code.toLowerCase()}`,
+            nama: meta.kaprodi,
+            role: 'Ketua Program Studi',
+            kodeProdi: code,
+            kind: 'TTD'
+          });
+        }
+      });
+
+      return list.sort((a, b) => a.kodeProdi.localeCompare(b.kodeProdi) || a.kind.localeCompare(b.kind));
+    }
+
+    function openSpesimenTtdModal(presetKind, presetProdi) {
+      const modal = document.getElementById('modalSpesimenTtd');
+      if (!modal) return;
+      spesimenModalState.targets = buildSpecimenSignerTargets();
+      const selectEl = document.getElementById('spesimenSignerSelect');
+      if (selectEl) {
+        selectEl.innerHTML = spesimenModalState.targets.map(t =>
+          `<option value="${escapeHtml(t.key)}">[${escapeHtml(t.kodeProdi)}] ${escapeHtml(t.kind === 'Paraf' ? 'Sek.Prodi' : 'KaProdi')} &mdash; ${escapeHtml(t.nama)}</option>`
+        ).join('');
+        const targetKind = presetKind || (isSuratRoleSekprodi() ? 'Paraf' : (isSuratRoleKaprodi() ? 'TTD' : 'Paraf'));
+        const targetProdi = String(presetProdi || suratDosenState.kodeProdi || 'MNJ').toUpperCase();
+        const match = spesimenModalState.targets.find(t => t.kodeProdi === targetProdi && t.kind === targetKind) || spesimenModalState.targets[0];
+        if (match) {
+          selectEl.value = match.key;
+          spesimenModalState.kind = match.kind;
+        }
+        selectEl.disabled = !isSuratMasterRole();
+      }
+
+      const btnParaf = document.getElementById('btnSpesimenKindParaf');
+      const btnTtd = document.getElementById('btnSpesimenKindTtd');
+      if (btnParaf) btnParaf.disabled = isSuratRoleKaprodi() && !isSuratMasterRole();
+      if (btnTtd) btnTtd.disabled = isSuratRoleSekprodi() && !isSuratMasterRole();
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      initSpesimenCanvasEvents();
+      clearSpesimenCanvas();
+      spesimenModalState.uploadedRawDataUrl = '';
+      spesimenModalState.processedUploadDataUrl = '';
+      const upBox = document.getElementById('spesimenUploadPreviewBox');
+      if (upBox) { upBox.classList.add('hidden'); upBox.innerHTML = ''; }
+      const fileInp = document.getElementById('spesimenPngFileInput');
+      if (fileInp) fileInp.value = '';
+      setSpesimenInputMethod('canvas');
+      setSpesimenKind(spesimenModalState.kind, true);
+    }
+
+    function closeSpesimenTtdModal() {
+      const modal = document.getElementById('modalSpesimenTtd');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function getSelectedSpecimenTarget() {
+      const sel = document.getElementById('spesimenSignerSelect');
+      const key = sel ? sel.value : '';
+      return spesimenModalState.targets.find(t => t.key === key) || spesimenModalState.targets[0] || {
+        username: (currentUser && currentUser.username) || '',
+        nama: (currentUser && currentUser.nama) || 'Pejabat Prodi',
+        role: (currentUser && currentUser.role) || 'Sekretaris Program Studi',
+        kodeProdi: suratDosenState.kodeProdi || 'MNJ',
+        kind: spesimenModalState.kind
+      };
+    }
+
+    function onSpesimenSignerTargetChange() {
+      const target = getSelectedSpecimenTarget();
+      spesimenModalState.kind = target.kind;
+      syncSpesimenKindButtons();
+      refreshSpecimenModalPreview();
+    }
+
+    function setSpesimenKind(kind, skipSelectMatch) {
+      const cleanKind = String(kind || '').toLowerCase() === 'ttd' ? 'TTD' : 'Paraf';
+      spesimenModalState.kind = cleanKind;
+      if (!skipSelectMatch && isSuratMasterRole()) {
+        const curr = getSelectedSpecimenTarget();
+        const match = spesimenModalState.targets.find(t => t.kodeProdi === curr.kodeProdi && t.kind === cleanKind);
+        const sel = document.getElementById('spesimenSignerSelect');
+        if (match && sel) sel.value = match.key;
+      }
+      syncSpesimenKindButtons();
+      refreshSpecimenModalPreview();
+    }
+
+    function syncSpesimenKindButtons() {
+      const btnP = document.getElementById('btnSpesimenKindParaf');
+      const btnT = document.getElementById('btnSpesimenKindTtd');
+      const isP = spesimenModalState.kind === 'Paraf';
+      if (btnP) {
+        btnP.classList.toggle('bg-blue-900', isP);
+        btnP.classList.toggle('text-white', isP);
+        btnP.classList.toggle('border-blue-900', isP);
+        btnP.classList.toggle('bg-white', !isP);
+        btnP.classList.toggle('text-slate-700', !isP);
+        btnP.classList.toggle('border-slate-300', !isP);
+      }
+      if (btnT) {
+        btnT.classList.toggle('bg-emerald-700', !isP);
+        btnT.classList.toggle('text-white', !isP);
+        btnT.classList.toggle('border-emerald-700', !isP);
+        btnT.classList.toggle('bg-white', isP);
+        btnT.classList.toggle('text-slate-700', isP);
+        btnT.classList.toggle('border-slate-300', isP);
+      }
+    }
+
+    function refreshSpecimenModalPreview() {
+      const target = getSelectedSpecimenTarget();
+      const saved = findActiveSpecimenRecord(target.kodeProdi, spesimenModalState.kind, target.username);
+      const previewBox = document.getElementById('spesimenSavedPreviewBox');
+      const tsEl = document.getElementById('spesimenSavedTimestamp');
+      if (previewBox) {
+        const imgUrl = saved ? String(saved['Data Gambar'] || saved.imageDataUri || '') : '';
+        previewBox.innerHTML = imgUrl.startsWith('data:image/')
+          ? `<img src="${imgUrl}" alt="Spesimen Tersimpan" class="max-h-20 max-w-full object-contain" />`
+          : `<span class="text-[11px] text-slate-400">Belum ada spesimen ${escapeHtml(spesimenModalState.kind)} untuk ${escapeHtml(target.kodeProdi)}</span>`;
+      }
+      if (tsEl) {
+        tsEl.innerText = saved && (saved['Updated At'] || saved.updatedAt) ? String(saved['Updated At'] || saved.updatedAt) : 'Belum ada';
+      }
+
+      const parafSaved = findActiveSpecimenRecord(target.kodeProdi, 'Paraf');
+      const ttdSaved = findActiveSpecimenRecord(target.kodeProdi, 'TTD');
+      const simParaf = document.getElementById('spesimenSimParafImg');
+      const simTtd = document.getElementById('spesimenSimTtdImg');
+      const simName = document.getElementById('spesimenSimSignerName');
+
+      const draftPreview = spesimenModalState.method === 'upload'
+        ? spesimenModalState.processedUploadDataUrl
+        : (spesimenModalState.strokes.length ? exportTrimmedCanvasSpecimen() : '');
+
+      const finalParaf = (spesimenModalState.kind === 'Paraf' && draftPreview)
+        ? draftPreview
+        : (parafSaved ? String(parafSaved['Data Gambar'] || '') : '');
+      const finalTtd = (spesimenModalState.kind === 'TTD' && draftPreview)
+        ? draftPreview
+        : (ttdSaved ? String(ttdSaved['Data Gambar'] || '') : '');
+
+      if (simParaf) {
+        simParaf.src = finalParaf || '';
+        simParaf.classList.toggle('hidden', !finalParaf.startsWith('data:image/'));
+      }
+      if (simTtd) {
+        simTtd.src = finalTtd || '';
+        simTtd.classList.toggle('hidden', !finalTtd.startsWith('data:image/'));
+      }
+      if (simName) {
+        simName.innerText = getSuratProdiMeta(target.kodeProdi).kaprodi;
+      }
+    }
+
+    function setSpesimenInputMethod(method) {
+      spesimenModalState.method = method === 'upload' ? 'upload' : 'canvas';
+      const isCanvas = spesimenModalState.method === 'canvas';
+      const btnC = document.getElementById('btnSpesimenMethodCanvas');
+      const btnU = document.getElementById('btnSpesimenMethodUpload');
+      const secC = document.getElementById('spesimenCanvasSection');
+      const secU = document.getElementById('spesimenUploadSection');
+      if (btnC) {
+        btnC.classList.toggle('bg-blue-900', isCanvas);
+        btnC.classList.toggle('text-white', isCanvas);
+        btnC.classList.toggle('text-slate-600', !isCanvas);
+      }
+      if (btnU) {
+        btnU.classList.toggle('bg-blue-900', !isCanvas);
+        btnU.classList.toggle('text-white', !isCanvas);
+        btnU.classList.toggle('text-slate-600', isCanvas);
+      }
+      if (secC) secC.classList.toggle('hidden', !isCanvas);
+      if (secU) secU.classList.toggle('hidden', isCanvas);
+      refreshSpecimenModalPreview();
+    }
+
+    function setSpesimenInkColor(hex) {
+      spesimenModalState.inkColor = hex || '#0f172a';
+      document.querySelectorAll('.spesimen-ink-btn').forEach(btn => {
+        const match = btn.getAttribute('data-spesimen-ink') === spesimenModalState.inkColor;
+        btn.classList.toggle('border-blue-600', match);
+        btn.classList.toggle('border-transparent', !match);
+      });
+    }
+
+    function initSpesimenCanvasEvents() {
+      const canvas = document.getElementById('spesimenDrawCanvas');
+      if (!canvas || spesimenModalState.canvasInitialized) return;
+      spesimenModalState.canvasInitialized = true;
+
+      const getPos = (evt) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / Math.max(1, rect.width);
+        const scaleY = canvas.height / Math.max(1, rect.height);
+        return {
+          x: (evt.clientX - rect.left) * scaleX,
+          y: (evt.clientY - rect.top) * scaleY
+        };
+      };
+
+      canvas.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
+        spesimenModalState.isDrawing = true;
+        const pt = getPos(e);
+        spesimenModalState.currentPoints = [pt];
+        const hint = document.getElementById('spesimenCanvasHint');
+        if (hint) hint.classList.add('hidden');
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        if (!spesimenModalState.isDrawing) return;
+        e.preventDefault();
+        const pt = getPos(e);
+        spesimenModalState.currentPoints.push(pt);
+        redrawSpesimenCanvas();
+      });
+
+      const finishStroke = () => {
+        if (!spesimenModalState.isDrawing) return;
+        spesimenModalState.isDrawing = false;
+        if (spesimenModalState.currentPoints.length > 0) {
+          spesimenModalState.strokes.push({
+            color: spesimenModalState.inkColor,
+            width: Number(spesimenModalState.strokeWidth || 3),
+            points: spesimenModalState.currentPoints.slice()
+          });
+        }
+        spesimenModalState.currentPoints = [];
+        redrawSpesimenCanvas();
+        refreshSpecimenModalPreview();
+      };
+
+      canvas.addEventListener('pointerup', finishStroke);
+      canvas.addEventListener('pointercancel', finishStroke);
+    }
+
+    function redrawSpesimenCanvas() {
+      const canvas = document.getElementById('spesimenDrawCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const drawStroke = (pts, color, width) => {
+        if (!pts || !pts.length) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (pts.length === 1) {
+          ctx.beginPath();
+          ctx.arc(pts[0].x, pts[0].y, width / 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (let i = 1; i < pts.length - 1; i++) {
+            const mx = (pts[i].x + pts[i + 1].x) / 2;
+            const my = (pts[i].y + pts[i + 1].y) / 2;
+            ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+          }
+          ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      };
+
+      spesimenModalState.strokes.forEach(s => drawStroke(s.points, s.color, s.width));
+      if (spesimenModalState.isDrawing && spesimenModalState.currentPoints.length) {
+        drawStroke(spesimenModalState.currentPoints, spesimenModalState.inkColor, Number(spesimenModalState.strokeWidth || 3));
+      }
+
+      const hint = document.getElementById('spesimenCanvasHint');
+      if (hint) hint.classList.toggle('hidden', spesimenModalState.strokes.length > 0 || spesimenModalState.isDrawing);
+    }
+
+    function undoSpesimenCanvas() {
+      spesimenModalState.strokes.pop();
+      redrawSpesimenCanvas();
+      refreshSpecimenModalPreview();
+    }
+
+    function clearSpesimenCanvas() {
+      spesimenModalState.strokes = [];
+      spesimenModalState.currentPoints = [];
+      spesimenModalState.isDrawing = false;
+      redrawSpesimenCanvas();
+      refreshSpecimenModalPreview();
+    }
+
+    function trimAndCompressSpecimenCanvas(sourceCanvas, kind) {
+      const ctx = sourceCanvas.getContext('2d');
+      const w = sourceCanvas.width;
+      const h = sourceCanvas.height;
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+
+      let minX = w, minY = h, maxX = -1, maxY = -1;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const alpha = data[(y * w + x) * 4 + 3];
+          if (alpha > 12) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        }
+      }
+      if (maxX < minX || maxY < minY) return '';
+
+      const pad = 6;
+      const sx = Math.max(0, minX - pad);
+      const sy = Math.max(0, minY - pad);
+      const sw = Math.min(w - sx, maxX - minX + 1 + pad * 2);
+      const sh = Math.min(h - sy, maxY - minY + 1 + pad * 2);
+
+      const isParaf = String(kind || '').toLowerCase() === 'paraf';
+      let maxW = isParaf ? 220 : 340;
+      let maxH = isParaf ? 120 : 150;
+      let resultUrl = '';
+
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const scale = Math.min(1, maxW / sw, maxH / sh);
+        const tw = Math.max(24, Math.round(sw * scale));
+        const th = Math.max(20, Math.round(sh * scale));
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = tw;
+        outCanvas.height = th;
+        const outCtx = outCanvas.getContext('2d');
+        outCtx.clearRect(0, 0, tw, th);
+        outCtx.drawImage(sourceCanvas, sx, sy, sw, sh, 0, 0, tw, th);
+        resultUrl = outCanvas.toDataURL('image/png');
+        if (resultUrl.length <= 42000) break;
+        maxW = Math.round(maxW * 0.72);
+        maxH = Math.round(maxH * 0.72);
+      }
+      return resultUrl;
+    }
+
+    function exportTrimmedCanvasSpecimen() {
+      const canvas = document.getElementById('spesimenDrawCanvas');
+      if (!canvas || !spesimenModalState.strokes.length) return '';
+      return trimAndCompressSpecimenCanvas(canvas, spesimenModalState.kind);
+    }
+
+    function handleSpesimenPngUpload(inputEl) {
+      const file = inputEl && inputEl.files && inputEl.files[0];
+      if (!file) return;
+      if (file.type !== 'image/png' && !file.name.toLowerCase().endsWith('.png')) {
+        Swal.fire({ icon: 'warning', title: 'Format Wajib PNG', text: 'Gunakan file gambar berformat .png (disarankan transparan).' });
+        inputEl.value = '';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        spesimenModalState.uploadedRawDataUrl = String(reader.result || '');
+        reprocessUploadedSpecimenPng();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function reprocessUploadedSpecimenPng() {
+      if (!spesimenModalState.uploadedRawDataUrl) return;
+      const removeWhite = Boolean(document.getElementById('spesimenAutoRemoveWhiteCb') && document.getElementById('spesimenAutoRemoveWhiteCb').checked);
+      const img = new Image();
+      img.onload = () => {
+        const tmp = document.createElement('canvas');
+        tmp.width = Math.min(900, img.naturalWidth || 400);
+        tmp.height = Math.max(40, Math.round((img.naturalHeight || 200) * (tmp.width / Math.max(1, img.naturalWidth || 400))));
+        const ctx = tmp.getContext('2d');
+        ctx.drawImage(img, 0, 0, tmp.width, tmp.height);
+
+        if (removeWhite) {
+          const imgData = ctx.getImageData(0, 0, tmp.width, tmp.height);
+          const d = imgData.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const r = d[i], g = d[i + 1], b = d[i + 2], a = d[i + 3];
+            if (a > 0 && r > 228 && g > 228 && b > 228) {
+              d[i + 3] = 0;
+            }
+          }
+          ctx.putImageData(imgData, 0, 0);
+        }
+
+        const compressed = trimAndCompressSpecimenCanvas(tmp, spesimenModalState.kind);
+        spesimenModalState.processedUploadDataUrl = compressed;
+
+        const box = document.getElementById('spesimenUploadPreviewBox');
+        if (box) {
+          box.classList.remove('hidden');
+          box.innerHTML = compressed
+            ? `<img src="${compressed}" alt="Hasil PNG Transparan" class="max-h-24 max-w-full object-contain" />`
+            : `<span class="text-xs text-rose-600 font-bold">Gambar kosong atau seluruh piksel transparan.</span>`;
+        }
+        const info = document.getElementById('spesimenSizeInfoText');
+        if (info && compressed) {
+          info.innerText = `Ukuran sel Spreadsheet: ${compressed.length.toLocaleString('id-ID')} / 48.000 karakter`;
+        }
+        refreshSpecimenModalPreview();
+      };
+      img.src = spesimenModalState.uploadedRawDataUrl;
+    }
+
+    function saveCurrentSpesimenDigital() {
+      const target = getSelectedSpecimenTarget();
+      const dataUri = spesimenModalState.method === 'upload'
+        ? spesimenModalState.processedUploadDataUrl
+        : exportTrimmedCanvasSpecimen();
+
+      if (!dataUri || !dataUri.startsWith('data:image/')) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Spesimen Belum Diisi',
+          text: spesimenModalState.method === 'upload'
+            ? 'Silakan pilih file PNG terlebih dahulu.'
+            : 'Silakan goreskan paraf atau tanda tangan Anda di canvas terlebih dahulu.'
+        });
+        return;
+      }
+      if (dataUri.length > 48000) {
+        Swal.fire({ icon: 'error', title: 'Ukuran Terlalu Besar', text: 'Hasil gambar melebihi batas sel Google Sheets (48.000 karakter).' });
+        return;
+      }
+
+      const actorName = (typeof getCurrentActorName === 'function')
+        ? getCurrentActorName(currentUser && currentUser.nama, currentUser && currentUser.role)
+        : (currentUser && (currentUser.nama || currentUser.username)) || '';
+
+      const payload = {
+        actorUsername: (currentUser && currentUser.username) || '',
+        actorName: actorName,
+        actorRole: (currentUser && currentUser.role) || '',
+        targetUsername: target.username,
+        targetNama: target.nama,
+        targetRole: target.role,
+        kodeProdi: target.kodeProdi,
+        jenisSpesimen: spesimenModalState.kind,
+        imageDataUri: dataUri
+      };
+
+      Swal.fire({ title: 'Menyimpan Spesimen...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      callGasApi('saveDigitalSpecimen', [payload], (res) => {
+        if (!res || !res.success) {
+          Swal.fire({ icon: 'error', title: 'Gagal Menyimpan Spesimen', text: (res && res.message) || 'Terjadi kesalahan.' });
+          return;
+        }
+        if (res.specimen) {
+          if (!Array.isArray(appData.spesimenTtd)) appData.spesimenTtd = [];
+          const spId = String(res.specimen.ID || '');
+          const idx = appData.spesimenTtd.findIndex(item => String(item.ID || '') === spId);
+          if (idx >= 0) appData.spesimenTtd[idx] = res.specimen;
+          else appData.spesimenTtd.unshift(res.specimen);
+          saveAppDataCache(appData);
+        }
+        refreshSpecimenModalPreview();
+        renderSuratRecordsTable();
+        if (!res.isLocalFallback && typeof loadAppData === 'function') loadAppData(true);
+        Swal.fire({
+          icon: 'success',
+          title: 'Spesimen Tersimpan',
+          text: res.message || 'Spesimen siap digunakan untuk verifikasi 1-klik.',
+          timer: 2000,
+          showConfirmButton: false
+        });
+      }, (err) => {
+        Swal.fire({ icon: 'error', title: 'Gagal Menyimpan', text: (err && err.message) || 'Koneksi gagal.' });
+      });
+    }
+
+    function handleLocalSuratGasFallback(action, args, onSuccess) {
+      if (!appData || typeof appData !== 'object') appData = {};
+      if (!Array.isArray(appData.suratPengantar)) appData.suratPengantar = [];
+      if (!Array.isArray(appData.spesimenTtd)) appData.spesimenTtd = [];
+      const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+      if (action === 'saveSuratPengantarRecord') {
+        const p = (args && args[0]) || {};
+        const recId = String(p.id || '').trim() || ('SRT-' + nowStr.slice(0, 10).replace(/-/g, '') + '-' + String(appData.suratPengantar.length + 1).padStart(3, '0'));
+        const actor = String(p.actorName || (currentUser && currentUser.nama) || 'Admin TU');
+        const rowObj = {
+          'ID': recId,
+          'Nomor Surat': p.nomorSurat || '',
+          'Kode Arsip': p.kodeArsip || '',
+          'Kode Prodi': p.kodeProdi || 'MNJ',
+          'Program Studi': p.programStudi || '',
+          'Jenis Layanan': p.layanan || 'UTS Susulan',
+          'Dosen Pengampu': p.dosen || '',
+          'Mata Kuliah': p.mataKuliah || '',
+          'Semester': p.semester || 'Ganjil',
+          'Tahun Akademik': p.tahunAkademik || '2026/2027',
+          'Tanggal Masehi': p.tanggalMasehi || getLocalIsoTodayForSurat(),
+          'Tanggal Hijriah': p.tanggalHijriah || '',
+          'Lampiran': p.lampiran || '1 (satu) Berkas',
+          'Tenggat Nilai': p.tenggatNilai || '1 (satu) minggu',
+          'Kaprodi Nama': p.kaprodiNama || '',
+          'Kaprodi NIK': p.kaprodiNikNidn || '',
+          'Mahasiswa JSON': JSON.stringify(Array.isArray(p.rows) ? p.rows : []),
+          'Status Verifikasi': 'Menunggu Paraf Sek.Prodi',
+          'Locked': 'Tidak',
+          'Paraf SekProdi': '',
+          'TTD KaProdi': '',
+          'Paraf Image': '',
+          'TTD Image': '',
+          'Meta JSON': JSON.stringify(Object.assign({}, p.meta || {}, { createdBy: actor, createdAt: nowStr, updatedBy: actor, updatedAt: nowStr }))
+        };
+        const idx = appData.suratPengantar.findIndex(r => String(r.ID || r.id) === recId);
+        if (idx >= 0) appData.suratPengantar[idx] = rowObj;
+        else appData.suratPengantar.unshift(rowObj);
+        saveAppDataCache(appData);
+        appendLocalActivityLog(actor, 'Konfirmasi Surat Pengantar', recId, 'Disimpan di memori lokal', p.actorRole || 'Admin TU');
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, id: recId, record: rowObj, message: 'Surat berhasil dikonfirmasi & disimpan (lokal).' });
+        return;
+      }
+
+      if (action === 'verifySuratPengantarStep') {
+        const recId = String((args && args[0]) || '').trim();
+        const step = String((args && args[1]) || '').trim().toUpperCase();
+        const actor = String((args && args[2]) || (currentUser && currentUser.nama) || 'Pejabat');
+        const role = String((args && args[3]) || (currentUser && currentUser.role) || '');
+        const img = String((args && args[4]) || '');
+        const note = String((args && args[5]) || '');
+        const rec = appData.suratPengantar.find(r => String(r.ID || r.id) === recId);
+        if (!rec) {
+          if (onSuccess) onSuccess({ success: false, message: 'Record tidak ditemukan di memori lokal.' });
+          return;
+        }
+        const meta = parseSuratJsonSafe(rec['Meta JSON'], {});
+        if (step === 'PARAF_SEKPRODI') {
+          rec['Status Verifikasi'] = 'Menunggu TTD KaProdi';
+          rec['Locked'] = 'Ya';
+          rec['Paraf SekProdi'] = `${actor} (${nowStr})`;
+          rec['Paraf Image'] = img;
+          meta.parafBy = actor; meta.parafAt = nowStr; meta.revisionNote = '';
+        } else if (step === 'TTD_KAPRODI') {
+          rec['Status Verifikasi'] = 'Terverifikasi Final';
+          rec['Locked'] = 'Ya';
+          rec['TTD KaProdi'] = `${actor} (${nowStr})`;
+          rec['TTD Image'] = img;
+          meta.ttdBy = actor; meta.ttdAt = nowStr;
+        } else {
+          rec['Status Verifikasi'] = step === 'REOPEN_DRAFT' ? 'Menunggu Paraf Sek.Prodi' : 'Perlu Revisi';
+          rec['Locked'] = 'Tidak';
+          rec['Paraf SekProdi'] = '';
+          rec['TTD KaProdi'] = '';
+          rec['Paraf Image'] = '';
+          rec['TTD Image'] = '';
+          meta.revisionNote = note || 'Perlu perbaikan';
+        }
+        rec['Meta JSON'] = JSON.stringify(meta);
+        saveAppDataCache(appData);
+        appendLocalActivityLog(actor, step, recId, 'Pembaruan verifikasi surat (lokal)', role);
+        if (onSuccess) {
+          onSuccess({
+            success: true,
+            isLocalFallback: true,
+            status: rec['Status Verifikasi'],
+            locked: rec['Locked'],
+            parafSummary: rec['Paraf SekProdi'],
+            ttdSummary: rec['TTD KaProdi'],
+            parafImage: rec['Paraf Image'],
+            ttdImage: rec['TTD Image'],
+            meta
+          });
+        }
+        return;
+      }
+
+      if (action === 'deleteSuratPengantarRecord') {
+        const recId = String((args && args[0]) || '').trim();
+        appData.suratPengantar = appData.suratPengantar.filter(r => String(r.ID || r.id) !== recId);
+        saveAppDataCache(appData);
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, id: recId, message: 'Record surat dihapus (lokal).' });
+        return;
+      }
+
+      if (action === 'saveDigitalSpecimen') {
+        const p = (args && args[0]) || {};
+        const jenis = String(p.jenisSpesimen || 'Paraf').toLowerCase() === 'ttd' ? 'TTD' : 'Paraf';
+        const kodeProdi = String(p.kodeProdi || 'MNJ').toUpperCase();
+        const targetUsername = String(p.targetUsername || '').trim();
+        const existingIdx = appData.spesimenTtd.findIndex(s =>
+          String(s['Jenis Spesimen'] || '').toLowerCase() === jenis.toLowerCase() &&
+          (String(s.Username || '').toLowerCase() === targetUsername.toLowerCase() || String(s['Kode Prodi'] || '').toUpperCase() === kodeProdi)
+        );
+        const spmObj = {
+          'ID': existingIdx >= 0 ? appData.spesimenTtd[existingIdx].ID : ('SPM-' + Date.now()),
+          'Username': targetUsername,
+          'Nama Lengkap': p.targetNama || targetUsername,
+          'Role': p.targetRole || p.actorRole || '',
+          'Kode Prodi': kodeProdi,
+          'Jenis Spesimen': jenis,
+          'Data Gambar': p.imageDataUri || '',
+          'Updated At': nowStr,
+          'Updated By': p.actorName || targetUsername
+        };
+        if (existingIdx >= 0) appData.spesimenTtd[existingIdx] = spmObj;
+        else appData.spesimenTtd.unshift(spmObj);
+        saveAppDataCache(appData);
+        appendLocalActivityLog(p.actorName || 'Admin', `Simpan Spesimen ${jenis}`, `${kodeProdi}`, 'Spesimen digital tersimpan (lokal)', p.actorRole || '');
+        if (onSuccess) onSuccess({ success: true, isLocalFallback: true, specimen: spmObj, message: `Spesimen ${jenis} tersimpan (lokal).` });
+      }
+    }
+  </script>
 </body>
 </html>
+
