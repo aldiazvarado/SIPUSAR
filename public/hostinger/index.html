@@ -2421,37 +2421,42 @@
 
       <!-- TAB: SURAT PENGANTAR DOSEN & DAFTAR HADIR (MASTER ADMIN, ADMIN TU, SEK.PRODI, KAPRODI) -->
       <div id="tabContentSuratdosen" class="hidden space-y-4">
-        <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 no-print">
-          <div class="min-w-0 space-y-1">
-            <div class="flex flex-wrap items-center gap-2">
-              <h3 class="text-base font-bold text-slate-800">Surat Pengantar Dosen &amp; Formulir Daftar Hadir Ujian</h3>
-              <span id="suratActiveRecordMetaText" class="text-xs font-mono tabular-nums font-bold text-slate-500">Draft Baru</span>
+        <div class="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-3.5 no-print">
+          <div class="w-full space-y-1">
+            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <h3 class="text-base font-bold text-slate-900">Surat Pengantar Dosen &amp; Formulir Daftar Hadir Ujian</h3>
+              <span class="text-slate-300" aria-hidden="true">&middot;</span>
+              <span id="suratActiveRecordMetaText" class="text-xs font-mono tabular-nums font-bold text-slate-600">Draft Baru</span>
             </div>
-            <p class="text-xs text-slate-500">Alur verifikasi 3 tahap: 1. Form Isian Selesai &rarr; 2. Paraf Sek.Prodi (Edit dikunci) &rarr; 3. TTD Final KaProdi (PDF/Cetak/Word F4 terbuka).</p>
+            <p class="text-xs text-slate-500 leading-relaxed">Alur verifikasi 3 tahap: 1. Form Isian Selesai &rarr; 2. Paraf Sek.Prodi (Edit dikunci) &rarr; 3. TTD Final KaProdi (PDF/Cetak/Word F4 terbuka).</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto shrink-0">
-            <button id="btnManageSpesimenTtd" type="button" onclick="openSpesimenTtdModal()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 min-h-[40px] py-2 rounded-xl text-xs items-center justify-center gap-1.5 border border-slate-300 transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-signature text-blue-900"></i> <span>Spesimen Paraf / TTD</span>
-            </button>
-            <button id="btnNewSuratDraft" type="button" onclick="createNewSuratDraft()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 min-h-[40px] py-2 rounded-xl text-xs items-center justify-center gap-1.5 border border-slate-200 transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-file-circle-plus"></i> <span>Surat Baru</span>
-            </button>
-            <button id="btnKonfirmasiSimpanSurat" type="button" onclick="confirmAndSaveSuratPengantar()" class="hidden bg-blue-900 hover:bg-blue-800 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs items-center justify-center gap-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-check-to-slot"></i> <span>Konfirmasi &amp; Simpan</span>
-            </button>
-            <div class="inline-flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 min-h-[40px] shrink-0" role="group" aria-label="Mode Paraf dan Tanda Tangan Ekspor">
-              <button id="btnSuratModeWithTtd" type="button" onclick="setSuratExportIncludeSignatures(true)" class="px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer bg-blue-900 text-white shadow-xs">Dengan Paraf &amp; TTD</button>
-              <button id="btnSuratModeNoTtd" type="button" onclick="setSuratExportIncludeSignatures(false)" class="px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer text-slate-600 hover:text-slate-900">Tanpa Paraf &amp; TTD</button>
+          <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+            <div class="flex flex-wrap items-center gap-2">
+              <button id="btnManageSpesimenTtd" type="button" onclick="openSpesimenTtdModal()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs items-center justify-center gap-1.5 border border-slate-300 transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-signature text-blue-900"></i> <span>Spesimen Paraf / TTD</span>
+              </button>
+              <button id="btnNewSuratDraft" type="button" onclick="createNewSuratDraft()" class="hidden bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs items-center justify-center gap-1.5 border border-slate-200 transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-file-circle-plus"></i> <span>Surat Baru</span>
+              </button>
+              <button id="btnKonfirmasiSimpanSurat" type="button" onclick="confirmAndSaveSuratPengantar()" class="hidden bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 min-h-[40px] py-2 rounded-xl text-xs items-center justify-center gap-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-check-to-slot"></i> <span>Konfirmasi &amp; Simpan</span>
+              </button>
             </div>
-            <button id="btnDownloadSuratWord" type="button" onclick="downloadSuratPengantarWord()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-file-word"></i> <span>Word (.docx)</span>
-            </button>
-            <button id="btnDownloadSuratPdf" type="button" onclick="downloadSuratPengantarPdf()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-md transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-file-pdf"></i> <span>Simpan PDF</span>
-            </button>
-            <button id="btnPrintSuratDosen" type="button" onclick="printSuratPengantarDosen()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
-              <i class="fas fa-print"></i> <span>Cetak / Print</span>
-            </button>
+            <div class="flex flex-wrap items-center gap-2 ml-auto">
+              <div class="inline-flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200 min-h-[40px] shrink-0" role="group" aria-label="Mode Paraf dan Tanda Tangan Ekspor">
+                <button id="btnSuratModeWithTtd" type="button" onclick="setSuratExportIncludeSignatures(true)" class="px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer bg-blue-900 text-white shadow-xs">Dengan Paraf &amp; TTD</button>
+                <button id="btnSuratModeNoTtd" type="button" onclick="setSuratExportIncludeSignatures(false)" class="px-2.5 py-1.5 min-h-[34px] rounded-lg text-[11px] font-bold transition whitespace-nowrap shrink-0 cursor-pointer text-slate-600 hover:text-slate-900">Tanpa Paraf &amp; TTD</button>
+              </div>
+              <button id="btnDownloadSuratWord" type="button" onclick="downloadSuratPengantarWord()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-file-word"></i> <span>Word (.docx)</span>
+              </button>
+              <button id="btnDownloadSuratPdf" type="button" onclick="downloadSuratPengantarPdf()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-md transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-file-pdf"></i> <span>Simpan PDF</span>
+              </button>
+              <button id="btnPrintSuratDosen" type="button" onclick="printSuratPengantarDosen()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-3.5 min-h-[40px] py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-sm transition whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-print"></i> <span>Cetak / Print</span>
+              </button>
+            </div>
           </div>
         </div>
 
