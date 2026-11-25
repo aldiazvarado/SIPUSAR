@@ -68,6 +68,7 @@ function handleApiRequest(action, args) {
     permanentDeletePendaftaran: permanentDeletePendaftaran,
     emptySampahPendaftaran: emptySampahPendaftaran,
     repairDuplicatePendaftaranIds: repairDuplicatePendaftaranIds,
+    diagnoseSpreadsheetConnection: diagnoseSpreadsheetConnection,
     addPeriode: addPeriode,
     updatePeriode: updatePeriode,
     deletePeriode: deletePeriode,
@@ -2247,12 +2248,16 @@ function repairDuplicatePendaftaranIds_(ss, opts) {
 
       SpreadsheetApp.flush();
       try { invalidateCache('Pendaftaran'); } catch (icErr) {}
-      var actorMeta = resolveActorMeta_(opts.actor, opts.role, 'System', 'System');
-      var detailText = changes.map(function(c) {
-        return (c.oldId + ' -> ' + c.newId + (c.nama ? ' (' + c.nama + ')' : ''));
-      }).join('; ');
-      bumpSyncVersion(actorMeta.actor, 'Perbaikan ' + changes.length + ' ID Pendaftaran duplikat');
-      addActivityLog(actorMeta.actor, 'Perbaiki ID Duplikat', changes.length + ' berkas', 'Deduplikasi ID otomatis: ' + detailText, actorMeta.role);
+      try {
+        var actorMeta = resolveActorIdentity_(ss, opts.actor || 'System', opts.role || 'System');
+        var detailText = changes.map(function(c) {
+          return (c.oldId + ' -> ' + c.newId + (c.nama ? ' (' + c.nama + ')' : ''));
+        }).join('; ');
+        bumpSyncVersion(actorMeta.actor, 'Perbaikan ' + changes.length + ' ID Pendaftaran duplikat');
+        addActivityLog(actorMeta.actor, 'Perbaiki ID Duplikat', changes.length + ' berkas', 'Deduplikasi ID otomatis: ' + detailText, actorMeta.role);
+      } catch (logErr) {
+        Logger.log('Peringatan log repairDuplicatePendaftaranIds_: ' + logErr.message);
+      }
     }
 
     return {
@@ -2273,18 +2278,68 @@ function repairDuplicatePendaftaranIds_(ss, opts) {
     lock.waitLock(10000);
     return runRepair();
   } finally {
-    lock.releaseLock();
+    try {
+      if (lock && (!lock.hasLock || lock.hasLock())) lock.releaseLock();
+    } catch (eRel) {}
   }
 }
 
 function repairDuplicatePendaftaranIds(actor, userRole) {
   try {
     var ss = getActiveSpreadsheetSafe();
-    if (!ss) return { success: false, message: 'Spreadsheet tidak terhubung.' };
-    return repairDuplicatePendaftaranIds_(ss, { actor: actor || 'Admin', role: userRole || 'Admin TU' });
+    if (!ss) return { success: false, message: 'Spreadsheet tidak terhubung. Pastikan skrip terikat ke Spreadsheet atau SPREADSHEET_ID terpasang di Script Properties.' };
+    var res = repairDuplicatePendaftaranIds_(ss, { actor: actor || 'Admin', role: userRole || 'Admin TU' });
+    Logger.log('Hasil repairDuplicatePendaftaranIds: ' + JSON.stringify(res));
+    return res;
   } catch (err) {
-    Logger.log('Error repairDuplicatePendaftaranIds: ' + err.message);
-    return { success: false, message: 'Gagal memperbaiki ID duplikat: ' + err.message };
+    Logger.log('Error repairDuplicatePendaftaranIds: ' + (err && err.message ? err.message : String(err)));
+    return { success: false, message: 'Gagal memperbaiki ID duplikat: ' + (err && err.message ? err.message : String(err)) };
+  }
+}
+
+function diagnoseSpreadsheetConnection() {
+  try {
+    var ss = getActiveSpreadsheetSafe();
+    if (!ss) {
+      var msg = 'Spreadsheet tidak terhubung (getActiveSpreadsheetSafe mengembalikan null).';
+      Logger.log(msg);
+      return { success: false, connected: false, message: msg };
+    }
+    var pSheet = ss.getSheetByName('Pendaftaran');
+    var sSheet = ss.getSheetByName('Sampah_Pendaftaran');
+    var info = getUsedAndMaxPendaftaranIds_(ss);
+    var dupList = [];
+    if (pSheet && pSheet.getLastRow() > 1) {
+      var vals = pSheet.getRange(1, 1, pSheet.getLastRow(), Math.max(1, pSheet.getLastColumn())).getValues();
+      var hdrs = vals[0].map(function(h) { return String(h || '').trim(); });
+      var idIdx = hdrs.indexOf('ID');
+      if (idIdx < 0) idIdx = 0;
+      var seen = {};
+      for (var r = 1; r < vals.length; r++) {
+        var rid = String(vals[r][idIdx] || '').trim();
+        if (!rid) continue;
+        var uk = rid.toUpperCase();
+        if (seen[uk]) dupList.push(rid + ' (baris ' + (r + 1) + ')');
+        else seen[uk] = true;
+      }
+    }
+    var out = {
+      success: true,
+      connected: true,
+      spreadsheetName: ss.getName(),
+      spreadsheetId: ss.getId(),
+      pendaftaranRows: pSheet ? Math.max(0, pSheet.getLastRow() - 1) : 0,
+      sampahRows: sSheet ? Math.max(0, sSheet.getLastRow() - 1) : 0,
+      maxRegNumber: info.maxNum,
+      nextRegId: 'REG-' + (info.maxNum + 1),
+      duplicateIds: dupList
+    };
+    Logger.log('Diagnosa Spreadsheet: ' + JSON.stringify(out));
+    return out;
+  } catch (err) {
+    var errMsg = 'Error diagnosa Spreadsheet: ' + (err && err.message ? err.message : String(err));
+    Logger.log(errMsg);
+    return { success: false, connected: false, message: errMsg };
   }
 }
 

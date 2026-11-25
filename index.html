@@ -2610,10 +2610,10 @@
                     <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">2. Daftar Mahasiswa pada Surat</h4>
                     <p id="suratSelectedSummaryText" class="text-[11px] text-slate-500 font-mono tabular-nums">0 terpilih dari 0 baris</p>
                   </div>
-                  <div class="flex items-center gap-1.5">
-                    <button type="button" onclick="toggleAllSuratRows(true)" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-700 cursor-pointer">Pilih Semua</button>
-                    <button type="button" onclick="toggleAllSuratRows(false)" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-600 cursor-pointer">Kosongkan</button>
-                    <button type="button" onclick="addManualSuratStudentRow()" class="px-2.5 py-1 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-[11px] font-bold cursor-pointer">+ Baris</button>
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <button type="button" onclick="toggleAllSuratRows(true)" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-700 whitespace-nowrap shrink-0 cursor-pointer">Pilih Semua</button>
+                    <button type="button" onclick="toggleAllSuratRows(false)" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-[11px] font-bold text-slate-600 whitespace-nowrap shrink-0 cursor-pointer">Batal Pilih Semua</button>
+                    <button type="button" onclick="addManualSuratStudentRow()" class="px-2.5 py-1 rounded-lg bg-blue-900 hover:bg-blue-800 text-white text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer">+ Baris</button>
                   </div>
                 </div>
 
@@ -12930,7 +12930,21 @@
             confirmButtonColor: '#1e3a8a'
           });
         } else {
-          Swal.fire('Gagal', (res && res.message) || 'Gagal memperbaiki ID pendaftaran duplikat.', 'error');
+          const errMsg = String((res && res.message) || 'Gagal memperbaiki ID pendaftaran duplikat.');
+          const safeErrMsg = errMsg.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+          if (/fungsi tidak ditemukan/i.test(errMsg)) {
+            Swal.fire({
+              icon: 'warning',
+              title: 'Deployment GAS Perlu Diperbarui',
+              html: `<div class="text-left text-sm text-slate-700 space-y-2">
+                <p>Server GAS saat ini masih menjalankan versi deployment lama (<code>${safeErrMsg}</code>).</p>
+                <p>Buka editor <strong>Google Apps Script</strong>, tempel <code>Code.gs</code> terbaru, lalu klik <strong>Terapkan → Kelola deployment → Edit → Versi baru → Terapkan</strong>.</p>
+              </div>`,
+              confirmButtonColor: '#1e3a8a'
+            });
+          } else {
+            Swal.fire('Gagal', errMsg, 'error');
+          }
         }
       };
 
@@ -17349,9 +17363,13 @@
       renderSuratDosenPreview();
     }
 
+    function isSuratRowChecked(r) {
+      return Boolean(r && r.selected !== false && String(r.selected).toLowerCase() !== 'false');
+    }
+
     function updateSuratSelectedSummary() {
       const total = suratDosenState.rows.length;
-      const selected = suratDosenState.rows.filter(r => r.selected).length;
+      const selected = suratDosenState.rows.filter(isSuratRowChecked).length;
       const el = document.getElementById('suratSelectedSummaryText');
       if (el) el.innerText = `${selected} terpilih dari ${total} mahasiswa`;
     }
@@ -17371,28 +17389,48 @@
         return;
       }
 
-      container.innerHTML = suratDosenState.rows.map((r, idx) => `
-        <div class="p-2.5 rounded-xl border ${r.selected ? 'border-blue-200 bg-blue-50/40' : 'border-slate-200 bg-slate-50/60 opacity-75'} space-y-1.5">
+      const selectedCount = suratDosenState.rows.filter(isSuratRowChecked).length;
+      const canEditRows = !suratDosenState.isLocked && (typeof isSuratCanEditDraft !== 'function' || isSuratCanEditDraft());
+      const unselectedBannerHtml = (selectedCount === 0)
+        ? `
+          <div class="p-2.5 rounded-xl border border-amber-300 bg-amber-50 flex flex-wrap items-center justify-between gap-2 text-[11px] text-amber-950">
+            <span class="font-semibold">Belum ada mahasiswa dicentang (0 dari ${suratDosenState.rows.length}) sehingga tabel pratinjau masih kosong.</span>
+            ${canEditRows ? '<button type="button" onclick="toggleAllSuratRows(true)" class="px-2.5 py-1 rounded-lg bg-amber-800 hover:bg-amber-900 text-white text-[11px] font-bold whitespace-nowrap shrink-0 cursor-pointer">Pilih Semua</button>' : ''}
+          </div>
+        `
+        : '';
+
+      container.innerHTML = unselectedBannerHtml + suratDosenState.rows.map((r, idx) => {
+        const checked = isSuratRowChecked(r);
+        const approvalStatus = String(r.status || 'Pending').trim();
+        const approvalCls = approvalStatus.toLowerCase() === 'disetujui' ? 'text-emerald-700' : 'text-amber-700';
+        const includeText = checked ? 'Masuk Surat' : 'Tidak Masuk Surat';
+        const includeCls = checked ? 'text-blue-800' : 'text-slate-600';
+        return `
+        <div class="p-2.5 rounded-xl border ${checked ? 'border-blue-300 bg-blue-50/35' : 'border-slate-300 bg-white'} space-y-1.5">
           <div class="flex items-center justify-between gap-2">
-            <label class="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer min-w-0">
-              <input type="checkbox" ${r.selected ? 'checked' : ''} onchange="toggleSuratRowSelected(${idx}, this.checked)" class="rounded text-blue-900 cursor-pointer shrink-0">
+            <label class="flex items-center gap-2 text-xs font-bold text-slate-900 cursor-pointer min-w-0">
+              <input type="checkbox" ${checked ? 'checked' : ''} onchange="toggleSuratRowSelected(${idx}, this.checked)" class="rounded text-blue-900 cursor-pointer shrink-0">
               <span class="font-mono tabular-nums text-[11px] text-blue-900">#${idx + 1}</span>
               <span class="truncate">${escapeHtml(r.nama || 'Mahasiswa Baru')}</span>
             </label>
-            <div class="flex items-center gap-1.5 shrink-0">
-              <span class="text-[10px] font-bold ${String(r.status).toLowerCase() === 'disetujui' ? 'text-emerald-700' : 'text-amber-700'}">${escapeHtml(r.status || 'Pending')}</span>
+            <div class="flex items-center gap-1.5 text-[11px] font-semibold shrink-0">
+              <span class="${includeCls}">${includeText}</span>
+              <span class="text-slate-300" aria-hidden="true">&middot;</span>
+              <span class="${approvalCls} font-bold">${escapeHtml(approvalStatus)}</span>
               <button type="button" onclick="removeSuratRow(${idx})" title="Hapus baris" class="text-slate-400 hover:text-rose-600 px-1 cursor-pointer"><i class="fas fa-trash text-[11px]"></i></button>
             </div>
           </div>
           <div class="space-y-1.5">
-            <input type="text" value="${escapeHtml(r.nama)}" oninput="updateSuratRowField(${idx}, 'nama', this.value)" placeholder="Nama Lengkap Mahasiswa" aria-label="Nama Mahasiswa" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-900">
+            <input type="text" value="${escapeHtml(r.nama)}" oninput="updateSuratRowField(${idx}, 'nama', this.value)" placeholder="Nama Lengkap Mahasiswa" aria-label="Nama Mahasiswa" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-900">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-              <input type="text" value="${escapeHtml(r.npm)}" oninput="updateSuratRowField(${idx}, 'npm', this.value)" placeholder="NPM" aria-label="NPM Mahasiswa" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-mono tabular-nums bg-white focus:outline-none focus:ring-1 focus:ring-blue-900">
-              <input type="text" value="${escapeHtml(r.semesterKelas)}" oninput="updateSuratRowField(${idx}, 'semesterKelas', this.value)" placeholder="Semester / Kelas" aria-label="Semester dan Kelas" class="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-900">
+              <input type="text" value="${escapeHtml(r.npm)}" oninput="updateSuratRowField(${idx}, 'npm', this.value)" placeholder="NPM" aria-label="NPM Mahasiswa" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 font-mono tabular-nums bg-white focus:outline-none focus:ring-1 focus:ring-blue-900">
+              <input type="text" value="${escapeHtml(r.semesterKelas)}" oninput="updateSuratRowField(${idx}, 'semesterKelas', this.value)" placeholder="Semester / Kelas" aria-label="Semester dan Kelas" class="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 bg-white focus:outline-none focus:ring-1 focus:ring-blue-900">
             </div>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function getSuratDocumentModel() {
@@ -17418,7 +17456,7 @@
         : 'Formulir Daftar Hadir Ujian Susulan';
 
       const selectedRows = suratDosenState.rows
-        .filter(r => r.selected)
+        .filter(isSuratRowChecked)
         .map(r => ({
           nama: String(r.nama || '').trim(),
           npm: String(r.npm || '').trim(),
@@ -18024,6 +18062,9 @@
       if (suratDosenState.rows.length === 0 && (suratDosenState.dosen || suratDosenState.mataKuliah) && !suratDosenState.currentRecordId) {
         rebuildSuratStudentRowsFromFilters();
       } else {
+        if (!suratDosenState.currentRecordId && suratDosenState.rows.length > 0 && suratDosenState.rows.every(r => !isSuratRowChecked(r))) {
+          suratDosenState.rows.forEach(r => { r.selected = true; });
+        }
         renderSuratStudentRowsChecklist();
         renderSuratDosenPreview();
       }
@@ -18866,6 +18907,18 @@ ${extraDocRels}
       const nomorSurat = String(rec['Nomor Surat'] || rec.nomorSurat || '').trim();
       const kodeArsip = String(rec['Kode Arsip'] || rec.kodeArsip || '').trim();
 
+      const parsedRows = (Array.isArray(rows) ? rows : []).map((x, idx) => ({
+        uid: (x && x.uid) || `${id}_${idx}`,
+        selected: x ? (x.selected !== false && String(x.selected).toLowerCase() !== 'false') : true,
+        nama: String((x && x.nama) || ''),
+        npm: String((x && x.npm) || ''),
+        semesterKelas: String((x && x.semesterKelas) || ''),
+        status: String((x && x.status) || 'Disetujui')
+      }));
+      if (parsedRows.length > 0 && parsedRows.every(x => !x.selected)) {
+        parsedRows.forEach(x => { x.selected = true; });
+      }
+
       return {
         id,
         nomorSurat,
@@ -18883,7 +18936,7 @@ ${extraDocRels}
         tenggatNilai: String(rec['Tenggat Nilai'] || rec.tenggatNilai || '1 (satu) minggu').trim(),
         kaprodiNama: String(rec['Kaprodi Nama'] || rec.kaprodiNama || getSuratProdiMeta(kodeProdi).kaprodi).trim(),
         kaprodiNikNidn: String(rec['Kaprodi NIK'] || rec.kaprodiNikNidn || getSuratProdiMeta(kodeProdi).nikNidn).trim(),
-        rows: Array.isArray(rows) ? rows : [],
+        rows: parsedRows,
         statusVerifikasi: status,
         isLocked,
         parafSummary: String(rec['Paraf SekProdi'] || rec.parafSummary || '').trim(),
@@ -18945,7 +18998,7 @@ ${extraDocRels}
       suratDosenState.minRows = meta.minRows !== undefined ? Number(meta.minRows) : 5;
       suratDosenState.rows = rec.rows.map((r, idx) => ({
         uid: r.uid || `${rec.id}_${idx}`,
-        selected: r.selected !== false,
+        selected: isSuratRowChecked(r),
         nama: String(r.nama || ''),
         npm: String(r.npm || ''),
         semesterKelas: String(r.semesterKelas || ''),
@@ -19038,7 +19091,7 @@ ${extraDocRels}
       }
 
       const model = getSuratDocumentModel();
-      const selectedCount = suratDosenState.rows.filter(r => r.selected).length;
+      const selectedCount = suratDosenState.rows.filter(isSuratRowChecked).length;
       const confirmRes = await Swal.fire({
         icon: 'question',
         title: suratDosenState.currentRecordId ? 'Simpan Ulang & Ajukan Verifikasi?' : 'Konfirmasi Form Isian Selesai?',
@@ -19214,7 +19267,7 @@ ${extraDocRels}
 
       tbody.innerHTML = filtered.map(r => {
         const isActive = r.id === suratDosenState.currentRecordId;
-        const mhsCount = r.rows.filter(x => x.selected !== false && (x.nama || x.npm)).length;
+        const mhsCount = r.rows.filter(x => isSuratRowChecked(x) && (x.nama || x.npm)).length;
         const canParaf = (isSuratRoleSekprodi() || isSuratMasterRole()) && r.statusVerifikasi === 'Menunggu Paraf Sek.Prodi';
         const canTtd = (isSuratRoleKaprodi() || isSuratMasterRole()) && r.statusVerifikasi === 'Menunggu TTD KaProdi';
         const canReopen = isSuratMasterRole() && r.isLocked;
@@ -19323,7 +19376,7 @@ ${extraDocRels}
       }
 
       const model = getSuratDocumentModel();
-      const selectedRows = suratDosenState.rows.filter(r => r.selected !== false && (r.nama || r.npm));
+      const selectedRows = suratDosenState.rows.filter(r => isSuratRowChecked(r) && (r.nama || r.npm));
       panel.innerHTML = `
         <div class="flex items-center justify-between border-b border-slate-100 pb-2">
           <h4 class="text-xs font-extrabold uppercase tracking-wider text-slate-700">Ringkasan Verifikasi Surat</h4>
