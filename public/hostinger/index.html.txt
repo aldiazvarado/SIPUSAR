@@ -395,6 +395,20 @@
       return candidate;
     }
 
+    function getNextLocalJadwalBaseNum() {
+      const list = (typeof appData === 'object' && appData && Array.isArray(appData.jadwal)) ? appData.jadwal : [];
+      let maxNum = 1000;
+      list.forEach(item => {
+        if (!item) return;
+        const m = String(item.ID || item.id || '').trim().match(/^JDW-(\d+)/i);
+        if (m) {
+          const n = parseInt(m[1], 10);
+          if (!Number.isNaN(n) && n > maxNum) maxNum = n;
+        }
+      });
+      return maxNum + 1;
+    }
+
     function findDuplicatePendaftaranIdsClient() {
       const list = (typeof appData === 'object' && appData && Array.isArray(appData.pendaftaran)) ? appData.pendaftaran : [];
       const trashIds = new Set();
@@ -579,7 +593,7 @@
         const payload = isPayloadObj ? args[0] : (args && args[1]);
         if (payload) {
           appData.jadwal = appData.jadwal || [];
-          const baseNum = 1000 + (appData.jadwal.length + 1);
+          const baseNum = getNextLocalJadwalBaseNum();
           const editTargetId = !isPayloadObj ? (args && args[0]) : '';
           const baseId = payload.id || editTargetId || ('JDW-' + baseNum);
 
@@ -8645,8 +8659,12 @@
         return unscheduled.length === 0;
       }
 
-      // Saring hanya pendaftar yang masih memiliki mata kuliah belum terjadwal
-      let availablePendaftar = pendaftaranList.filter(p => !isPendaftaranAlreadyScheduled(p));
+      // Saring hanya pendaftar berstatus Disetujui / Pending yang masih memiliki mata kuliah belum terjadwal
+      let availablePendaftar = pendaftaranList.filter(p => {
+        const st = String(p['Status Persetujuan'] || '').trim().toLowerCase();
+        if (st === 'ditolak') return false;
+        return !isPendaftaranAlreadyScheduled(p);
+      });
 
       // Jika sedang mengedit jadwal yang sudah ada, pastikan pendaftar jadwal ini tetap disertakan (pencocokan bertingkat bebas tabrakan NPM)
       let matchedPendaftarForEdit = null;
@@ -9056,14 +9074,17 @@
       const select = document.getElementById('jadwalSelectPendaftar');
       const opt = select ? select.options[select.selectedIndex] : null;
 
-      // 1. Prioritas cari langsung dari objek appData.pendaftaran
-      let data = (appData.pendaftaran || []).find(p => String(p.ID || p.id).trim() === String(pendaftarId).trim());
-      
-      // 2. Fallback baca dari atribut data-json jika ada
-      if (!data && opt && opt.getAttribute('data-json')) {
+      // 1. Prioritas baca dari atribut data-json pada opsi yang dipilih agar tepat baris meski ada ID lama kembar
+      let data = null;
+      if (opt && String(opt.value || '').trim() === String(pendaftarId).trim() && opt.getAttribute('data-json')) {
         try {
           data = JSON.parse(opt.getAttribute('data-json'));
         } catch(e) {}
+      }
+
+      // 2. Fallback cari langsung dari objek appData.pendaftaran
+      if (!data) {
+        data = (appData.pendaftaran || []).find(p => String(p.ID || p.id).trim() === String(pendaftarId).trim());
       }
 
       if (!data) {
@@ -9247,7 +9268,7 @@
 
     // Optimistic update lokal
     appData.jadwal = appData.jadwal || [];
-    const baseNum = 1000 + (appData.jadwal.length + 1);
+    const baseNum = getNextLocalJadwalBaseNum();
     const baseId = editId || ('JDW-' + baseNum);
 
     if (items.length > 1 && !editId) {

@@ -2206,7 +2206,47 @@ function repairDuplicatePendaftaranIds_(ss, opts) {
     }
 
     if (changes.length > 0) {
+      // Sinkronkan tag [ID: REG-...] pada Jadwal_Ujian apabila jadwal milik baris duplikat sudah terlanjur dibuat
+      try {
+        var jSheet = ss.getSheetByName('Jadwal_Ujian');
+        if (jSheet && jSheet.getLastRow() > 1) {
+          var jVals = jSheet.getDataRange().getValues();
+          var jHeaders = jVals[0].map(function(h) { return String(h || '').trim(); });
+          var jKetCol = 0;
+          for (var jh = 0; jh < jHeaders.length; jh++) {
+            if (jHeaders[jh] === 'Keterangan') {
+              jKetCol = jh + 1;
+              break;
+            }
+          }
+          if (jKetCol > 0) {
+            var jUpdated = false;
+            for (var jr = 1; jr < jVals.length; jr++) {
+              var rawKet = String(jVals[jr][jKetCol - 1] || '');
+              if (!rawKet) continue;
+              var updatedKet = rawKet;
+              for (var ci = 0; ci < changes.length; ci++) {
+                var ch = changes[ci];
+                if (!ch.oldId || ch.oldId === '(Kosong)') continue;
+                var hasOldTag = updatedKet.toUpperCase().indexOf('[ID: ' + ch.oldId.toUpperCase() + ']') !== -1;
+                var matchesStudent = (ch.npm && updatedKet.indexOf(ch.npm) !== -1) ||
+                                     (ch.nama && updatedKet.toLowerCase().indexOf(ch.nama.toLowerCase()) !== -1);
+                if (hasOldTag && matchesStudent) {
+                  updatedKet = updatedKet.replace(new RegExp('\\[ID:\\s*' + ch.oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\]', 'gi'), '[ID: ' + ch.newId + ']');
+                }
+              }
+              if (updatedKet !== rawKet) {
+                jSheet.getRange(jr + 1, jKetCol).setValue(updatedKet);
+                jUpdated = true;
+              }
+            }
+            if (jUpdated) invalidateCache('Jadwal_Ujian');
+          }
+        }
+      } catch (jSyncErr) {}
+
       SpreadsheetApp.flush();
+      try { invalidateCache('Pendaftaran'); } catch (icErr) {}
       var actorMeta = resolveActorMeta_(opts.actor, opts.role, 'System', 'System');
       var detailText = changes.map(function(c) {
         return (c.oldId + ' -> ' + c.newId + (c.nama ? ' (' + c.nama + ')' : ''));
