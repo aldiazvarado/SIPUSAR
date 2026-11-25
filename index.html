@@ -2621,14 +2621,14 @@
 
                 <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
                   <label class="flex items-center gap-2 font-semibold text-slate-700 cursor-pointer select-none">
-                    <input type="checkbox" id="suratPadMinRowsCheckbox" checked onchange="suratDosenState.padToMinRows = this.checked; renderSuratDosenPreview()" class="rounded text-blue-900 cursor-pointer">
+                    <input type="checkbox" id="suratPadMinRowsCheckbox" onchange="suratDosenState.padToMinRows = this.checked; renderSuratDosenPreview()" class="rounded text-blue-900 cursor-pointer">
                     <span>Sediakan baris cadangan minimal</span>
                   </label>
-                  <select id="suratMinRowsSelect" onchange="suratDosenState.minRows = Number(this.value || 5); renderSuratDosenPreview()" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold bg-white">
-                    <option value="5" selected>5 Baris</option>
+                  <select id="suratMinRowsSelect" onchange="suratDosenState.minRows = Number(this.value || 0); renderSuratDosenPreview()" class="border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold bg-white">
+                    <option value="0" selected>Sesuai Terpilih</option>
+                    <option value="5">5 Baris</option>
                     <option value="8">8 Baris</option>
                     <option value="10">10 Baris</option>
-                    <option value="0">Sesuai Terpilih</option>
                   </select>
                 </div>
               </div>
@@ -16827,8 +16827,8 @@
       kaprodiNama: SURAT_PRODI_OFFICIAL_META.MNJ.kaprodi,
       kaprodiNikNidn: SURAT_PRODI_OFFICIAL_META.MNJ.nikNidn,
       tenggatNilai: '1 (satu) minggu',
-      padToMinRows: true,
-      minRows: 5,
+      padToMinRows: false,
+      minRows: 0,
       rows: []
     };
 
@@ -17300,8 +17300,8 @@
       suratDosenState.kodeArsipTahun = todayYear;
       suratDosenState.tanggalMasehi = todayIso;
       suratDosenState.tanggalHijriah = formatTanggalHijriahSurat(todayIso);
-      suratDosenState.padToMinRows = true;
-      suratDosenState.minRows = 5;
+      suratDosenState.padToMinRows = false;
+      suratDosenState.minRows = 0;
       suratDosenState.rows = [];
       syncSuratProdiDefaults('MNJ');
       renderSuratDosenWorkspace();
@@ -17581,7 +17581,7 @@
       const p2DosenSigStyle = forWord ? "margin-left: 10.65cm; margin-top: 20pt; font-size: 11pt; line-height: 1.28;" : "margin-left: 431px; margin-top: 34px; font-size: 11pt; line-height: 1.28;";
 
       const parafImgHtml = (m.parafImage && String(m.parafImage).startsWith('data:image/'))
-        ? `<img src="${m.parafImage}" alt="Paraf Sek.Prodi" style="position: absolute; left: -44px; bottom: 2px; max-height: 36px; max-width: 42px; width: auto; height: auto; object-fit: contain; pointer-events: none;" />`
+        ? `<img src="${m.parafImage}" alt="Paraf Sek.Prodi" style="position: absolute; left: -22px; top: 50%; transform: translateY(-50%); width: 0.5cm; height: 0.5cm; max-width: 0.5cm; max-height: 0.5cm; object-fit: contain; pointer-events: none;" />`
         : '';
       const ttdImgHtml = (m.ttdImage && String(m.ttdImage).startsWith('data:image/'))
         ? `<img src="${m.ttdImage}" alt="TTD KaProdi" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); max-height: 62px; max-width: 195px; width: auto; height: auto; object-fit: contain; pointer-events: none;" />`
@@ -17589,7 +17589,7 @@
 
       const kaprodiSpacerHtml = forWord
         ? '<table style="border-collapse:collapse;"><tr><td style="height: 50pt; mso-height-rule: exactly; font-size: 1pt; line-height: 1pt;">&nbsp;</td></tr></table>'
-        : `<div style="position: relative; height: 66px; overflow: visible;">${parafImgHtml}${ttdImgHtml}</div>`;
+        : `<div style="position: relative; height: 66px; overflow: visible;">${ttdImgHtml}</div>`;
       const dosenSpacerHtml = forWord
         ? '<table style="border-collapse:collapse;"><tr><td style="height: 73pt; mso-height-rule: exactly; font-size: 1pt; line-height: 1pt;">&nbsp;</td></tr></table>'
         : '<div style="height: 98px;"></div>';
@@ -17651,7 +17651,7 @@
                     </table>
                   </td>
                   <td style="width: 36%; vertical-align: top; text-align: left; padding-left: 4px; font-size: 12pt; white-space: nowrap;">
-                    <div>Bogor, ${escapeHtml(m.tanggalMasehiText)}</div>
+                    <div>Bogor, <span style="text-decoration: underline;">${escapeHtml(m.tanggalMasehiText)}</span></div>
                     <div style="padding-left: 44px;">${escapeHtml(m.tanggalHijriahText)}</div>
                   </td>
                 </tr>
@@ -17702,8 +17702,11 @@
               <div style="${p1KaprodiStyle}">
                 <div>Ketua Program Studi ${escapeHtml(m.prodiNama)},</div>
                 ${kaprodiSpacerHtml}
-                <div style="font-weight: 700; text-decoration: underline;">${escapeHtml(m.kaprodiNama)}</div>
-                <div>NIK/NIDN: ${escapeHtml(m.kaprodiNikNidn)}</div>
+                <div style="position: relative; overflow: visible;">
+                  ${forWord ? '' : parafImgHtml}
+                  <div style="font-weight: 700; text-decoration: underline;">${escapeHtml(m.kaprodiNama)}</div>
+                  <div>NIK/NIDN: ${escapeHtml(m.kaprodiNikNidn)}</div>
+                </div>
               </div>
 
               <div style="${p1TembusanStyle}">
@@ -18471,7 +18474,7 @@
           label: 'Nomor',
           valRuns: buildOoxmlRun(m.nomorSurat, { sz: 24 }),
           c4: buildOoxmlParagraph(buildOoxmlRun('Bogor,', { sz: 24 }), { after: 0 }),
-          c5: buildOoxmlParagraph(buildOoxmlRun(m.tanggalMasehiText, { sz: 24 }), { after: 0 })
+          c5: buildOoxmlParagraph(buildOoxmlRun(m.tanggalMasehiText, { sz: 24, underline: true }), { after: 0 })
         },
         {
           label: 'Lampiran',
@@ -18526,24 +18529,32 @@
       const hasTtdImg = Boolean(m.ttdImage && String(m.ttdImage).startsWith('data:image/'));
       const parafBytes = hasParafImg ? base64DataUriToUint8Array(m.parafImage) : null;
       const ttdBytes = hasTtdImg ? base64DataUriToUint8Array(m.ttdImage) : null;
-      const parafEmu = parafBytes ? fitPngEmuWithin(parafBytes, 390000, 360000) : null;
+      const parafEmu = parafBytes ? fitPngEmuWithin(parafBytes, 180000, 180000) : null;
       const ttdEmu = ttdBytes ? fitPngEmuWithin(ttdBytes, 1750000, 620000) : null;
 
-      const kaprodiParafCellXml = buildOoxmlCell(
-        parafEmu
-          ? buildOoxmlParagraph(buildOoxmlDrawingInline('rIdImgParaf', parafEmu.cx, parafEmu.cy, 4, 'Paraf Sek.Prodi'), { jc: 'right', before: 0, after: 20, line: 220, lineRule: 'auto' })
-          : buildOoxmlParagraph('', { after: 0 }),
-        560,
-        { vAlign: 'bottom', padV: 0, padH: 20 }
-      );
       const kaprodiTtdCellXml = buildOoxmlCell(
         ttdEmu
           ? buildOoxmlParagraph(buildOoxmlDrawingInline('rIdImgTtd', ttdEmu.cx, ttdEmu.cy, 5, 'TTD KaProdi'), { jc: 'left', before: 0, after: 0, line: 240, lineRule: 'auto' })
           : buildOoxmlParagraph('', { after: 0 }),
         4500,
-        { vAlign: 'center', padV: 0, padH: 20 }
+        { vAlign: 'center', padV: 0, padH: 0 }
       );
-      const kaprodiSignatureOoxmlTable = `<w:tbl><w:tblPr><w:tblW w:w="5060" w:type="dxa"/><w:tblInd w:w="5080" w:type="dxa"/>${buildOoxmlBordersXml(false)}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="560"/><w:gridCol w:w="4500"/></w:tblGrid><w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="860" w:hRule="exact"/></w:trPr>${kaprodiParafCellXml}${kaprodiTtdCellXml}</w:tr></w:tbl>`;
+      const kaprodiSignatureOoxmlTable = `<w:tbl><w:tblPr><w:tblW w:w="4500" w:type="dxa"/><w:tblInd w:w="5660" w:type="dxa"/>${buildOoxmlBordersXml(false)}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="4500"/></w:tblGrid><w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="860" w:hRule="exact"/></w:trPr>${kaprodiTtdCellXml}</w:tr></w:tbl>`;
+
+      const kaprodiParafSideCellXml = buildOoxmlCell(
+        parafEmu
+          ? buildOoxmlParagraph(buildOoxmlDrawingInline('rIdImgParaf', parafEmu.cx, parafEmu.cy, 4, 'Paraf Sek.Prodi'), { jc: 'right', before: 0, after: 0, line: 220, lineRule: 'auto' })
+          : buildOoxmlParagraph('', { after: 0 }),
+        560,
+        { vAlign: 'center', padV: 0, padH: 60 }
+      );
+      const kaprodiNameNikCellXml = buildOoxmlCell(
+        buildOoxmlParagraph(buildOoxmlRun(m.kaprodiNama, { sz: 24, bold: true, underline: true }), { before: 0, after: 0 }) +
+        buildOoxmlParagraph(buildOoxmlRun(`NIK/NIDN: ${m.kaprodiNikNidn}`, { sz: 24 }), { before: 0, after: 0 }),
+        4800,
+        { vAlign: 'center', padV: 0, padH: 0 }
+      );
+      const kaprodiNameNikOoxmlTable = `<w:tbl><w:tblPr><w:tblW w:w="5360" w:type="dxa"/><w:tblInd w:w="5100" w:type="dxa"/>${buildOoxmlBordersXml(false)}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid><w:gridCol w:w="560"/><w:gridCol w:w="4800"/></w:tblGrid><w:tr><w:trPr><w:cantSplit/></w:trPr>${kaprodiParafSideCellXml}${kaprodiNameNikCellXml}</w:tr></w:tbl>`;
 
       // Section 1 body paragraphs
       const page1BodyXml = [
@@ -18571,8 +18582,8 @@
         buildOoxmlParagraph(buildOoxmlRun('Wassalamualaikum Wr.Wb.', { sz: 28, font: cursiveFont, italic: true }), { indLeft: 2320, after: 180 }),
         buildOoxmlParagraph(buildOoxmlRun(`Ketua Program Studi ${m.prodiNama},`, { sz: 24 }), { indLeft: 5660, after: 20 }),
         kaprodiSignatureOoxmlTable,
-        buildOoxmlParagraph(buildOoxmlRun(m.kaprodiNama, { sz: 24, bold: true, underline: true }), { indLeft: 5660, before: 40, after: 0 }),
-        buildOoxmlParagraph(buildOoxmlRun(`NIK/NIDN: ${m.kaprodiNikNidn}`, { sz: 24 }), { indLeft: 5660, after: 40 }),
+        kaprodiNameNikOoxmlTable,
+        buildOoxmlParagraph('', { before: 0, after: 40, line: 40, lineRule: 'exact' }),
         buildOoxmlParagraph(buildOoxmlRun('Tembusan Yth:', { sz: 22 }), { indLeft: 700, after: 0 }),
         buildOoxmlParagraph(buildOoxmlRun('1.  Arsip', { sz: 22 }), { indLeft: 700, after: 0 }),
         `<w:p><w:pPr><w:spacing w:before="0" w:after="0"/><w:sectPr><w:type w:val="nextPage"/><w:headerReference w:type="default" r:id="rIdHdr1"/><w:footerReference w:type="default" r:id="rIdFtr1"/><w:pgSz w:w="12240" w:h="18720"/><w:pgMar w:top="2440" w:right="1120" w:bottom="1120" w:left="720" w:header="60" w:footer="260" w:gutter="0"/></w:sectPr></w:pPr></w:p>`
@@ -18994,8 +19005,8 @@ ${extraDocRels}
       suratDosenState.kaprodiNama = rec.kaprodiNama;
       suratDosenState.kaprodiNikNidn = rec.kaprodiNikNidn;
       suratDosenState.tenggatNilai = rec.tenggatNilai;
-      suratDosenState.padToMinRows = meta.padToMinRows !== undefined ? Boolean(meta.padToMinRows) : true;
-      suratDosenState.minRows = meta.minRows !== undefined ? Number(meta.minRows) : 5;
+      suratDosenState.padToMinRows = false;
+      suratDosenState.minRows = 0;
       suratDosenState.rows = rec.rows.map((r, idx) => ({
         uid: r.uid || `${rec.id}_${idx}`,
         selected: isSuratRowChecked(r),
@@ -19145,7 +19156,7 @@ ${extraDocRels}
           kodeArsipXX: suratDosenState.kodeArsipXX || '',
           kodeArsipTahun: suratDosenState.kodeArsipTahun || getSuratDefaultYear(),
           padToMinRows: Boolean(suratDosenState.padToMinRows),
-          minRows: Number(suratDosenState.minRows || 5)
+          minRows: Number(suratDosenState.minRows ?? 0)
         }
       };
 
