@@ -67,6 +67,7 @@ function handleApiRequest(action, args) {
     bulkRestorePendaftaran: bulkRestorePendaftaran,
     permanentDeletePendaftaran: permanentDeletePendaftaran,
     emptySampahPendaftaran: emptySampahPendaftaran,
+    repairDuplicatePendaftaranIds: repairDuplicatePendaftaranIds,
     addPeriode: addPeriode,
     updatePeriode: updatePeriode,
     deletePeriode: deletePeriode,
@@ -1352,6 +1353,16 @@ function getInitialData(userRole, username, userProdi) {
         }
       ];
     }
+    try {
+      var ssInitReg = getActiveSpreadsheetSafe();
+      if (ssInitReg) {
+        repairDuplicatePendaftaranIds_(ssInitReg, {
+          silentIfClean: true,
+          actor: username || 'System',
+          role: userRole || 'System'
+        });
+      }
+    } catch (dupFixErr) {}
     var pendaftaran = [];
     try { pendaftaran = getSheetData('Pendaftaran'); } catch(e) {}
     if (pendaftaran && pendaftaran.length > 0) {
@@ -2026,6 +2037,217 @@ function validateNoDuplicatePendaftaranServer(sheet, payload, excludeId) {
   return { ok: true };
 }
 
+function extractRegNumber_(idStr) {
+  var m = String(idStr || '').trim().match(/^REG-(\d+)$/i);
+  if (!m) return 0;
+  var n = parseInt(m[1], 10);
+  return isNaN(n) ? 0 : n;
+}
+
+function getUsedAndMaxPendaftaranIds_(ss) {
+  var usedMap = {};
+  var maxNum = 1000;
+  if (!ss) return { maxNum: maxNum, usedMap: usedMap };
+
+  var sheetNames = ['Pendaftaran', 'Sampah_Pendaftaran'];
+  for (var s = 0; s < sheetNames.length; s++) {
+    var sh = ss.getSheetByName(sheetNames[s]);
+    if (!sh) continue;
+    var lastRow = sh.getLastRow();
+    if (lastRow <= 1) continue;
+    var lastCol = Math.max(1, sh.getLastColumn());
+    var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+    var idCol = 1;
+    for (var h = 0; h < headers.length; h++) {
+      if (String(headers[h] || '').trim().toUpperCase() === 'ID') {
+        idCol = h + 1;
+        break;
+      }
+    }
+    var colVals = sh.getRange(2, idCol, lastRow - 1, 1).getValues();
+    for (var r = 0; r < colVals.length; r++) {
+      var rawId = String(colVals[r][0] || '').trim();
+      if (!rawId) continue;
+      usedMap[rawId.toUpperCase()] = true;
+      var num = extractRegNumber_(rawId);
+      if (num > maxNum) maxNum = num;
+    }
+  }
+  return { maxNum: maxNum, usedMap: usedMap };
+}
+
+function getNextPendaftaranId_(ss) {
+  var info = getUsedAndMaxPendaftaranIds_(ss);
+  var candidateNum = info.maxNum + 1;
+  var candidateId = 'REG-' + candidateNum;
+  while (info.usedMap[candidateId.toUpperCase()]) {
+    candidateNum++;
+    candidateId = 'REG-' + candidateNum;
+  }
+  return candidateId;
+}
+
+function repairDuplicatePendaftaranIds_(ss, opts) {
+  opts = opts || {};
+  if (!ss) return { success: false, repairedCount: 0, changes: [], message: 'Spreadsheet tidak tersedia.' };
+  var sheet = ss.getSheetByName('Pendaftaran');
+  if (!sheet) return { success: true, repairedCount: 0, changes: [], message: 'Sheet Pendaftaran belum ada.' };
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= 1) return { success: true, repairedCount: 0, changes: [], message: 'Belum ada data pendaftaran.' };
+
+  var lastCol = Math.max(1, sheet.getLastColumn());
+  var values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
+  var headers = values[0].map(function(h) { return String(h || '').trim(); });
+  var headerMap = {};
+  for (var h = 0; h < headers.length; h++) {
+    if (headers[h]) headerMap[headers[h]] = h + 1;
+  }
+  var idCol = headerMap['ID'] || 1;
+  var npmCol = headerMap['NPM'] || headerMap['NIM'] || 5;
+  var namaCol = headerMap['Nama Mahasiswa'] || 6;
+  var matkulCol = headerMap['Mata Kuliah'] || 11;
+
+  // Hitung maxNum dan ID terpakai di Sampah_Pendaftaran + Pendaftaran terlebih dahulu
+  var sampahIds = {};
+  var maxNum = 1000;
+  var sampahSheet = ss.getSheetByName('Sampah_Pendaftaran');
+  if (sampahSheet && sampahSheet.getLastRow() > 1) {
+    var sLastRow = sampahSheet.getLastRow();
+    var sHeaders = sampahSheet.getRange(1, 1, 1, Math.max(1, sampahSheet.getLastColumn())).getValues()[0];
+    var sIdCol = 1;
+    for (var shIdx = 0; shIdx < sHeaders.length; shIdx++) {
+      if (String(sHeaders[shIdx] || '').trim().toUpperCase() === 'ID') {
+        sIdCol = shIdx + 1;
+        break;
+      }
+    }
+    var sVals = sampahSheet.getRange(2, sIdCol, sLastRow - 1, 1).getValues();
+    for (var sr = 0; sr < sVals.length; sr++) {
+      var sid = String(sVals[sr][0] || '').trim();
+      if (!sid) continue;
+      sampahIds[sid.toUpperCase()] = true;
+      var sNum = extractRegNumber_(sid);
+      if (sNum > maxNum) maxNum = sNum;
+    }
+  }
+
+  for (var i = 1; i < values.length; i++) {
+    var scanId = String(values[i][idCol - 1] || '').trim();
+    var scanNum = extractRegNumber_(scanId);
+    if (scanNum > maxNum) maxNum = scanNum;
+  }
+
+  // Pindai cepat untuk mendeteksi apakah ada baris duplikat atau kosong
+  var seenIds = {};
+  var pendingIndices = [];
+  for (var r = 1; r < values.length; r++) {
+    var row = values[r];
+    var rawId = String(row[idCol - 1] || '').trim();
+    var rowNpm = String(row[npmCol - 1] || '').trim();
+    var rowNama = String(row[namaCol - 1] || '').trim();
+    var rowMatkul = String(row[matkulCol - 1] || '').trim();
+    // Abaikan baris kosong sepenuhnya
+    if (!rawId && !rowNpm && !rowNama && !rowMatkul) continue;
+
+    var upperId = rawId.toUpperCase();
+    if (!rawId || seenIds[upperId] || sampahIds[upperId]) {
+      pendingIndices.push(r);
+    } else {
+      seenIds[upperId] = true;
+    }
+  }
+
+  if (pendingIndices.length === 0) {
+    return { success: true, repairedCount: 0, changes: [], message: 'Seluruh ID Pendaftaran sudah unik.' };
+  }
+
+  var runRepair = function() {
+    var changes = [];
+    // Re-read di dalam lock jika dipanggil di luar lock
+    var freshLastRow = sheet.getLastRow();
+    var freshLastCol = Math.max(1, sheet.getLastColumn());
+    var freshValues = sheet.getRange(1, 1, freshLastRow, freshLastCol).getValues();
+    var freshSeen = {};
+    var freshMax = maxNum;
+    for (var fi = 1; fi < freshValues.length; fi++) {
+      var fId = String(freshValues[fi][idCol - 1] || '').trim();
+      var fNum = extractRegNumber_(fId);
+      if (fNum > freshMax) freshMax = fNum;
+    }
+
+    for (var fr = 1; fr < freshValues.length; fr++) {
+      var fRow = freshValues[fr];
+      var curId = String(fRow[idCol - 1] || '').trim();
+      var fNpm = String(fRow[npmCol - 1] || '').trim();
+      var fNama = String(fRow[namaCol - 1] || '').trim();
+      var fMatkul = String(fRow[matkulCol - 1] || '').trim();
+      if (!curId && !fNpm && !fNama && !fMatkul) continue;
+
+      var curUpper = curId.toUpperCase();
+      if (!curId || freshSeen[curUpper] || sampahIds[curUpper]) {
+        freshMax++;
+        var nextId = 'REG-' + freshMax;
+        while (freshSeen[nextId.toUpperCase()] || sampahIds[nextId.toUpperCase()]) {
+          freshMax++;
+          nextId = 'REG-' + freshMax;
+        }
+        freshSeen[nextId.toUpperCase()] = true;
+        sheet.getRange(fr + 1, idCol).setValue(nextId);
+        changes.push({
+          row: fr + 1,
+          oldId: curId || '(Kosong)',
+          newId: nextId,
+          nama: fNama,
+          npm: fNpm
+        });
+      } else {
+        freshSeen[curUpper] = true;
+      }
+    }
+
+    if (changes.length > 0) {
+      SpreadsheetApp.flush();
+      var actorMeta = resolveActorMeta_(opts.actor, opts.role, 'System', 'System');
+      var detailText = changes.map(function(c) {
+        return (c.oldId + ' -> ' + c.newId + (c.nama ? ' (' + c.nama + ')' : ''));
+      }).join('; ');
+      bumpSyncVersion(actorMeta.actor, 'Perbaikan ' + changes.length + ' ID Pendaftaran duplikat');
+      addActivityLog(actorMeta.actor, 'Perbaiki ID Duplikat', changes.length + ' berkas', 'Deduplikasi ID otomatis: ' + detailText, actorMeta.role);
+    }
+
+    return {
+      success: true,
+      repairedCount: changes.length,
+      changes: changes,
+      message: changes.length > 0
+        ? ('Berhasil memperbaiki ' + changes.length + ' ID Pendaftaran duplikat ke nomor urut terbaru.')
+        : 'Seluruh ID Pendaftaran sudah unik.'
+    };
+  };
+
+  if (opts.skipLock) {
+    return runRepair();
+  }
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+    return runRepair();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function repairDuplicatePendaftaranIds(actor, userRole) {
+  try {
+    var ss = getActiveSpreadsheetSafe();
+    if (!ss) return { success: false, message: 'Spreadsheet tidak terhubung.' };
+    return repairDuplicatePendaftaranIds_(ss, { actor: actor || 'Admin', role: userRole || 'Admin TU' });
+  } catch (err) {
+    Logger.log('Error repairDuplicatePendaftaranIds: ' + err.message);
+    return { success: false, message: 'Gagal memperbaiki ID duplikat: ' + err.message };
+  }
+}
+
 function addPendaftaran(payload) {
   if (!payload || typeof payload !== 'object') {
     return { success: false, message: 'Payload pendaftaran kosong atau tidak valid.' };
@@ -2039,7 +2261,7 @@ function addPendaftaran(payload) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = getActiveSpreadsheetSafe() || SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Pendaftaran');
     if (!sheet) sheet = getOrCreateSheet(ss, 'Pendaftaran');
 
@@ -2061,8 +2283,19 @@ function addPendaftaran(payload) {
       headerMap['Kode Prodi'] = nextCol2;
     }
 
-    var lastRow = sheet.getLastRow();
-    var newId = payload.id || payload.ID || ('REG-' + (1000 + (lastRow > 1 ? lastRow : 1)));
+    var idInfo = getUsedAndMaxPendaftaranIds_(ss);
+    var requestedId = String(payload.id || payload.ID || '').trim();
+    var newId = '';
+    if (requestedId && !idInfo.usedMap[requestedId.toUpperCase()]) {
+      newId = requestedId;
+    } else {
+      var nextNum = idInfo.maxNum + 1;
+      newId = 'REG-' + nextNum;
+      while (idInfo.usedMap[newId.toUpperCase()]) {
+        nextNum++;
+        newId = 'REG-' + nextNum;
+      }
+    }
     var nowStr = formatDateToString(new Date());
 
     // [AUTO UPLOAD GOOGLE DRIVE]: Cek jika bukti foto dikirim dalam format base64
@@ -2427,11 +2660,17 @@ function restoreSinglePendaftaranRow_(ss, pendaftaranSheet, sampahSheet, id, act
     ? pValues[0].map(function(h) { return String(h || '').trim(); })
     : ["ID", "Tanggal", "Tahun Akademik", "Semester", "NPM", "Nama Mahasiswa", "Kode Prodi", "Program Studi", "Kelas", "Kategori Kelas", "Mata Kuliah", "Dosen Pengampu", "Jenis Layanan", "Alasan", "Bukti Foto", "Status Jadwal", "Nominal", "Status Pembayaran", "Status Persetujuan"];
 
-  // Cek bentrok ID aktif
+  // Cek bentrok ID aktif; bila terlanjur dipakai akibat duplikat lama, tetapkan ID baru MAX + 1
+  var finalRestoreId = String(id || '').trim();
+  var hasIdCollision = false;
   for (var pIdx = 1; pIdx < pValues.length; pIdx++) {
-    if (String(pValues[pIdx][0]).trim() === String(id).trim()) {
-      return { success: false, code: 'DUPLICATE_ID', message: 'Gagal memulihkan: ID berkas ' + id + ' sudah ada di daftar Pendaftaran aktif.' };
+    if (String(pValues[pIdx][0]).trim().toUpperCase() === finalRestoreId.toUpperCase()) {
+      hasIdCollision = true;
+      break;
     }
+  }
+  if (!finalRestoreId || hasIdCollision) {
+    finalRestoreId = getNextPendaftaranId_(ss);
   }
 
   var objRaw = {};
@@ -2441,11 +2680,12 @@ function restoreSinglePendaftaranRow_(ss, pendaftaranSheet, sampahSheet, id, act
       objRaw[key] = targetRow[c];
     }
   }
+  objRaw['ID'] = finalRestoreId;
 
   var statusPersetujuan = String(objRaw['Status Persetujuan'] || 'Pending').trim();
   if (statusPersetujuan.toLowerCase() !== 'ditolak') {
     var dupPayload = {
-      id: id,
+      id: finalRestoreId,
       npm: objRaw.NPM || objRaw.NIM || '',
       nim: objRaw.NIM || objRaw.NPM || '',
       namaMahasiswa: objRaw['Nama Mahasiswa'] || '',
@@ -2456,25 +2696,25 @@ function restoreSinglePendaftaranRow_(ss, pendaftaranSheet, sampahSheet, id, act
       mataKuliah: objRaw['Mata Kuliah'] || '',
       dosenPengampu: objRaw['Dosen Pengampu'] || ''
     };
-    var dupCheck = validateNoDuplicatePendaftaranServer(pendaftaranSheet, dupPayload, id);
+    var dupCheck = validateNoDuplicatePendaftaranServer(pendaftaranSheet, dupPayload, finalRestoreId);
     if (!dupCheck.ok) {
       return { success: false, code: 'DUPLICATE_REGISTRATION', message: dupCheck.message };
     }
   }
 
-  var mapped = buildMappedRowAndObject_(sampahHeaders, targetRow, pHeaders, null);
+  var mapped = buildMappedRowAndObject_(sampahHeaders, targetRow, pHeaders, { ID: finalRestoreId });
   pendaftaranSheet.appendRow(mapped.row);
   sampahSheet.deleteRow(rowIndex);
 
   var targetNama = String(objRaw['Nama Mahasiswa'] || '').trim();
   var targetNpm = String(objRaw.NPM || objRaw.NIM || '').trim();
   var detailMhs = targetNama ? (' a.n. ' + targetNama + (targetNpm ? ' (' + targetNpm + ')' : '')) : '';
-  addActivityLog(actorMeta.actor, 'Pulihkan Pendaftaran', id, 'Berkas pendaftaran' + detailMhs + ' dipulihkan dari Tong Sampah', actorMeta.role);
+  addActivityLog(actorMeta.actor, 'Pulihkan Pendaftaran', finalRestoreId, 'Berkas pendaftaran' + detailMhs + ' dipulihkan dari Tong Sampah' + (finalRestoreId !== String(id).trim() ? ' (ID disesuaikan dari ' + id + ')' : ''), actorMeta.role);
   return {
     success: true,
-    id: id,
+    id: finalRestoreId,
     restoredItem: mapped.obj,
-    message: 'Berkas pendaftaran ' + id + ' berhasil dipulihkan.'
+    message: 'Berkas pendaftaran ' + finalRestoreId + ' berhasil dipulihkan.'
   };
 }
 

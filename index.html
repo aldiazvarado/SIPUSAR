@@ -367,6 +367,116 @@
       }
     }
 
+    function extractRegNumberClient(idStr) {
+      const m = String(idStr || '').trim().match(/^REG-(\d+)$/i);
+      if (!m) return 0;
+      const n = parseInt(m[1], 10);
+      return Number.isNaN(n) ? 0 : n;
+    }
+
+    function getNextLocalRegId() {
+      const activeList = (typeof appData === 'object' && appData && Array.isArray(appData.pendaftaran)) ? appData.pendaftaran : [];
+      const trashList = (typeof appData === 'object' && appData && Array.isArray(appData.sampahPendaftaran)) ? appData.sampahPendaftaran : [];
+      const used = new Set();
+      let maxNum = 1000;
+      activeList.concat(trashList).forEach(item => {
+        if (!item) return;
+        const raw = String(item.ID || item.id || '').trim();
+        if (!raw) return;
+        used.add(raw.toUpperCase());
+        const num = extractRegNumberClient(raw);
+        if (num > maxNum) maxNum = num;
+      });
+      let nextNum = maxNum + 1;
+      let candidate = 'REG-' + nextNum;
+      while (used.has(candidate.toUpperCase())) {
+        nextNum++;
+        candidate = 'REG-' + nextNum;
+      }
+      return candidate;
+    }
+
+    function findDuplicatePendaftaranIdsClient() {
+      const list = (typeof appData === 'object' && appData && Array.isArray(appData.pendaftaran)) ? appData.pendaftaran : [];
+      const trashIds = new Set();
+      const trashList = (typeof appData === 'object' && appData && Array.isArray(appData.sampahPendaftaran)) ? appData.sampahPendaftaran : [];
+      trashList.forEach(t => {
+        const tid = String((t && (t.ID || t.id)) || '').trim().toUpperCase();
+        if (tid) trashIds.add(tid);
+      });
+      const seen = new Set();
+      const duplicateIds = [];
+      let affectedCount = 0;
+      list.forEach(item => {
+        if (!item) return;
+        const rawId = String(item.ID || item.id || '').trim();
+        const upperId = rawId.toUpperCase();
+        if (!rawId || seen.has(upperId) || trashIds.has(upperId)) {
+          affectedCount++;
+          duplicateIds.push(rawId || '(Kosong)');
+        } else {
+          seen.add(upperId);
+        }
+      });
+      return {
+        affectedCount,
+        duplicateIds: Array.from(new Set(duplicateIds))
+      };
+    }
+
+    function repairDuplicatePendaftaranIdsLocal(actor, role) {
+      if (typeof appData !== 'object' || !appData) {
+        return { success: false, repairedCount: 0, changes: [], message: 'Data lokal belum tersedia.' };
+      }
+      appData.pendaftaran = Array.isArray(appData.pendaftaran) ? appData.pendaftaran : [];
+      appData.sampahPendaftaran = Array.isArray(appData.sampahPendaftaran) ? appData.sampahPendaftaran : [];
+      const used = new Set();
+      let maxNum = 1000;
+      appData.pendaftaran.concat(appData.sampahPendaftaran).forEach(item => {
+        if (!item) return;
+        const raw = String(item.ID || item.id || '').trim();
+        if (!raw) return;
+        const n = extractRegNumberClient(raw);
+        if (n > maxNum) maxNum = n;
+      });
+      appData.sampahPendaftaran.forEach(item => {
+        const raw = String((item && (item.ID || item.id)) || '').trim().toUpperCase();
+        if (raw) used.add(raw);
+      });
+      const changes = [];
+      appData.pendaftaran.forEach(item => {
+        if (!item) return;
+        const raw = String(item.ID || item.id || '').trim();
+        const upper = raw.toUpperCase();
+        if (!raw || used.has(upper)) {
+          maxNum++;
+          let newId = 'REG-' + maxNum;
+          while (used.has(newId.toUpperCase())) {
+            maxNum++;
+            newId = 'REG-' + maxNum;
+          }
+          used.add(newId.toUpperCase());
+          item.ID = newId;
+          if ('id' in item) item.id = newId;
+          changes.push({ oldId: raw || '(Kosong)', newId, nama: item['Nama Mahasiswa'] || '' });
+        } else {
+          used.add(upper);
+        }
+      });
+      if (changes.length > 0) {
+        if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+        appendLocalActivityLog(actor || 'Admin', 'Perbaiki ID Duplikat', `${changes.length} berkas`, `Deduplikasi ID lokal: ${changes.map(c => `${c.oldId} -> ${c.newId}`).join('; ')}`, role || 'Admin TU');
+      }
+      return {
+        success: true,
+        repairedCount: changes.length,
+        changes,
+        message: changes.length > 0
+          ? `Berhasil memperbaiki ${changes.length} ID Pendaftaran duplikat ke nomor urut terbaru.`
+          : 'Seluruh ID Pendaftaran sudah unik.'
+      };
+    }
+
     // Helper fallback lokal ketika endpoint GAS offline atau terblokir CORS di peramban
     function handleLocalGasFallback(action, args, onSuccess, onFailure, err) {
       if (typeof appData !== 'object' || !appData) {
@@ -414,7 +524,7 @@
             }
           }
           if (!payload.id) {
-            const newId = 'REG-' + (1000 + (appData.pendaftaran.length + 1));
+            const newId = getNextLocalRegId();
             const newRec = {
               ID: newId,
               Tanggal: new Date().toLocaleDateString('id-ID'),
@@ -830,14 +940,16 @@
             return;
           }
           const candidate = Object.assign({}, appData.sampahPendaftaran[sIdx]);
-          if (appData.pendaftaran.some(p => String(p.ID || p.id).trim() === cleanId)) {
-            failedItems.push({ id: cleanId, message: `ID ${cleanId} sudah ada di daftar Pendaftaran aktif.` });
-            return;
+          let finalRestoreId = cleanId;
+          if (appData.pendaftaran.some(p => String(p.ID || p.id).trim().toUpperCase() === cleanId.toUpperCase())) {
+            finalRestoreId = getNextLocalRegId();
+            candidate.ID = finalRestoreId;
+            if ('id' in candidate) candidate.id = finalRestoreId;
           }
           const isBypass = String(candidate['Status Persetujuan'] || '').trim().toLowerCase() === 'ditolak';
           if (!isBypass && typeof findCrossFormPendaftaranDuplicatesClient === 'function') {
             const dupPayload = {
-              id: cleanId,
+              id: finalRestoreId,
               npm: candidate.NPM || candidate.NIM || '',
               namaMahasiswa: candidate['Nama Mahasiswa'] || '',
               tahunAkademik: candidate['Tahun Akademik'] || '2026/2027',
@@ -847,9 +959,9 @@
               mataKuliah: candidate['Mata Kuliah'] || '',
               dosenPengampu: candidate['Dosen Pengampu'] || ''
             };
-            const conflicts = findCrossFormPendaftaranDuplicatesClient(dupPayload, appData.pendaftaran, cleanId);
+            const conflicts = findCrossFormPendaftaranDuplicatesClient(dupPayload, appData.pendaftaran, finalRestoreId);
             if (conflicts.length > 0) {
-              failedItems.push({ id: cleanId, message: `Pendaftaran ganda ditolak: ${conflicts[0].mataKuliah} sudah aktif pada ${conflicts[0].existingId}.` });
+              failedItems.push({ id: finalRestoreId, message: `Pendaftaran ganda ditolak: ${conflicts[0].mataKuliah} sudah aktif pada ${conflicts[0].existingId}.` });
               return;
             }
           }
@@ -858,9 +970,9 @@
           delete candidate['Deleted Role'];
           appData.sampahPendaftaran.splice(sIdx, 1);
           appData.pendaftaran.unshift(candidate);
-          restoredIds.push(cleanId);
+          restoredIds.push(finalRestoreId);
           restoredItems.push(candidate);
-          appendLocalActivityLog(actName, 'Pulihkan Pendaftaran', cleanId, 'Berkas pendaftaran dipulihkan dari Tong Sampah (lokal)', actRole);
+          appendLocalActivityLog(actName, 'Pulihkan Pendaftaran', finalRestoreId, 'Berkas pendaftaran dipulihkan dari Tong Sampah (lokal)', actRole);
         });
 
         if (action === "restorePendaftaran") {
@@ -921,6 +1033,14 @@
           appendLocalActivityLog(actName, 'Kosongkan Tong Sampah', 'Sampah_Pendaftaran', `Menghapus permanen ${count} berkas di Tong Sampah (lokal)`, actRole);
         }
         if (onSuccess) onSuccess({ success: true, isLocalFallback: true, count, message: count > 0 ? `Tong Sampah dikosongkan (${count} berkas dihapus permanen).` : 'Tong Sampah sudah kosong.' });
+        return;
+      }
+
+      if (action === "repairDuplicatePendaftaranIds") {
+        const actName = args && args[0];
+        const actRole = (args && args[1]) || (currentUser && currentUser.role) || '';
+        const localRes = repairDuplicatePendaftaranIdsLocal(actName, actRole);
+        if (onSuccess) onSuccess(Object.assign({}, localRes, { isLocalFallback: true }));
         return;
       }
 
@@ -2094,6 +2214,16 @@
               </button>
             </div>
           </div>
+        </div>
+
+        <div id="pendaftaranDuplicateIdBanner" class="hidden bg-amber-50 border border-amber-300 rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="text-xs text-amber-950 space-y-0.5">
+            <p class="font-bold">Terdeteksi ID Pendaftaran Kembar (<span id="pendaftaranDuplicateIdListText" class="font-mono"></span>)</p>
+            <p class="text-[11px] text-amber-800">Baris pertama tetap mempertahankan ID aslinya dan baris duplikat akan otomatis diberi nomor REG tertinggi berikutnya.</p>
+          </div>
+          <button type="button" id="btnRepairDuplicatePendaftaranIds" onclick="repairDuplicatePendaftaranIdsAction()" class="px-3.5 py-2 rounded-xl bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer transition">
+            Perbaiki ID Duplikat
+          </button>
         </div>
 
         <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden w-full min-w-0">
@@ -8193,7 +8323,7 @@
       let optimisticRecord = null;
       let prevEditSnapshot = null;
       if (!payload.id) {
-        const newId = 'REG-' + (1000 + ((appData.pendaftaran || []).length + 1));
+        const newId = getNextLocalRegId();
         optimisticRecord = {
           ID: newId,
           Tanggal: new Date().toLocaleDateString('id-ID'),
@@ -12729,6 +12859,79 @@
         wrap.scrollTop = opts && opts.preserveScroll ? prevScrollTop : 0;
       }
       syncSampahPendaftaranBadge();
+      if (typeof syncPendaftaranDuplicateBanner === 'function') syncPendaftaranDuplicateBanner();
+    }
+
+    function syncPendaftaranDuplicateBanner() {
+      const banner = document.getElementById('pendaftaranDuplicateIdBanner');
+      const listEl = document.getElementById('pendaftaranDuplicateIdListText');
+      if (!banner) return;
+      const info = typeof findDuplicatePendaftaranIdsClient === 'function'
+        ? findDuplicatePendaftaranIdsClient()
+        : { affectedCount: 0, duplicateIds: [] };
+      const roleLower = currentUser ? String(currentUser.role || '').trim().toLowerCase() : '';
+      const canRepair = ['master admin', 'master_admin', 'admin tu', 'admintu', 'admin'].includes(roleLower);
+      const shouldShow = canRepair && info.affectedCount > 0;
+      banner.classList.toggle('hidden', !shouldShow);
+      if (shouldShow && listEl) {
+        listEl.innerText = `${info.affectedCount} baris duplikat: ${info.duplicateIds.join(', ')}`;
+      }
+    }
+
+    function repairDuplicatePendaftaranIdsAction() {
+      const btn = document.getElementById('btnRepairDuplicatePendaftaranIds');
+      const origHtml = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Memperbaiki...';
+      }
+      const actor = typeof getCurrentActorName === 'function' ? getCurrentActorName('', 'Admin') : 'Admin';
+      const role = typeof getCurrentActorRole === 'function' ? getCurrentActorRole('Admin TU') : 'Admin TU';
+
+      const handleDone = (res) => {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origHtml || 'Perbaiki ID Duplikat';
+        }
+        if (res && res.success) {
+          if (typeof repairDuplicatePendaftaranIdsLocal === 'function' && res.isLocalFallback) {
+            // already fixed locally
+          } else {
+            repairDuplicatePendaftaranIdsLocal(actor, role);
+          }
+          if (typeof saveAppDataCache === 'function') saveAppDataCache(appData);
+          renderPendaftaranTable();
+          if (typeof loadAppData === 'function') loadAppData(true);
+          Swal.fire({
+            icon: 'success',
+            title: 'ID Duplikat Diperbaiki',
+            text: res.message || 'Seluruh ID pendaftaran kini sudah unik.',
+            confirmButtonColor: '#1e3a8a'
+          });
+        } else {
+          Swal.fire('Gagal', (res && res.message) || 'Gagal memperbaiki ID pendaftaran duplikat.', 'error');
+        }
+      };
+
+      const handleFail = () => {
+        const localRes = repairDuplicatePendaftaranIdsLocal(actor, role);
+        handleDone(Object.assign({}, localRes, { isLocalFallback: true }));
+      };
+
+      if (typeof google !== 'undefined' && google.script && google.script.run && !window.google?.__isProxy && typeof google.script.run.repairDuplicatePendaftaranIds === 'function') {
+        google.script.run
+          .withSuccessHandler(handleDone)
+          .withFailureHandler(handleFail)
+          .repairDuplicatePendaftaranIds(actor, role);
+      } else {
+        callGasApi('repairDuplicatePendaftaranIds', [actor, role], (res) => {
+          if (res && res.isLocalFallback) {
+            handleDone(Object.assign({}, repairDuplicatePendaftaranIdsLocal(actor, role), { isLocalFallback: true }));
+          } else {
+            handleDone(res);
+          }
+        }, handleFail);
+      }
     }
 
     function canManagePendaftaranTrash() {
