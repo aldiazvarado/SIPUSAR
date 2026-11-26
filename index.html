@@ -568,6 +568,16 @@
           } else {
             const item = appData.pendaftaran.find(d => String(d.ID || d.id) === String(payload.id));
             if (item) {
+              if (payload.nim !== undefined) {
+                item.NPM = payload.nim;
+                item.NIM = payload.nim;
+              }
+              if (payload.namaMahasiswa !== undefined) item['Nama Mahasiswa'] = payload.namaMahasiswa;
+              if (payload.kodeProdi !== undefined) item['Kode Prodi'] = payload.kodeProdi;
+              if (payload.prodi !== undefined) item['Program Studi'] = payload.prodi;
+              if (payload.kelas !== undefined) item.Kelas = payload.kelas;
+              if (payload.kategoriKelas !== undefined) item['Kategori Kelas'] = payload.kategoriKelas;
+              if (payload.angkatan !== undefined) item.Angkatan = payload.angkatan;
               if (payload.tahunAkademik) item['Tahun Akademik'] = payload.tahunAkademik;
               if (payload.semester) item.Semester = payload.semester;
               if (payload.semesterPeriode) item['Semester Type'] = payload.semesterPeriode;
@@ -576,6 +586,7 @@
               if (payload.dosenPengampu) item['Dosen Pengampu'] = payload.dosenPengampu;
               if (payload.mataKuliahList) item.mataKuliahList = payload.mataKuliahList;
               if (payload.nominal !== undefined) item.Nominal = payload.nominal;
+              if (payload.statusPembayaran !== undefined) item['Status Pembayaran'] = payload.statusPembayaran;
               if (payload.statusPersetujuan) item['Status Persetujuan'] = payload.statusPersetujuan;
               if (payload.statusJadwal) item['Status Jadwal'] = payload.statusJadwal;
               if (payload.alasan) item.Alasan = payload.alasan;
@@ -3526,6 +3537,50 @@
             <option value="Disetujui">Disetujui</option>
             <option value="Ditolak">Ditolak</option>
           </select>
+        </div>
+
+        <div id="wrapperEditBillingAdmin" class="hidden p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b border-slate-200 pb-2">
+            <div>
+              <p class="font-bold text-slate-800 text-xs">Status Jadwal &amp; Tagihan (Khusus Mode Edit Admin)</p>
+              <p id="editBillingOriginalMetaText" class="text-[11px] font-mono tabular-nums text-slate-500 mt-0.5">Data asli tersimpan: -</p>
+            </div>
+            <span id="editBillingActiveModeText" class="text-[11px] font-semibold text-blue-900 whitespace-nowrap">Mengikuti Data Asli</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="sm:col-span-2">
+              <label for="pendaftaranEditBillingMode" class="block font-bold text-slate-600 mb-1">Mode Perhitungan Biaya Saat Edit</label>
+              <select id="pendaftaranEditBillingMode" onchange="onPendaftaranEditBillingModeChange(this.value)" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-blue-900">
+                <option value="preserve">Pertahankan Status &amp; Biaya Asli (Direkomendasikan)</option>
+                <option value="recalculate">Hitung Ulang Sesuai Jadwal Periode Saat Ini</option>
+                <option value="manual">Sesuaikan Status &amp; Nominal Secara Manual</option>
+              </select>
+            </div>
+            <div>
+              <label for="pendaftaranEditStatusJadwalSelect" class="block font-bold text-slate-600 mb-1">Status Jadwal Pendaftaran</label>
+              <select id="pendaftaranEditStatusJadwalSelect" onchange="onPendaftaranEditManualBillingChange('jadwal')" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-blue-900">
+                <option value="Tepat Waktu">Tepat Waktu</option>
+                <option value="Terlambat">Terlambat</option>
+                <option value="Masa Terlambat (Tanpa Denda)">Masa Terlambat (Tanpa Denda)</option>
+                <option value="Di Luar Jadwal (Input Admin)">Di Luar Jadwal (Input Admin)</option>
+              </select>
+            </div>
+            <div>
+              <label for="pendaftaranEditStatusPembayaranSelect" class="block font-bold text-slate-600 mb-1">Status Pembayaran</label>
+              <select id="pendaftaranEditStatusPembayaranSelect" onchange="onPendaftaranEditManualBillingChange('payment')" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-blue-900">
+                <option value="Gratis (Tepat Waktu)">Gratis (Tepat Waktu)</option>
+                <option value="Belum Bayar (Denda Keterlambatan)">Belum Bayar (Denda Keterlambatan)</option>
+                <option value="Belum Bayar">Belum Bayar</option>
+                <option value="Lunas">Lunas</option>
+                <option value="Gratis (Masa Terlambat)">Gratis (Masa Terlambat)</option>
+                <option value="Gratis (Input Admin)">Gratis (Input Admin)</option>
+              </select>
+            </div>
+            <div class="sm:col-span-2">
+              <label for="pendaftaranEditNominalInput" class="block font-bold text-slate-600 mb-1">Nominal Biaya / Retribusi (Rp)</label>
+              <input type="number" id="pendaftaranEditNominalInput" min="0" step="1000" oninput="onPendaftaranEditManualBillingChange('nominal')" class="w-full border border-slate-300 rounded-xl px-3 py-2 font-mono tabular-nums font-bold text-slate-800 bg-white focus:ring-2 focus:ring-blue-900">
+            </div>
+          </div>
         </div>
 
         <div>
@@ -7003,6 +7058,112 @@
       }
     }
 
+    let pendaftaranEditBillingState = null;
+
+    function ensureSelectOptionExists(selectEl, val) {
+      if (!selectEl || val === undefined || val === null) return;
+      const strVal = String(val).trim();
+      if (!strVal) return;
+      const opts = Array.from(selectEl.options || []);
+      const matched = opts.find(o => String(o.value).trim().toLowerCase() === strVal.toLowerCase());
+      if (matched) {
+        selectEl.value = matched.value;
+      } else {
+        const opt = document.createElement('option');
+        opt.value = strVal;
+        opt.textContent = strVal;
+        selectEl.appendChild(opt);
+        selectEl.value = strVal;
+      }
+    }
+
+    function syncEditBillingAdminControls(jadwalVal, paymentVal, totalNominal) {
+      const state = pendaftaranEditBillingState;
+      const wrapper = document.getElementById('wrapperEditBillingAdmin');
+      const isMhsUser = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      if (!wrapper || !state || isMhsUser) {
+        if (wrapper) wrapper.classList.add('hidden');
+        return;
+      }
+      wrapper.classList.remove('hidden');
+
+      const modeSel = document.getElementById('pendaftaranEditBillingMode');
+      const jadwalSel = document.getElementById('pendaftaranEditStatusJadwalSelect');
+      const paymentSel = document.getElementById('pendaftaranEditStatusPembayaranSelect');
+      const nominalInput = document.getElementById('pendaftaranEditNominalInput');
+      const metaEl = document.getElementById('editBillingOriginalMetaText');
+      const modeBadgeEl = document.getElementById('editBillingActiveModeText');
+
+      if (modeSel) modeSel.value = state.billingMode || 'preserve';
+      if (jadwalSel) ensureSelectOptionExists(jadwalSel, jadwalVal);
+      if (paymentSel) ensureSelectOptionExists(paymentSel, paymentVal);
+      if (nominalInput) {
+        const isManual = state.billingMode === 'manual';
+        nominalInput.readOnly = !isManual;
+        nominalInput.className = isManual
+          ? 'w-full border border-slate-300 rounded-xl px-3 py-2 font-mono tabular-nums font-bold text-slate-900 bg-white focus:ring-2 focus:ring-blue-900'
+          : 'w-full border border-slate-200 rounded-xl px-3 py-2 font-mono tabular-nums font-bold text-slate-700 bg-slate-100 cursor-not-allowed select-none';
+        if (document.activeElement !== nominalInput) {
+          nominalInput.value = String(Math.max(0, Number(totalNominal) || 0));
+        }
+      }
+      if (metaEl) {
+        metaEl.innerText = `Tercatat ${state.originalTanggal || '-'} · ${state.originalStatusJadwal || '-'} · ${state.originalStatusPembayaran || '-'} · Rp ${Number(state.originalNominal || 0).toLocaleString('id-ID')}`;
+      }
+      if (modeBadgeEl) {
+        if (state.billingMode === 'manual') {
+          modeBadgeEl.innerText = 'Penyesuaian Manual Admin';
+          modeBadgeEl.className = 'text-[11px] font-semibold text-amber-800 whitespace-nowrap';
+        } else if (state.billingMode === 'recalculate') {
+          modeBadgeEl.innerText = 'Hitung Ulang Periode Berjalan';
+          modeBadgeEl.className = 'text-[11px] font-semibold text-amber-800 whitespace-nowrap';
+        } else {
+          modeBadgeEl.innerText = 'Mengikuti Data Asli';
+          modeBadgeEl.className = 'text-[11px] font-semibold text-emerald-800 whitespace-nowrap';
+        }
+      }
+    }
+
+    function onPendaftaranEditBillingModeChange(mode) {
+      if (!pendaftaranEditBillingState) return;
+      pendaftaranEditBillingState.billingMode = mode || 'preserve';
+      if (pendaftaranEditBillingState.billingMode === 'preserve') {
+        const jadwalSel = document.getElementById('pendaftaranEditStatusJadwalSelect');
+        const paymentSel = document.getElementById('pendaftaranEditStatusPembayaranSelect');
+        const nominalInput = document.getElementById('pendaftaranEditNominalInput');
+        if (jadwalSel) ensureSelectOptionExists(jadwalSel, pendaftaranEditBillingState.originalStatusJadwal);
+        if (paymentSel) ensureSelectOptionExists(paymentSel, pendaftaranEditBillingState.originalStatusPembayaran);
+        if (nominalInput) nominalInput.value = String(pendaftaranEditBillingState.originalNominal || 0);
+      }
+      updateRegistrationSummary();
+    }
+
+    function onPendaftaranEditManualBillingChange(source) {
+      if (!pendaftaranEditBillingState) return;
+      pendaftaranEditBillingState.billingMode = 'manual';
+      const modeSel = document.getElementById('pendaftaranEditBillingMode');
+      if (modeSel) modeSel.value = 'manual';
+
+      const paymentSel = document.getElementById('pendaftaranEditStatusPembayaranSelect');
+      const nominalInput = document.getElementById('pendaftaranEditNominalInput');
+      if (source === 'payment' && paymentSel && nominalInput) {
+        const payLower = String(paymentSel.value || '').toLowerCase();
+        if (payLower.startsWith('gratis')) {
+          nominalInput.value = '0';
+        } else if ((payLower.includes('denda') || payLower.includes('belum bayar')) && Number(nominalInput.value || 0) === 0) {
+          const selectedLayanan = document.getElementById('pendaftaranLayanan')?.value || '';
+          const selectedKategori = document.getElementById('pendaftaranKategoriKelas')?.value || '';
+          const matchedPrd = findMatchingActivePeriod(selectedLayanan, selectedKategori);
+          const lateFeePerItem = matchedPrd ? Number(evaluatePeriodWindow(matchedPrd, new Date()).biayaDenda || 0) : 0;
+          const filledCount = collectCurrentMatkulFormData().filter(d => d.mataKuliah && d.mataKuliah.trim().length > 0).length;
+          if (lateFeePerItem > 0) {
+            nominalInput.value = String(lateFeePerItem * Math.max(1, filledCount));
+          }
+        }
+      }
+      updateRegistrationSummary();
+    }
+
     // Helper: Hitung live total matkul, total SKS, dan estimasi biaya denda / retribusi
     function updateRegistrationSummary() {
       const data = collectCurrentMatkulFormData();
@@ -7020,12 +7181,16 @@
         totalSks += (sks || 3);
       });
 
+      const editId = (document.getElementById('pendaftaranId')?.value || '').trim();
+      const hasEditState = Boolean(editId && pendaftaranEditBillingState && pendaftaranEditBillingState.recordId === editId);
+      const editBillingMode = hasEditState ? (pendaftaranEditBillingState.billingMode || 'preserve') : '';
+
       // Pengecekan Periode & Jadwal Denda (Sinkron Jenis Layanan + Kategori Kelas)
       const selectedLayanan = document.getElementById('pendaftaranLayanan')?.value || '';
       const selectedKategori = document.getElementById('pendaftaranKategoriKelas')?.value || '';
       const matchedPrd = findMatchingActivePeriod(selectedLayanan, selectedKategori);
 
-      if (matchedPrd) {
+      if (matchedPrd && (!hasEditState || editBillingMode === 'recalculate')) {
         const taEl = document.getElementById('pendaftaranTahunAkademik');
         const semEl = document.getElementById('pendaftaranSemester');
         const badgeEl = document.getElementById('activePeriodBadgeId');
@@ -7041,7 +7206,7 @@
 
       const isLate = windowEval.state === 'LATE';
       const lateFeePerItem = windowEval.biayaDenda || 0;
-      const totalNominal = isLate ? (lateFeePerItem * Math.max(1, filledCount)) : 0;
+      let totalNominal = isLate ? (lateFeePerItem * Math.max(1, filledCount)) : 0;
 
       // Update Live Summary Strip
       const badgeCount = document.getElementById('summaryMatkulCountBadge');
@@ -7054,11 +7219,6 @@
         textSks.innerText = `${totalSks} SKS Terakumulasi`;
       }
 
-      const textNominal = document.getElementById('summaryTotalNominalText');
-      if (textNominal) {
-        textNominal.innerText = `Rp ${Number(totalNominal).toLocaleString('id-ID')}`;
-      }
-
       // Update Box Ketentuan Jadwal & Biaya Denda
       const statusBadge = document.getElementById('notifStatusCurrent');
       const detailBox = document.getElementById('notifPeriodeRangeDetail');
@@ -7067,37 +7227,84 @@
       let jadwalVal = isLate ? 'Terlambat' : 'Tepat Waktu';
       let paymentVal = (isLate && totalNominal > 0) ? 'Belum Bayar (Denda Keterlambatan)' : 'Gratis (Tepat Waktu)';
 
-      if (statusBadge) {
-        if (windowEval.state === 'LATE') {
-          if (totalNominal > 0) {
-            statusBadge.innerText = `Terlambat (Denda Rp ${Number(totalNominal).toLocaleString('id-ID')})`;
+      if (hasEditState && editBillingMode === 'preserve') {
+        jadwalVal = pendaftaranEditBillingState.originalStatusJadwal || 'Tepat Waktu';
+        paymentVal = pendaftaranEditBillingState.originalStatusPembayaran || 'Gratis (Tepat Waktu)';
+        totalNominal = Math.max(0, Number(pendaftaranEditBillingState.originalNominal) || 0);
+
+        if (statusBadge) {
+          const payLower = paymentVal.toLowerCase();
+          const jadwalLower = jadwalVal.toLowerCase();
+          if (totalNominal <= 0 && (payLower.includes('gratis') || jadwalLower.includes('tepat waktu'))) {
+            statusBadge.innerText = `${jadwalVal} · Gratis (Data Asli)`;
+            statusBadge.className = 'font-mono font-bold text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300';
+          } else if (payLower === 'lunas') {
+            statusBadge.innerText = `Lunas · Rp ${Number(totalNominal).toLocaleString('id-ID')} (Data Asli)`;
+            statusBadge.className = 'font-mono font-bold text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300';
           } else {
-            statusBadge.innerText = 'Masa Terlambat (Tanpa Denda)';
+            statusBadge.innerText = `${jadwalVal} · Rp ${Number(totalNominal).toLocaleString('id-ID')} (Data Asli)`;
+            statusBadge.className = 'font-mono font-bold text-[11px] text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300';
           }
-          statusBadge.className = 'font-mono font-bold text-[11px] text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300';
-          if (totalNominal <= 0) paymentVal = 'Gratis (Masa Terlambat)';
-        } else if (windowEval.state === 'NORMAL') {
-          statusBadge.innerText = 'Tepat Waktu (Gratis)';
-          statusBadge.className = 'font-mono font-bold text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300';
-        } else if (windowEval.state === 'BEFORE_START') {
-          statusBadge.innerText = isMhsUser ? 'Belum Dibuka' : 'Di Luar Jadwal — Belum Buka (Admin)';
-          statusBadge.className = 'font-mono font-bold text-[11px] text-blue-800 bg-blue-100/90 px-2 py-0.5 rounded-md border border-blue-300';
-          jadwalVal = 'Di Luar Jadwal (Belum Buka)';
-          paymentVal = isMhsUser ? 'Belum Dibuka' : 'Gratis (Input Admin)';
-        } else if (windowEval.state === 'CLOSED' || windowEval.state === 'BETWEEN_NORMAL_AND_LATE') {
-          statusBadge.innerText = isMhsUser ? 'Masa Pendaftaran Ditutup' : 'Di Luar Jadwal — Tutup (Admin)';
-          statusBadge.className = 'font-mono font-bold text-[11px] text-rose-800 bg-rose-100/90 px-2 py-0.5 rounded-md border border-rose-300';
-          jadwalVal = windowEval.state === 'CLOSED' ? 'Di Luar Jadwal (Sudah Tutup)' : 'Di Luar Jadwal (Jeda Periode)';
-          paymentVal = isMhsUser ? 'Ditutup' : 'Gratis (Input Admin)';
-        } else {
-          statusBadge.innerText = isMhsUser ? 'Tidak Ada Periode Aktif' : 'Periode Non-Aktif (Input Admin)';
-          statusBadge.className = 'font-mono font-bold text-[11px] text-slate-700 bg-slate-200/80 px-2 py-0.5 rounded-md border border-slate-300';
-          jadwalVal = 'Periode Non-Aktif';
-          paymentVal = isMhsUser ? 'Periode Non-Aktif' : 'Gratis (Input Admin)';
+        }
+      } else if (hasEditState && editBillingMode === 'manual') {
+        const jadwalSel = document.getElementById('pendaftaranEditStatusJadwalSelect');
+        const paymentSel = document.getElementById('pendaftaranEditStatusPembayaranSelect');
+        const nominalInput = document.getElementById('pendaftaranEditNominalInput');
+        jadwalVal = (jadwalSel && jadwalSel.value) ? jadwalSel.value : 'Tepat Waktu';
+        paymentVal = (paymentSel && paymentSel.value) ? paymentSel.value : 'Gratis (Tepat Waktu)';
+        totalNominal = Math.max(0, Number(nominalInput ? nominalInput.value : 0) || 0);
+
+        if (statusBadge) {
+          const payLower = paymentVal.toLowerCase();
+          if (totalNominal <= 0 || payLower === 'lunas' || payLower.includes('gratis')) {
+            statusBadge.innerText = `${jadwalVal} · ${paymentVal} (Manual Admin)`;
+            statusBadge.className = 'font-mono font-bold text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300';
+          } else {
+            statusBadge.innerText = `${jadwalVal} · Rp ${Number(totalNominal).toLocaleString('id-ID')} (Manual Admin)`;
+            statusBadge.className = 'font-mono font-bold text-[11px] text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300';
+          }
+        }
+      } else {
+        if (statusBadge) {
+          if (windowEval.state === 'LATE') {
+            if (totalNominal > 0) {
+              statusBadge.innerText = `Terlambat (Denda Rp ${Number(totalNominal).toLocaleString('id-ID')})`;
+            } else {
+              statusBadge.innerText = 'Masa Terlambat (Tanpa Denda)';
+            }
+            statusBadge.className = 'font-mono font-bold text-[11px] text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-md border border-amber-300';
+            if (totalNominal <= 0) paymentVal = 'Gratis (Masa Terlambat)';
+          } else if (windowEval.state === 'NORMAL') {
+            statusBadge.innerText = 'Tepat Waktu (Gratis)';
+            statusBadge.className = 'font-mono font-bold text-[11px] text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300';
+          } else if (windowEval.state === 'BEFORE_START') {
+            statusBadge.innerText = isMhsUser ? 'Belum Dibuka' : 'Di Luar Jadwal — Belum Buka (Admin)';
+            statusBadge.className = 'font-mono font-bold text-[11px] text-blue-800 bg-blue-100/90 px-2 py-0.5 rounded-md border border-blue-300';
+            jadwalVal = 'Di Luar Jadwal (Belum Buka)';
+            paymentVal = isMhsUser ? 'Belum Dibuka' : 'Gratis (Input Admin)';
+          } else if (windowEval.state === 'CLOSED' || windowEval.state === 'BETWEEN_NORMAL_AND_LATE') {
+            statusBadge.innerText = isMhsUser ? 'Masa Pendaftaran Ditutup' : 'Di Luar Jadwal — Tutup (Admin)';
+            statusBadge.className = 'font-mono font-bold text-[11px] text-rose-800 bg-rose-100/90 px-2 py-0.5 rounded-md border border-rose-300';
+            jadwalVal = windowEval.state === 'CLOSED' ? 'Di Luar Jadwal (Sudah Tutup)' : 'Di Luar Jadwal (Jeda Periode)';
+            paymentVal = isMhsUser ? 'Ditutup' : 'Gratis (Input Admin)';
+          } else {
+            statusBadge.innerText = isMhsUser ? 'Tidak Ada Periode Aktif' : 'Periode Non-Aktif (Input Admin)';
+            statusBadge.className = 'font-mono font-bold text-[11px] text-slate-700 bg-slate-200/80 px-2 py-0.5 rounded-md border border-slate-300';
+            jadwalVal = 'Periode Non-Aktif';
+            paymentVal = isMhsUser ? 'Periode Non-Aktif' : 'Gratis (Input Admin)';
+          }
         }
       }
 
+      const textNominal = document.getElementById('summaryTotalNominalText');
+      if (textNominal) {
+        textNominal.innerText = `Rp ${Number(totalNominal).toLocaleString('id-ID')}`;
+      }
+
       if (detailBox) {
+        const origPrefix = hasEditState
+          ? `<b>Data Daftar Asli:</b> Tanggal ${escapeHtml(pendaftaranEditBillingState.originalTanggal || '-')} · Status ${escapeHtml(pendaftaranEditBillingState.originalStatusJadwal || '-')} (${escapeHtml(pendaftaranEditBillingState.originalStatusPembayaran || '-')})<br>`
+          : '';
         if (matchedPrd) {
           const normalTxt = formatPeriodeWaktuLengkap(
             matchedPrd['Tanggal & Jam Mulai'] || matchedPrd['Tanggal Mulai'],
@@ -7105,9 +7312,9 @@
           );
           const hasLate = Boolean(matchedPrd['Mulai Terlambat'] || matchedPrd['Selesai Terlambat']);
           const lateTxt = hasLate ? formatPeriodeWaktuLengkap(matchedPrd['Mulai Terlambat'], matchedPrd['Selesai Terlambat']) : 'Tidak ada masa terlambat';
-          detailBox.innerHTML = `<b>Jadwal Normal:</b> ${escapeHtml(normalTxt)}<br><b>Jadwal Terlambat:</b> ${escapeHtml(lateTxt)} · <b>Denda:</b> Rp ${Number(lateFeePerItem).toLocaleString('id-ID')}/mata kuliah`;
+          detailBox.innerHTML = `${origPrefix}<b>Jadwal Normal:</b> ${escapeHtml(normalTxt)}<br><b>Jadwal Terlambat:</b> ${escapeHtml(lateTxt)} · <b>Denda:</b> Rp ${Number(lateFeePerItem).toLocaleString('id-ID')}/mata kuliah`;
         } else {
-          detailBox.innerHTML = `<span class="text-rose-700 font-semibold">Tidak ditemukan periode berstatus Aktif yang cocok untuk kombinasi layanan &amp; kategori kelas ini.</span>`;
+          detailBox.innerHTML = `${origPrefix}<span class="text-rose-700 font-semibold">Tidak ditemukan periode berstatus Aktif yang cocok untuk kombinasi layanan &amp; kategori kelas ini.</span>`;
         }
       }
 
@@ -7122,6 +7329,10 @@
 
       const hiddenTotalSks = document.getElementById('pendaftaranTotalSks');
       if (hiddenTotalSks) hiddenTotalSks.value = totalSks;
+
+      if (hasEditState) {
+        syncEditBillingAdminControls(jadwalVal, paymentVal, totalNominal);
+      }
     }
 
     function initAllAutocompletes() {
@@ -7520,7 +7731,15 @@
 
       const currentLayananVal = layananEl ? layananEl.value : '';
       const matched = findMatchingActivePeriod(currentLayananVal, targetKategori) || candidatePeriods[0] || activePeriods[0] || null;
-      if (matched) {
+      const keepOriginalPeriod = Boolean(
+        allowHistorical ||
+        (pendaftaranEditBillingState && pendaftaranEditBillingState.billingMode !== 'recalculate')
+      );
+      if (keepOriginalPeriod && pendaftaranEditBillingState && pendaftaranEditBillingState.originalTahunAkademik) {
+        if (taEl) taEl.value = pendaftaranEditBillingState.originalTahunAkademik;
+        if (semEl) semEl.value = pendaftaranEditBillingState.originalSemester || (matched && matched.Semester) || 'Ganjil';
+        if (badgeEl) badgeEl.innerText = (matched && matched.ID) || 'DATA-ASLI';
+      } else if (matched) {
         if (taEl) taEl.value = matched['Tahun Akademik'] || '2026/2027';
         if (semEl) semEl.value = matched.Semester || 'Ganjil';
         if (badgeEl) badgeEl.innerText = matched.ID || 'PRD-AKTIF';
@@ -7793,6 +8012,8 @@
 
       populateDatalistDosenTerdahulu();
 
+      pendaftaranEditBillingState = null;
+
       if (id) {
         const item = (appData.pendaftaran || []).find(d => String(d.ID) === String(id));
         if (item) {
@@ -7805,7 +8026,36 @@
           populateKelasDropdown(prodiSelect.value, itemCategory, itemCleanClass);
           if (kelasSelect) kelasSelect.value = itemCleanClass;
 
+          const rawNominal = Math.max(0, Number(item.Nominal || 0) || 0);
+          let rawStatusBayar = String(item['Status Pembayaran'] || '').trim();
+          let rawStatusJadwal = String(item['Status Jadwal'] || '').trim();
+          if (!rawStatusBayar) {
+            rawStatusBayar = rawNominal > 0 ? 'Belum Bayar' : 'Gratis (Tepat Waktu)';
+          }
+          if (!rawStatusJadwal || (rawStatusJadwal.toLowerCase() === 'belum terjadwal' && rawStatusBayar.toLowerCase().includes('tepat waktu'))) {
+            const payLower = rawStatusBayar.toLowerCase();
+            rawStatusJadwal = (rawNominal > 0 && (payLower.includes('denda') || payLower.includes('terlambat')))
+              ? 'Terlambat'
+              : 'Tepat Waktu';
+          }
+          pendaftaranEditBillingState = {
+            recordId: String(item.ID || id).trim(),
+            originalTanggal: String(item.Tanggal || item.tanggal || '').trim(),
+            originalTahunAkademik: String(item['Tahun Akademik'] || '').trim(),
+            originalSemester: String(item['Semester Type'] || item.Semester || '').trim(),
+            originalStatusJadwal: rawStatusJadwal,
+            originalStatusPembayaran: rawStatusBayar,
+            originalNominal: rawNominal,
+            billingMode: 'preserve'
+          };
+
           syncPeriodeToPendaftaran(item['Jenis Layanan'] || '', true);
+          const taElEdit = document.getElementById('pendaftaranTahunAkademik');
+          const semElEdit = document.getElementById('pendaftaranSemester');
+          if (taElEdit && item['Tahun Akademik']) taElEdit.value = item['Tahun Akademik'];
+          if (semElEdit && (item['Semester Type'] || item.Semester)) {
+            semElEdit.value = item['Semester Type'] || item.Semester;
+          }
           
           // Parsing data multi-matkul dari item
           let parsedRows = [];
@@ -7906,16 +8156,21 @@
 
           const wrapperStatus = document.getElementById('wrapperStatusPersetujuan');
           const selStatus = document.getElementById('pendaftaranStatusPersetujuan');
+          const wrapperBillingAdmin = document.getElementById('wrapperEditBillingAdmin');
           if (!isMhs && wrapperStatus && selStatus) {
             wrapperStatus.classList.remove('hidden');
             selStatus.value = item['Status Persetujuan'] || 'Pending';
-          } else if (wrapperStatus) {
-            wrapperStatus.classList.add('hidden');
+            if (wrapperBillingAdmin) wrapperBillingAdmin.classList.remove('hidden');
+          } else {
+            if (wrapperStatus) wrapperStatus.classList.add('hidden');
+            if (wrapperBillingAdmin) wrapperBillingAdmin.classList.add('hidden');
           }
         }
       } else {
         const wrapperStatus = document.getElementById('wrapperStatusPersetujuan');
         if (wrapperStatus) wrapperStatus.classList.add('hidden');
+        const wrapperBillingAdmin = document.getElementById('wrapperEditBillingAdmin');
+        if (wrapperBillingAdmin) wrapperBillingAdmin.classList.add('hidden');
 
         // Reset form pendaftaran baru
         clearBuktiFoto();
@@ -7942,6 +8197,7 @@
     }
 
     function closePendaftaranModal() {
+      pendaftaranEditBillingState = null;
       document.getElementById('modalPendaftaran').classList.add('hidden');
       document.getElementById('modalPendaftaran').classList.remove('flex');
     }
@@ -8375,9 +8631,23 @@
         const item = (appData.pendaftaran || []).find(d => String(d.ID) === String(payload.id));
         if (item) {
           prevEditSnapshot = { ...item };
+          item.NPM = payload.nim;
+          item.NIM = payload.nim;
+          item['Nama Mahasiswa'] = payload.namaMahasiswa;
+          item['Kode Prodi'] = payload.kodeProdi;
+          item['Program Studi'] = payload.prodi;
+          item.Kelas = payload.kelas;
+          item['Kategori Kelas'] = payload.kategoriKelas;
+          item['Tahun Akademik'] = payload.tahunAkademik;
+          item.Semester = payload.semester;
+          item['Semester Type'] = payload.semesterPeriode || item['Semester Type'] || 'Ganjil';
+          item.Angkatan = payload.angkatan;
+          item['Jenis Layanan'] = payload.jenisLayanan;
           item['Mata Kuliah'] = payload.mataKuliah;
           item['Dosen Pengampu'] = payload.dosenPengampu;
           item.mataKuliahList = payload.mataKuliahList;
+          item['Status Jadwal'] = payload.statusJadwal;
+          item['Status Pembayaran'] = payload.statusPembayaran;
           item.Nominal = payload.nominal;
           item['Status Persetujuan'] = payload.statusPersetujuan;
           item.Alasan = payload.alasan;

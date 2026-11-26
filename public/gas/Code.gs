@@ -2565,6 +2565,7 @@ function updatePendaftaran(payload) {
       }
       setCol('Bukti Foto', finalBuktiUrl);
     }
+    if (payload.statusJadwal !== undefined) setCol('Status Jadwal', payload.statusJadwal);
     setCol('Nominal', sanitizeNumber(payload.nominal));
     setCol('Status Pembayaran', payload.statusPembayaran);
     setCol('Status Persetujuan', payload.statusPersetujuan);
