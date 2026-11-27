@@ -42,6 +42,8 @@ export default function App() {
 
   // Modal states
   const [activeCardItem, setActiveCardItem] = useState<PendaftaranItem | null>(null);
+  const [kartuSearchQuery, setKartuSearchQuery] = useState('');
+  const [kartuDropdownOpen, setKartuDropdownOpen] = useState(false);
   const [showExportPdfModal, setShowExportPdfModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
@@ -740,38 +742,102 @@ export default function App() {
         )}
 
         {/* TAB 2: CETAK KARTU UJIAN DIGITAL LIVE PREVIEW */}
-        {activeTab === 'kartu' && (
-          <div className="space-y-4">
-            <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <div>
-                <h2 className="text-base font-black text-slate-800">Preview Layout Cetak Kartu Ujian Digital</h2>
-                <p className="text-xs text-slate-500">Pilih mahasiswa pendaftar untuk melihat kartu tanda peserta ujian siap cetak.</p>
-              </div>
-              <select
-                className="border border-slate-300 rounded-xl px-3 py-2 text-xs font-bold bg-white text-slate-800"
-                onChange={e => {
-                  const itm = appState.pendaftaran.find(p => p.ID === e.target.value);
-                  if (itm) setActiveCardItem(itm);
-                }}
-                value={activeCardItem?.ID || (appState.pendaftaran.find(p => p['Status Persetujuan'] === 'Disetujui')?.ID || '')}
-              >
-                {appState.pendaftaran.map(p => (
-                  <option key={p.ID} value={p.ID}>
-                    {p['Nama Mahasiswa']} ({p.NPM}) - {p['Mata Kuliah']} [{p['Status Persetujuan']}]
-                  </option>
-                ))}
-              </select>
-            </div>
+        {activeTab === 'kartu' && (() => {
+          const scopedKartuList = currentUser.role === 'Mahasiswa'
+            ? appState.pendaftaran.filter(p => p.NPM.toLowerCase() === (currentUser.npm || currentUser.username).toLowerCase())
+            : appState.pendaftaran;
+          const tokens = kartuSearchQuery.toLowerCase().trim().split(/\s+/).filter(Boolean);
+          const matchedKartuList = tokens.length === 0
+            ? scopedKartuList
+            : scopedKartuList.filter(p => {
+                const haystack = `${p['Nama Mahasiswa']} ${p.NPM} ${p.ID} ${p['Mata Kuliah']} ${p['Kode Prodi']} ${p['Program Studi']} ${p['Jenis Layanan']}`.toLowerCase();
+                return tokens.every(tok => haystack.includes(tok));
+              });
+          const cardsToRender = activeCardItem && matchedKartuList.some(m => m.ID === activeCardItem.ID)
+            ? [activeCardItem]
+            : (tokens.length > 0 ? matchedKartuList : [matchedKartuList.find(p => p['Status Persetujuan'] === 'Disetujui') || matchedKartuList[0]].filter(Boolean));
 
-            {(() => {
-              const target = activeCardItem || appState.pendaftaran.find(p => p['Status Persetujuan'] === 'Disetujui') || appState.pendaftaran[0];
-              const matchJadwal = appState.jadwal.find(j =>
-                j['Kode Prodi'] === target['Kode Prodi'] && j['Mata Kuliah'] === target['Mata Kuliah']
-              );
-              return <KartuUjianCard pendaftaran={target} jadwal={matchJadwal} />;
-            })()}
-          </div>
-        )}
+          return (
+            <div className="space-y-4">
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
+                <div>
+                  <h2 className="text-base font-black text-slate-800">Preview Layout Cetak Kartu Ujian Digital</h2>
+                  <p className="text-xs text-slate-500">Cari berdasarkan Nama, NPM, ID, Matkul, Prodi, atau Layanan untuk menyaring kartu ujian.</p>
+                </div>
+                <div className="relative w-full lg:w-96">
+                  <div className="relative flex items-center">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={kartuSearchQuery}
+                      onFocus={() => setKartuDropdownOpen(true)}
+                      onBlur={() => setTimeout(() => setKartuDropdownOpen(false), 180)}
+                      onChange={e => {
+                        setKartuSearchQuery(e.target.value);
+                        setActiveCardItem(null);
+                        setKartuDropdownOpen(true);
+                      }}
+                      placeholder="Cari Nama, NPM, ID, Matkul, Prodi, Layanan..."
+                      className="w-full pl-8 pr-8 py-2 border border-slate-300 rounded-xl text-xs font-semibold bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-900"
+                    />
+                    {(kartuSearchQuery || activeCardItem) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setKartuSearchQuery('');
+                          setActiveCardItem(null);
+                        }}
+                        className="absolute right-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        title="Bersihkan pencarian"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {kartuDropdownOpen && (
+                    <div className="absolute left-0 right-0 mt-1 max-h-60 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 z-30 divide-y divide-slate-100">
+                      {matchedKartuList.length === 0 ? (
+                        <div className="p-3 text-center text-xs text-slate-400">Tidak ada berkas kartu yang cocok</div>
+                      ) : (
+                        matchedKartuList.map(p => (
+                          <button
+                            key={p.ID}
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => {
+                              setActiveCardItem(p);
+                              setKartuSearchQuery(`${p['Nama Mahasiswa']} (${p.NPM}) - ${p.ID}`);
+                              setKartuDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-blue-50 transition text-xs cursor-pointer"
+                          >
+                            <div className="font-bold text-slate-800">{p['Nama Mahasiswa']} <span className="font-mono text-blue-800">({p.NPM})</span> · <span className="font-mono text-slate-500">{p.ID}</span></div>
+                            <div className="text-[11px] text-slate-500 truncate">{p['Mata Kuliah']} · [{p['Kode Prodi']}] · {p['Jenis Layanan']}</div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {cardsToRender.length === 0 ? (
+                <div className="bg-white p-8 rounded-3xl border border-slate-200 text-center text-xs text-slate-400">
+                  Tidak ada Kartu Tanda Peserta Ujian yang cocok dengan kata kunci pencarian.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6">
+                  {cardsToRender.map(target => {
+                    const matchJadwal = appState.jadwal.find(j =>
+                      j['Kode Prodi'] === target['Kode Prodi'] && j['Mata Kuliah'] === target['Mata Kuliah']
+                    );
+                    return <KartuUjianCard key={target.ID} pendaftaran={target} jadwal={matchJadwal} />;
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* TAB 3: EXPORT REKAPITULASI LAPORAN KE PDF */}
         {activeTab === 'exportPdf' && (

@@ -2461,22 +2461,49 @@
 
       <!-- TAB: BUKTI PENDAFTARAN / KARTU UJIAN DIGITAL (MENU 3 - POIN 6 DITERAPKAN) -->
       <div id="tabContentKartu" class="hidden space-y-4">
-        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-          <div>
-            <div class="flex items-center gap-2">
-              <span class="inline-block bg-emerald-100 text-emerald-900 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-emerald-200">Menu 3</span>
-              <h3 class="text-base font-bold text-slate-800">Kartu Tanda Peserta Ujian Digital</h3>
+        <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col gap-3">
+          <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="inline-block bg-emerald-100 text-emerald-900 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border border-emerald-200">Menu 3</span>
+                <h3 class="text-base font-bold text-slate-800">Kartu Tanda Peserta Ujian Digital</h3>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">Kartu HANYA TAMPIL jika Admin Master/TU sudah selesai memasukkan jadwal ujian untuk mahasiswa tersebut.</p>
             </div>
-            <p class="text-xs text-slate-500 mt-0.5">Kartu HANYA TAMPIL jika Admin Master/TU sudah selesai memasukkan jadwal ujian untuk mahasiswa tersebut.</p>
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
+              <div id="kartuStaffSelectorBox" class="flex items-center gap-2 w-full sm:w-auto">
+                <div class="relative w-full sm:w-80 md:w-96" id="autocompleteKartuContainer">
+                  <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <i class="fas fa-search text-xs"></i>
+                    </div>
+                    <input type="text" id="kartuSearchInput" autocomplete="off"
+                      placeholder="Cari Nama, NPM, ID, Matkul, Prodi, Layanan..."
+                      aria-label="Cari Kartu Tanda Peserta Ujian Digital berdasarkan Nama, NPM, ID, Mata Kuliah, Prodi, atau Layanan"
+                      class="w-full pl-8 pr-14 py-2 bg-white border border-slate-300 rounded-xl font-semibold text-slate-800 text-xs placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition-all shadow-2xs">
+                    <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+                      <button type="button" id="btnClearKartuSearch" title="Bersihkan pencarian"
+                        class="hidden w-5 h-5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer">
+                        <i class="fas fa-times text-[10px]"></i>
+                      </button>
+                      <div class="text-slate-400 pointer-events-none px-1">
+                        <i class="fas fa-chevron-down text-[10px]"></i>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="dropdownListKartu" class="hidden absolute left-0 right-0 z-[60] mt-1 max-h-64 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100"></div>
+                </div>
+              </div>
+              <button onclick="window.print()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center space-x-1.5 shadow-md whitespace-nowrap shrink-0 cursor-pointer">
+                <i class="fas fa-print"></i> <span>Cetak / Export PDF</span>
+              </button>
+            </div>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <div id="kartuStaffSelectorBox" class="hidden items-center gap-2">
-              <select id="kartuStaffSelectNpm" onchange="renderKartuUjianDigital()" class="border border-slate-300 rounded-xl px-3 py-1.5 text-xs font-semibold focus:ring-2 focus:ring-blue-900">
-                <option value="">-- Semua Mahasiswa --</option>
-              </select>
-            </div>
-            <button onclick="window.print()" class="bg-blue-900 hover:bg-blue-800 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center space-x-1.5 shadow-md">
-              <i class="fas fa-print"></i> <span>Cetak / Export PDF</span>
+          <div id="kartuFilterStatusBar" class="hidden pt-2 border-t border-slate-100 flex-wrap items-center justify-between gap-2 text-xs">
+            <span id="kartuFilterCountText" class="text-slate-600 font-medium"></span>
+            <button type="button" onclick="resetKartuSearchFilter()" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] transition cursor-pointer">
+              <i class="fas fa-rotate-left text-[10px]"></i>
+              <span>Tampilkan Semua</span>
             </button>
           </div>
         </div>
@@ -3699,13 +3726,32 @@
 
         <!-- LANGKAH 1: Admin Memilih Data Mahasiswa Terdaftar Terlebih Dahulu -->
         <div class="bg-blue-50/70 p-3.5 rounded-2xl border border-blue-200 space-y-2">
-          <div class="flex items-center justify-between">
-            <label class="block font-bold text-blue-950">1. Pilih Data dari Mahasiswa yang Mendaftar <span class="text-rose-500">*</span></label>
-            <span id="jadwalPendaftarCountBadge" class="text-[10px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full"></span>
+          <div class="flex items-center justify-between gap-2">
+            <label for="jadwalPendaftarSearchInput" class="block font-bold text-blue-950">1. Pilih Data dari Mahasiswa yang Mendaftar <span class="text-rose-500">*</span></label>
+            <span id="jadwalPendaftarCountBadge" class="text-[10px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full shrink-0"></span>
           </div>
-          <select id="jadwalSelectPendaftar" required onchange="onSelectMahasiswaPendaftar(this.value)" class="w-full border border-blue-300 rounded-xl px-3 py-2 font-bold bg-white text-slate-800 focus:ring-2 focus:ring-blue-900">
-            <option value="">-- Pilih Mahasiswa Terdaftar (Disetujui / Pending) --</option>
-          </select>
+          <input type="hidden" id="jadwalSelectPendaftar" value="">
+          <div class="relative" id="autocompleteJadwalPendaftarContainer">
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-blue-700">
+                <i class="fas fa-search text-xs"></i>
+              </div>
+              <input type="text" id="jadwalPendaftarSearchInput" autocomplete="off"
+                placeholder="Ketik Nama, NPM, ID REG, Matkul, Prodi, atau Layanan..."
+                aria-label="Cari dan pilih data mahasiswa yang mendaftar"
+                class="w-full pl-8 pr-14 py-2 bg-white border border-blue-300 rounded-xl font-bold text-slate-800 text-xs placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition-all shadow-2xs">
+              <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+                <button type="button" id="btnClearJadwalPendaftar" title="Bersihkan pilihan mahasiswa"
+                  class="hidden w-5 h-5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer">
+                  <i class="fas fa-times text-[10px]"></i>
+                </button>
+                <div class="text-blue-700 pointer-events-none px-1">
+                  <i class="fas fa-chevron-down text-[10px]"></i>
+                </div>
+              </div>
+            </div>
+            <div id="dropdownListJadwalPendaftar" class="hidden absolute left-0 right-0 z-[70] mt-1 max-h-60 overflow-y-auto bg-white rounded-xl shadow-xl border border-blue-200 divide-y divide-slate-100"></div>
+          </div>
           <p id="jadwalPendaftarHint" class="text-[11px] text-slate-500 flex items-center gap-1.5">
             <i class="fas fa-filter text-emerald-600"></i>
             <span>Mahasiswa yang sudah memiliki jadwal otomatis disembunyikan agar tidak terjadi duplikasi.</span>
@@ -5456,6 +5502,7 @@
         if (result.isConfirmed) {
           sipSafeStorageRemove('sip_user');
           currentUser = null;
+          if (typeof resetKartuSearchFilter === 'function') resetKartuSearchFilter();
           const loginSec = document.getElementById('loginSection');
           const mainSec = document.getElementById('mainAppSection');
           if (loginSec) loginSec.classList.remove('hidden');
@@ -6438,6 +6485,76 @@
       `;
     }
 
+    function buildPendaftaranCandidateHaystack(p) {
+      if (!p || typeof p !== 'object') return '';
+      return [
+        p['Nama Mahasiswa'],
+        p.nama,
+        p.NPM,
+        p.NIM,
+        p.npm,
+        p.ID,
+        p.id,
+        p['Mata Kuliah'],
+        p.mataKuliah,
+        p['Kode Prodi'],
+        p.kodeProdi,
+        p['Program Studi'],
+        p.programStudi,
+        p['Jenis Layanan'],
+        p.Layanan,
+        p.Kelas,
+        p.Semester
+      ]
+        .filter(v => v !== undefined && v !== null && String(v).trim() !== '')
+        .map(v => String(v).toLowerCase())
+        .join(' ');
+    }
+
+    function filterPendaftaranByKeywords(list, query) {
+      if (!Array.isArray(list)) return [];
+      const tokens = String(query || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+      if (tokens.length === 0) return list;
+      return list.filter(p => {
+        const haystack = buildPendaftaranCandidateHaystack(p);
+        return tokens.every(tok => haystack.includes(tok));
+      });
+    }
+
+    function renderPendaftaranAutocompleteItem(p, query, extraBadge = '') {
+      const nama = String(p['Nama Mahasiswa'] || p.nama || '-');
+      const npm = String(p.NPM || p.NIM || p.npm || '-');
+      const regId = String(p.ID || p.id || '-');
+      const prodi = String(p['Kode Prodi'] || p.kodeProdi || 'FEB');
+      const prodiName = String(p['Program Studi'] || p.programStudi || '').trim();
+      const layanan = String(p['Jenis Layanan'] || p.Layanan || '-');
+      const rawMatkul = String(p['Mata Kuliah'] || p.mataKuliah || '-').replace(/\n+/g, ', ');
+
+      const highNama = highlightSearchMatch(nama, query);
+      const highNpm = highlightSearchMatch(npm, query);
+      const highId = highlightSearchMatch(regId, query);
+      const highMatkul = highlightSearchMatch(rawMatkul, query);
+      const highProdi = highlightSearchMatch(prodiName ? `[${prodi}] ${prodiName}` : `[${prodi}]`, query);
+      const highLayanan = highlightSearchMatch(layanan, query);
+
+      return `
+        <div class="flex-1 min-w-0 pr-2 space-y-0.5">
+          <div class="flex items-center flex-wrap gap-1.5">
+            <span class="font-bold text-slate-900 text-xs sm:text-sm group-hover:text-blue-900 break-words">${highNama}</span>
+            <span class="text-[10px] font-mono font-bold text-blue-900 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 tabular-nums">${highNpm}</span>
+            <span class="text-[10px] font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded tabular-nums">${highId}</span>
+            ${extraBadge ? `<span class="text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">${escapeHtml(extraBadge)}</span>` : ''}
+          </div>
+          <div class="text-[11px] text-slate-600 leading-snug break-words"><i class="fas fa-book-open text-[9px] text-slate-400 mr-1"></i>${highMatkul}</div>
+          <div class="text-[10px] text-slate-500 flex flex-wrap items-center gap-1.5">
+            <span>${highProdi}</span>
+            <span aria-hidden="true">·</span>
+            <span class="font-semibold text-indigo-800">${highLayanan}</span>
+          </div>
+        </div>
+      `;
+    }
+
     function setupAutocomplete({
       inputElem,
       dropdownElem,
@@ -6669,6 +6786,15 @@
     let dynamicMatkulAutocompletes = [];
     let autoMatkulJadwal = null;
     let autoDosenJadwal = null;
+    let autoJadwalPendaftar = null;
+    let autoKartuSearch = null;
+    let jadwalAvailablePendaftarMeta = [];
+    let selectedJadwalPendaftarObj = null;
+    let kartuFilterState = {
+      query: '',
+      selectedRegId: '',
+      selectedObj: null
+    };
 
     // Helper: Mengisi datalist dosen terdahulu dari Master Mata Kuliah FEB UIKA
     function populateDatalistDosenTerdahulu() {
@@ -7658,7 +7784,135 @@
           renderItem: (item, query) => renderMasterMatkulDosenDropdownItem(item, query)
         });
       }
+
+      // 3. AUTOCOMPLETE PILIH MAHASISWA PENDAFTAR PADA MODAL JADWAL UJIAN
+      initJadwalPendaftarAutocomplete();
+
+      // 4. AUTOCOMPLETE FILTER KARTU TANDA PESERTA UJIAN DIGITAL
+      initKartuAutocomplete();
     }
+
+    function initJadwalPendaftarAutocomplete() {
+      const inputPendaftar = document.getElementById('jadwalPendaftarSearchInput');
+      const dropPendaftar = document.getElementById('dropdownListJadwalPendaftar');
+      const btnClearPendaftar = document.getElementById('btnClearJadwalPendaftar');
+      const contPendaftar = document.getElementById('autocompleteJadwalPendaftarContainer');
+      const hiddenPendaftar = document.getElementById('jadwalSelectPendaftar');
+
+      if (inputPendaftar && dropPendaftar && !autoJadwalPendaftar) {
+        autoJadwalPendaftar = setupAutocomplete({
+          inputElem: inputPendaftar,
+          dropdownElem: dropPendaftar,
+          clearBtnElem: btnClearPendaftar,
+          containerElem: contPendaftar,
+          strictValidation: true,
+          placeholderEmpty: 'Mahasiswa pendaftar tidak ditemukan',
+          getItems: (query) => {
+            const list = Array.isArray(jadwalAvailablePendaftarMeta) ? jadwalAvailablePendaftarMeta : [];
+            const tokens = String(query || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+            if (tokens.length === 0) return list;
+            return list.filter(entry => {
+              const haystack = `${buildPendaftaranCandidateHaystack(entry.p)} ${String(entry.label || '').toLowerCase()} ${String(entry.partialInfo || '').toLowerCase()} ${String(entry.editLabel || '').toLowerCase()}`;
+              return tokens.every(tok => haystack.includes(tok));
+            });
+          },
+          getItemValue: (entry) => entry.label || '',
+          renderItem: (entry, query) => {
+            const extraBadge = [entry.partialInfo, entry.editLabel].filter(Boolean).join(' · ');
+            return renderPendaftaranAutocompleteItem(entry.p, query, extraBadge);
+          },
+          onSelect: (entry) => {
+            if (hiddenPendaftar) hiddenPendaftar.value = entry.id || '';
+            selectedJadwalPendaftarObj = entry.p || null;
+            onSelectMahasiswaPendaftar(entry.id || '', false, entry.p || null);
+          },
+          onClear: () => {
+            if (hiddenPendaftar) hiddenPendaftar.value = '';
+            selectedJadwalPendaftarObj = null;
+            onSelectMahasiswaPendaftar('');
+          }
+        });
+      }
+      return autoJadwalPendaftar;
+    }
+
+    function getRoleScopedKartuPendaftaranList() {
+      const pendaftaranList = (typeof appData !== 'undefined' && appData && Array.isArray(appData.pendaftaran)) ? appData.pendaftaran : [];
+      const isMhs = typeof currentUser !== 'undefined' && currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      if (isMhs) {
+        const myNpm = String(currentUser.npm || currentUser.username || '').trim().toLowerCase();
+        return pendaftaranList.filter(d => String(d.NPM || d.NIM || d.npm || '').trim().toLowerCase() === myNpm);
+      }
+      return pendaftaranList;
+    }
+
+    function initKartuAutocomplete() {
+      const inputKartu = document.getElementById('kartuSearchInput');
+      const dropKartu = document.getElementById('dropdownListKartu');
+      const btnClearKartu = document.getElementById('btnClearKartuSearch');
+      const contKartu = document.getElementById('autocompleteKartuContainer');
+
+      if (inputKartu && dropKartu && !autoKartuSearch) {
+        autoKartuSearch = setupAutocomplete({
+          inputElem: inputKartu,
+          dropdownElem: dropKartu,
+          clearBtnElem: btnClearKartu,
+          containerElem: contKartu,
+          strictValidation: false,
+          placeholderEmpty: 'Tidak ada berkas kartu ujian yang cocok',
+          getItems: (query) => {
+            const scoped = getRoleScopedKartuPendaftaranList();
+            const tokens = String(query || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+            if (tokens.length === 0) return scoped;
+            return scoped.filter(p => {
+              const formattedVal = `${p['Nama Mahasiswa'] || p.nama || ''} (${p.NPM || p.NIM || '-'}) - ${p.ID || p.id || ''}`.toLowerCase();
+              const haystack = `${buildPendaftaranCandidateHaystack(p)} ${formattedVal}`;
+              return tokens.every(tok => haystack.includes(tok));
+            });
+          },
+          getItemValue: (p) => `${p['Nama Mahasiswa'] || p.nama || ''} (${p.NPM || p.NIM || '-'}) - ${p.ID || p.id || ''}`,
+          renderItem: (p, query) => {
+            const statusApp = String(p['Status Persetujuan'] || 'Pending').trim();
+            return renderPendaftaranAutocompleteItem(p, query, statusApp);
+          },
+          onSelect: (p) => {
+            kartuFilterState.selectedRegId = String(p.ID || p.id || '').trim();
+            kartuFilterState.selectedObj = p;
+            kartuFilterState.query = inputKartu.value || '';
+            renderKartuUjianDigital();
+          },
+          onClear: () => {
+            kartuFilterState.selectedRegId = '';
+            kartuFilterState.selectedObj = null;
+            kartuFilterState.query = '';
+            renderKartuUjianDigital();
+          }
+        });
+
+        inputKartu.addEventListener('input', () => {
+          kartuFilterState.selectedRegId = '';
+          kartuFilterState.selectedObj = null;
+          kartuFilterState.query = inputKartu.value || '';
+          renderKartuUjianDigital();
+        });
+      }
+      return autoKartuSearch;
+    }
+
+    function resetKartuSearchFilter() {
+      kartuFilterState.selectedRegId = '';
+      kartuFilterState.selectedObj = null;
+      kartuFilterState.query = '';
+      if (autoKartuSearch) {
+        autoKartuSearch.clear();
+        autoKartuSearch.close();
+      } else {
+        const inp = document.getElementById('kartuSearchInput');
+        if (inp) inp.value = '';
+        renderKartuUjianDigital();
+      }
+    }
+    window.resetKartuSearchFilter = resetKartuSearchFilter;
 
     // Toggle edit input jadwal ujian
     function toggleEditJadwalMatkul() {
@@ -9153,11 +9407,14 @@
       }
 
       // Populate pilihan mahasiswa yang mendaftar (Hanya yang BELUM terjadwalkan)
-      const selectPendaftar = document.getElementById('jadwalSelectPendaftar');
+      const hiddenPendaftar = document.getElementById('jadwalSelectPendaftar');
+      const inputPendaftarSearch = document.getElementById('jadwalPendaftarSearchInput');
       const badgeCount = document.getElementById('jadwalPendaftarCountBadge');
       const hintText = document.getElementById('jadwalPendaftarHint');
       const pendaftaranList = appData.pendaftaran || [];
       const jadwalList = appData.jadwal || [];
+
+      initJadwalPendaftarAutocomplete();
 
       // Cari jadwal yang sedang diedit jika realId ada
       const currentEditingJadwal = realId ? jadwalList.find(j => String(j.ID).trim() === realId) : null;
@@ -9225,36 +9482,70 @@
         }
       }
 
-      if (availablePendaftar.length > 0) {
-        selectPendaftar.disabled = false;
+      jadwalAvailablePendaftarMeta = availablePendaftar.map(p => {
+        const allCourses = extractMataKuliahList(p);
+        const unscheduled = getUnscheduledCoursesForPendaftaran(p, jadwalList, realId);
+        const partialInfo = (allCourses.length > 1 && unscheduled.length < allCourses.length)
+          ? `Sisa ${unscheduled.length}/${allCourses.length} Matkul`
+          : '';
+        const isCurrentEdit = matchedPendaftarForEdit && String(p.ID) === String(matchedPendaftarForEdit.ID);
+        const editLabel = isCurrentEdit ? 'Jadwal Aktif Ini' : '';
+        const cleanMatkul = String(p['Mata Kuliah'] || '').replace(/\n/g, ', ');
+        const regId = String(p.ID || p.id || '').trim();
+        const label = `${p['Nama Mahasiswa'] || ''} (NPM: ${p.NPM || p.NIM || '-'}) - ${cleanMatkul} [${regId}]`;
+        return { p, id: regId, partialInfo, editLabel, label };
+      });
+
+      if (jadwalAvailablePendaftarMeta.length > 0) {
+        if (inputPendaftarSearch) {
+          inputPendaftarSearch.disabled = false;
+          inputPendaftarSearch.placeholder = 'Ketik Nama, NPM, ID REG, Matkul, Prodi, atau Layanan...';
+        }
         if (badgeCount) {
-          badgeCount.innerText = `${availablePendaftar.length} Mahasiswa Menunggu`;
-          badgeCount.className = 'text-[10px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full';
+          badgeCount.innerText = `${jadwalAvailablePendaftarMeta.length} Mahasiswa Menunggu`;
+          badgeCount.className = 'text-[10px] font-bold text-blue-900 bg-blue-100 border border-blue-300 px-2 py-0.5 rounded-full shrink-0';
         }
         if (hintText) {
-          hintText.innerHTML = '<i class="fas fa-filter text-emerald-600"></i><span>Mahasiswa yang seluruh mata kuliahnya sudah terjadwal otomatis disembunyikan agar tidak terjadi duplikasi.</span>';
+          hintText.innerHTML = '<i class="fas fa-filter text-emerald-600"></i><span>Ketik kata kunci untuk menyaring mahasiswa. Yang seluruh mata kuliahnya sudah terjadwal otomatis disembunyikan.</span>';
         }
-        selectPendaftar.innerHTML = '<option value="">-- Pilih Mahasiswa Terdaftar (Disetujui / Pending) --</option>' +
-          availablePendaftar.map(p => {
-            const allCourses = extractMataKuliahList(p);
-            const unscheduled = getUnscheduledCoursesForPendaftaran(p, jadwalList, realId);
-            const partialInfo = (allCourses.length > 1 && unscheduled.length < allCourses.length)
-              ? ` (Sisa ${unscheduled.length}/${allCourses.length} Matkul)`
-              : '';
-            const cleanMatkul = String(p['Mata Kuliah'] || '').replace(/\n/g, ', ');
-            const isCurrentEdit = matchedPendaftarForEdit && String(p.ID) === String(matchedPendaftarForEdit.ID);
-            const editLabel = isCurrentEdit ? ' [Jadwal Aktif Ini]' : '';
-            return `<option value="${p.ID}" data-json='${JSON.stringify(p).replace(/'/g, "&#39;")}' ${isCurrentEdit ? 'selected' : ''}>${p['Nama Mahasiswa']} (NPM: ${p.NPM || p.NIM}) - ${cleanMatkul} [${p['Jenis Layanan']}]${partialInfo}${editLabel}</option>`;
-          }).join('');
+
+        const matchedMeta = matchedPendaftarForEdit
+          ? jadwalAvailablePendaftarMeta.find(entry => entry.p === matchedPendaftarForEdit || entry.id === String(matchedPendaftarForEdit.ID || '').trim())
+          : null;
+
+        if (matchedMeta) {
+          if (hiddenPendaftar) hiddenPendaftar.value = matchedMeta.id;
+          selectedJadwalPendaftarObj = matchedMeta.p;
+          if (autoJadwalPendaftar) {
+            autoJadwalPendaftar.setValue(matchedMeta.label);
+          } else if (inputPendaftarSearch) {
+            inputPendaftarSearch.value = matchedMeta.label;
+          }
+        } else {
+          if (hiddenPendaftar) hiddenPendaftar.value = '';
+          selectedJadwalPendaftarObj = null;
+          if (autoJadwalPendaftar) {
+            autoJadwalPendaftar.clear();
+          } else if (inputPendaftarSearch) {
+            inputPendaftarSearch.value = '';
+          }
+        }
       } else {
+        if (hiddenPendaftar) hiddenPendaftar.value = '';
+        selectedJadwalPendaftarObj = null;
+        if (autoJadwalPendaftar) autoJadwalPendaftar.clear();
+        if (inputPendaftarSearch) {
+          inputPendaftarSearch.value = '';
+          inputPendaftarSearch.disabled = true;
+          inputPendaftarSearch.placeholder = 'Semua mahasiswa terdaftar sudah terjadwalkan (0 Menunggu)';
+        }
         if (badgeCount) {
           badgeCount.innerText = 'Semua Sudah Terjadwalkan';
-          badgeCount.className = 'text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full';
+          badgeCount.className = 'text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full shrink-0';
         }
         if (hintText) {
           hintText.innerHTML = '<i class="fas fa-check-circle text-emerald-600"></i><span class="text-emerald-700 font-semibold">Seluruh mahasiswa pendaftar telah berhasil dijadwalkan ke ruangan ujian.</span>';
         }
-        selectPendaftar.innerHTML = '<option value="">-- Semua Mahasiswa Terdaftar Sudah Terjadwalkan (0 Menunggu) --</option>';
       }
 
       // Jika edit jadwal yang sudah ada:
@@ -9720,23 +10011,26 @@
       return allCourses.filter(c => !findScheduleForRegistrationCourse(p, c, jadwalList || [], excludeJadwalId));
     }
 
-    function onSelectMahasiswaPendaftar(pendaftarId, forceShowAll = false) {
+    function onSelectMahasiswaPendaftar(pendaftarId, forceShowAll = false, explicitDataObj = null) {
       if (!pendaftarId) {
+        if (document.getElementById('jadwalKodeProdi')) document.getElementById('jadwalKodeProdi').value = '';
+        if (document.getElementById('jadwalProgramStudi')) document.getElementById('jadwalProgramStudi').value = '';
+        if (document.getElementById('jadwalSemester')) document.getElementById('jadwalSemester').value = '';
+        if (document.getElementById('jadwalKelas')) document.getElementById('jadwalKelas').value = '';
+        if (document.getElementById('jadwalSemesterKelas')) document.getElementById('jadwalSemesterKelas').value = '';
+        if (document.getElementById('jadwalJenisUjian')) document.getElementById('jadwalJenisUjian').value = '';
         renderSlotJadwalMatkul([]);
         return;
       }
-      const select = document.getElementById('jadwalSelectPendaftar');
-      const opt = select ? select.options[select.selectedIndex] : null;
 
-      // 1. Prioritas baca dari atribut data-json pada opsi yang dipilih agar tepat baris meski ada ID lama kembar
-      let data = null;
-      if (opt && String(opt.value || '').trim() === String(pendaftarId).trim() && opt.getAttribute('data-json')) {
-        try {
-          data = JSON.parse(opt.getAttribute('data-json'));
-        } catch(e) {}
+      let data = explicitDataObj || null;
+      if (!data && selectedJadwalPendaftarObj && String(selectedJadwalPendaftarObj.ID || selectedJadwalPendaftarObj.id || '').trim() === String(pendaftarId).trim()) {
+        data = selectedJadwalPendaftarObj;
       }
-
-      // 2. Fallback cari langsung dari objek appData.pendaftaran
+      if (!data && Array.isArray(jadwalAvailablePendaftarMeta)) {
+        const metaMatch = jadwalAvailablePendaftarMeta.find(m => m.id === String(pendaftarId).trim());
+        if (metaMatch && metaMatch.p) data = metaMatch.p;
+      }
       if (!data) {
         data = (appData.pendaftaran || []).find(p => String(p.ID || p.id).trim() === String(pendaftarId).trim());
       }
@@ -10677,23 +10971,75 @@
     // HANYA MUNCUL JIKA ADMIN TU SUDAH SELESAI MEMASUKKAN JADWAL UJIAN
     // Jika belum: Tampilkan pesan status pending!
     // ==========================================
-    function renderKartuUjianDigital() {
+    function renderKartuUjianDigital(focusRegId = null) {
       const container = document.getElementById('kartuDigitalCardsContainer');
       if (!container) return;
 
-      const pendaftaranList = appData.pendaftaran || [];
-      const jadwalList = appData.jadwal || [];
-      const isMhs = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
+      initKartuAutocomplete();
 
-      let target = pendaftaranList;
-      if (isMhs) {
-        const myNpm = String(currentUser.npm || currentUser.username || '').toLowerCase();
-        target = pendaftaranList.filter(d => String(d.NPM || d.NIM || '').toLowerCase() === myNpm);
+      const scopedList = getRoleScopedKartuPendaftaranList();
+      const jadwalList = appData.jadwal || [];
+
+      if (typeof focusRegId === 'string' && focusRegId.trim() !== '') {
+        const cleanFocusId = focusRegId.trim();
+        const found = scopedList.find(d => String(d.ID || d.id || '').trim() === cleanFocusId) || null;
+        kartuFilterState.selectedRegId = cleanFocusId;
+        kartuFilterState.selectedObj = found;
+        const focusLabel = found
+          ? `${found['Nama Mahasiswa'] || found.nama || ''} (${found.NPM || found.NIM || '-'}) - ${cleanFocusId}`
+          : cleanFocusId;
+        kartuFilterState.query = focusLabel;
+        if (autoKartuSearch) {
+          autoKartuSearch.setValue(focusLabel);
+          autoKartuSearch.close();
+        } else {
+          const inp = document.getElementById('kartuSearchInput');
+          if (inp) inp.value = focusLabel;
+        }
+      }
+
+      let target = scopedList;
+      const isLockedSingle = Boolean(kartuFilterState.selectedRegId);
+      const hasQuery = Boolean(kartuFilterState.query && kartuFilterState.query.trim().length > 0);
+
+      if (isLockedSingle) {
+        target = scopedList.filter(d => String(d.ID || d.id || '').trim() === kartuFilterState.selectedRegId);
+      } else if (hasQuery) {
+        target = filterPendaftaranByKeywords(scopedList, kartuFilterState.query);
+      }
+
+      const statusBar = document.getElementById('kartuFilterStatusBar');
+      const countText = document.getElementById('kartuFilterCountText');
+      const isFiltered = isLockedSingle || hasQuery;
+      if (statusBar && countText) {
+        if (isFiltered) {
+          statusBar.classList.remove('hidden');
+          statusBar.classList.add('flex');
+          countText.innerText = isLockedSingle
+            ? `Menampilkan 1 kartu terpilih dari ${scopedList.length} berkas`
+            : `Menampilkan ${target.length} dari ${scopedList.length} kartu berkas untuk kata kunci "${kartuFilterState.query.trim()}"`;
+        } else {
+          statusBar.classList.add('hidden');
+          statusBar.classList.remove('flex');
+        }
       }
 
       container.innerHTML = '';
+      if (scopedList.length === 0) {
+        container.innerHTML = '<div class="col-span-2 bg-white p-8 rounded-3xl border border-slate-200 text-center text-slate-400">Belum ada berkas pendaftaran yang terdaftar di sistem.</div>';
+        return;
+      }
+
       if (target.length === 0) {
-        container.innerHTML = '<div class="col-span-2 bg-white p-8 rounded-3xl border border-slate-200 text-center text-slate-400">Belum ada berkas pendaftaran Anda yang terdaftar di sistem.</div>';
+        container.innerHTML = `
+          <div class="col-span-2 bg-white p-8 rounded-3xl border border-slate-200 text-center space-y-3">
+            <div class="text-slate-400 text-sm font-semibold">Tidak ada Kartu Tanda Peserta Ujian yang cocok dengan pencarian Anda.</div>
+            <button type="button" onclick="resetKartuSearchFilter()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-900 hover:bg-blue-800 text-white font-bold text-xs transition cursor-pointer">
+              <i class="fas fa-rotate-left text-[11px]"></i>
+              <span>Tampilkan Semua Kartu</span>
+            </button>
+          </div>
+        `;
         return;
       }
 
