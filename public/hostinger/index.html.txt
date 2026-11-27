@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sistem Pendaftaran & Reporting Akademik - FEB UIKA Bogor</title>
@@ -612,15 +611,16 @@
           if (Array.isArray(payload.items) && payload.items.length > 1 && !payload.id && !editTargetId) {
             payload.items.forEach((it, idx) => {
               const subId = `${baseId}-${idx + 1}`;
+              const isDirect = typeof isHubungiDosenSchedule === 'function' && isHubungiDosenSchedule(it);
               const newJadwal = {
                 ID: subId,
                 id: subId,
                 pendaftarId: payload.pendaftarId || payload.pendaftaranId,
                 pendaftaranId: payload.pendaftarId || payload.pendaftaranId,
-                'Tanggal Ujian': it.tanggalUjian || payload.tanggalUjian,
-                'Jam Mulai': it.jamMulai || payload.jamMulai || '08:00',
-                'Jam Selesai': it.jamSelesai || payload.jamSelesai || '10:00',
-                Ruangan: it.ruangan || payload.ruangan,
+                'Tanggal Ujian': it.tanggalUjian || payload.tanggalUjian || (isDirect ? 'Hubungi Dosen' : ''),
+                'Jam Mulai': (it.jamMulai !== undefined && it.jamMulai !== '') ? it.jamMulai : ((payload.jamMulai !== undefined && payload.jamMulai !== '') ? payload.jamMulai : (isDirect ? '-' : '08:00')),
+                'Jam Selesai': (it.jamSelesai !== undefined && it.jamSelesai !== '') ? it.jamSelesai : ((payload.jamSelesai !== undefined && payload.jamSelesai !== '') ? payload.jamSelesai : (isDirect ? '-' : '10:00')),
+                Ruangan: it.ruangan || payload.ruangan || (isDirect ? 'Hubungi Dosen' : ''),
                 'Kode Prodi': payload.kodeProdi || 'MNJ',
                 'Program Studi': payload.programStudi || '',
                 Semester: payload.semester || '',
@@ -634,15 +634,16 @@
             });
           } else {
             const firstItem = (payload.items && payload.items[0]) || {};
+            const isDirect = typeof isHubungiDosenSchedule === 'function' && (isHubungiDosenSchedule(payload) || isHubungiDosenSchedule(firstItem));
             const newJadwal = {
               ID: baseId,
               id: baseId,
               pendaftarId: payload.pendaftarId || payload.pendaftaranId,
               pendaftaranId: payload.pendaftarId || payload.pendaftaranId,
-              'Tanggal Ujian': payload.tanggalUjian || firstItem.tanggalUjian,
-              'Jam Mulai': payload.jamMulai || firstItem.jamMulai || '08:00',
-              'Jam Selesai': payload.jamSelesai || firstItem.jamSelesai || '10:00',
-              Ruangan: payload.ruangan || firstItem.ruangan,
+              'Tanggal Ujian': payload.tanggalUjian || firstItem.tanggalUjian || (isDirect ? 'Hubungi Dosen' : ''),
+              'Jam Mulai': (payload.jamMulai !== undefined && payload.jamMulai !== '') ? payload.jamMulai : ((firstItem.jamMulai !== undefined && firstItem.jamMulai !== '') ? firstItem.jamMulai : (isDirect ? '-' : '08:00')),
+              'Jam Selesai': (payload.jamSelesai !== undefined && payload.jamSelesai !== '') ? payload.jamSelesai : ((firstItem.jamSelesai !== undefined && firstItem.jamSelesai !== '') ? firstItem.jamSelesai : (isDirect ? '-' : '10:00')),
+              Ruangan: payload.ruangan || firstItem.ruangan || (isDirect ? 'Hubungi Dosen' : ''),
               'Kode Prodi': payload.kodeProdi || 'MNJ',
               'Program Studi': payload.programStudi || '',
               Semester: payload.semester || '',
@@ -3757,7 +3758,7 @@
             </p>
             <div id="toolbarSlotMultiMatkul" class="hidden">
               <button type="button" onclick="applyFirstSlotToAll()" class="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 rounded-lg font-bold text-[11px] shadow-2xs transition flex items-center gap-1 cursor-pointer">
-                <i class="fas fa-copy text-indigo-600"></i> Samakan Tanggal & Ruangan
+                <i class="fas fa-copy text-indigo-600"></i> Samakan Pengaturan Slot #1
               </button>
             </div>
           </div>
@@ -4962,9 +4963,32 @@
     // ==========================================
     // [PERBAIKAN BAGIAN WAKTU & FORMAT JAM/TANGGAL]
     // ==========================================
+    function isHubungiDosenSchedule(item) {
+      if (!item || typeof item !== 'object') return false;
+      const mode = String(item.mode || item.scheduleMode || '').trim().toLowerCase();
+      if (mode === 'contact_lecturer' || mode === 'hubungi_dosen') return true;
+      const tgl = String(item['Tanggal Ujian'] || item.tanggalUjian || item.tanggal || '').trim().toLowerCase();
+      const ruang = String(item.Ruangan || item.ruangan || '').trim().toLowerCase();
+      const jm = String(item['Jam Mulai'] || item.jamMulai || '').trim().toLowerCase();
+      const hasKeyword = (s) => s.includes('hubungi dosen') || s.includes('konfirmasi dosen') || s.includes('konfirmasi ke dosen') || s === 'hubungi_dosen';
+      return hasKeyword(tgl) || hasKeyword(ruang) || hasKeyword(jm);
+    }
+    window.isHubungiDosenSchedule = isHubungiDosenSchedule;
+
+    function extractCleanJadwalNote(rawKet) {
+      let s = String(rawKet || '').trim();
+      if (!s || s === '-') return '';
+      s = s.replace(/\s*\[ID:\s*REG-\d+\]/gi, '');
+      s = s.replace(/\s*\|\s*Peserta\s*:\s*[^|\[\n]+/gi, '');
+      s = s.replace(/^Peserta\s*:\s*[^|\[\n]+/gi, '');
+      return s.replace(/^[\s|]+|[\s|]+$/g, '').trim();
+    }
+    window.extractCleanJadwalNote = extractCleanJadwalNote;
+
     function formatJamClean(t) {
       if (!t) return '08:00';
       const s = String(t).trim();
+      if (!s || s === '-' || s.toLowerCase().includes('hubungi') || s.toLowerCase().includes('konfirmasi')) return '-';
       if (s.indexOf('1899') !== -1 || s.indexOf('1900') !== -1) {
         const dt = new Date(s);
         if (!isNaN(dt.getTime())) {
@@ -4980,6 +5004,7 @@
       try {
         const cleanM = formatJamClean(mulai);
         const cleanS = formatJamClean(selesai);
+        if (!cleanM || !cleanS || cleanM === '-' || cleanS === '-') return '';
         const [h1, m1] = cleanM.split(':').map(Number);
         const [h2, m2] = cleanS.split(':').map(Number);
         const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
@@ -4990,6 +5015,10 @@
 
     function formatTanggalIndo(tglStr) {
       if (!tglStr) return '-';
+      const rawLower = String(tglStr).trim().toLowerCase();
+      if (rawLower.includes('hubungi dosen') || rawLower.includes('konfirmasi dosen') || rawLower === 'hubungi_dosen') {
+        return 'Hubungi / Konfirmasi Dosen';
+      }
       try {
         let dt = null;
         if (tglStr instanceof Date) {
@@ -6298,11 +6327,114 @@
     }
 
     function highlightSearchMatch(text, query) {
-      if (!text) return '';
-      if (!query || !query.trim()) return escapeHtml(text);
-      const q = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`(${q})`, 'gi');
-      return escapeHtml(text).replace(regex, '<mark class="bg-amber-200 text-blue-950 font-extrabold px-1 py-0.5 rounded shadow-xs">$1</mark>');
+      const rawText = String(text || '');
+      if (!rawText) return '';
+      const tokens = Array.from(new Set(
+        String(query || '').trim().split(/\s+/).filter(Boolean)
+      )).sort((a, b) => b.length - a.length);
+      if (tokens.length === 0) return escapeHtml(rawText);
+      const pattern = tokens.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+      const regex = new RegExp(`(${pattern})`, 'gi');
+      const parts = rawText.split(regex);
+      return parts.map((part, idx) =>
+        idx % 2 === 1
+          ? `<mark class="bg-amber-200 text-blue-950 font-extrabold px-0.5 rounded shadow-2xs">${escapeHtml(part)}</mark>`
+          : escapeHtml(part)
+      ).join('');
+    }
+
+    function getMasterMatkulDosenCatalog(options = {}) {
+      const preferredProdi = String(options.preferredProdi || '').trim().toUpperCase();
+      const preferredMatkul = String(options.preferredMatkul || '').trim().toLowerCase();
+      const master = (typeof appData !== 'undefined' && appData && appData.master) ? appData.master : {};
+      const allMatkul = Array.isArray(master.matkul) ? master.matkul : [];
+
+      const dosenMap = new Map();
+      allMatkul.forEach(m => {
+        if (!m || typeof m !== 'object') return;
+        const nama = String(m['Dosen Pengampu'] || m.dosen || m.dosenPengampu || '').trim();
+        if (!nama || nama === '-') return;
+        const key = nama.toLowerCase().replace(/\s+/g, ' ');
+        const kodeProdi = String(m['Kode Prodi'] || m.Kode_Prodi || '').trim().toUpperCase();
+        const namaMatkul = String(m['Nama Mata Kuliah'] || m.nama || m.mataKuliah || '').trim();
+        const kelasStr = String(m.Kelas || m.kelas || '').trim();
+
+        if (!dosenMap.has(key)) {
+          dosenMap.set(key, {
+            nama,
+            prodiSet: new Set(),
+            matkulSet: new Set(),
+            kelasSet: new Set()
+          });
+        }
+        const entry = dosenMap.get(key);
+        if (kodeProdi) entry.prodiSet.add(kodeProdi);
+        if (namaMatkul) entry.matkulSet.add(namaMatkul);
+        if (kelasStr) entry.kelasSet.add(kelasStr);
+      });
+
+      const list = Array.from(dosenMap.values()).map(entry => {
+        const prodiList = Array.from(entry.prodiSet);
+        const matkulList = Array.from(entry.matkulSet);
+        const kelasList = Array.from(entry.kelasSet);
+        const matchesPreferredProdi = preferredProdi ? prodiList.includes(preferredProdi) : false;
+        const teachesPreferredMatkul = preferredMatkul
+          ? matkulList.some(mk => mk.toLowerCase() === preferredMatkul || mk.toLowerCase().includes(preferredMatkul))
+          : false;
+        const primaryProdi = matchesPreferredProdi ? preferredProdi : (prodiList[0] || 'FEB');
+
+        return {
+          nama: entry.nama,
+          prodiList,
+          primaryProdi,
+          matkulList,
+          kelasList,
+          matchesPreferredProdi,
+          teachesPreferredMatkul
+        };
+      });
+
+      list.sort((a, b) => {
+        if (a.teachesPreferredMatkul !== b.teachesPreferredMatkul) {
+          return a.teachesPreferredMatkul ? -1 : 1;
+        }
+        if (a.matchesPreferredProdi !== b.matchesPreferredProdi) {
+          return a.matchesPreferredProdi ? -1 : 1;
+        }
+        return a.nama.localeCompare(b.nama, 'id');
+      });
+
+      return list;
+    }
+
+    function filterMasterMatkulDosenCatalog(catalog, query) {
+      if (!Array.isArray(catalog) || catalog.length === 0) return [];
+      const tokens = String(query || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+      if (tokens.length === 0) return catalog;
+      return catalog.filter(item => {
+        const haystack = `${item.nama} ${item.matkulList.join(' ')} ${item.prodiList.join(' ')}`.toLowerCase();
+        return tokens.every(tok => haystack.includes(tok));
+      });
+    }
+
+    function renderMasterMatkulDosenDropdownItem(item, query) {
+      const highNama = highlightSearchMatch(item.nama || '', query);
+      const prodiLabel = (item.prodiList && item.prodiList.length > 0)
+        ? item.prodiList.join(', ')
+        : (item.primaryProdi || 'FEB');
+      const matkulPreviewList = (item.matkulList || []).slice(0, 2);
+      const extraCount = Math.max(0, (item.matkulList || []).length - 2);
+      const matkulSummary = matkulPreviewList.length > 0
+        ? matkulPreviewList.map(mk => highlightSearchMatch(mk, query)).join(' · ') + (extraCount > 0 ? ` (+${extraCount} lainnya)` : '')
+        : '';
+
+      return `
+        <div class="flex-1 min-w-0 pr-2">
+          <div class="font-bold text-slate-800 text-xs sm:text-sm group-hover:text-blue-900 break-words">${highNama}</div>
+          ${matkulSummary ? `<div class="text-[10px] text-slate-400 mt-0.5 leading-snug break-words"><i class="fas fa-book-open mr-1"></i>${matkulSummary}</div>` : ''}
+        </div>
+        <span class="text-[10px] font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 shrink-0 whitespace-nowrap">${escapeHtml(prodiLabel)}</span>
+      `;
     }
 
     function setupAutocomplete({
@@ -6537,16 +6669,15 @@
     let autoMatkulJadwal = null;
     let autoDosenJadwal = null;
 
-    // Helper: Mengisi datalist dosen terdahulu dari master data dosen FEB UIKA
+    // Helper: Mengisi datalist dosen terdahulu dari Master Mata Kuliah FEB UIKA
     function populateDatalistDosenTerdahulu() {
       const datalist = document.getElementById('datalistDosenTerdahulu');
       if (!datalist) return;
-      const master = appData.master || {};
-      const allDosen = master.dosen || [];
+      const allDosen = getMasterMatkulDosenCatalog();
       datalist.innerHTML = allDosen.map(d => {
-        const nama = d['Nama Dosen'] || d.Nama || '';
-        const prodi = d['Kode Prodi'] || 'FEB';
-        return `<option value="${escapeHtml(nama)}">${escapeHtml(nama)} (${prodi})</option>`;
+        const nama = d.nama || '';
+        const prodi = d.primaryProdi || 'FEB';
+        return `<option value="${escapeHtml(nama)}">${escapeHtml(nama)} (${escapeHtml(prodi)})</option>`;
       }).join('');
     }
 
@@ -6564,7 +6695,15 @@
       const currentDosenInput = document.getElementById(`pendaftaranDosen_${rowIdx}`);
       const laluDosenInput = document.getElementById(`pendaftaranDosenLalu_${rowIdx}`);
       if (currentDosenInput && laluDosenInput) {
-        laluDosenInput.value = currentDosenInput.value;
+        const entry = Array.isArray(dynamicMatkulAutocompletes)
+          ? dynamicMatkulAutocompletes.find(e => e.rowIdx === rowIdx)
+          : null;
+        if (entry && entry.autoDosenLalu) {
+          entry.autoDosenLalu.setValue(currentDosenInput.value);
+        } else {
+          laluDosenInput.value = currentDosenInput.value;
+        }
+        syncMatkulLegacyFields();
       }
     }
 
@@ -6647,7 +6786,7 @@
 
         const rowCard = document.createElement('div');
         rowCard.id = `matkulRowCard_${i}`;
-        rowCard.className = 'p-3.5 sm:p-4 bg-slate-50/90 hover:bg-slate-50 rounded-2xl border border-slate-200/90 transition-all space-y-3 relative shadow-2xs';
+        rowCard.className = 'p-3.5 sm:p-4 bg-slate-50/90 hover:bg-slate-50 rounded-2xl border border-slate-200/90 transition-all space-y-3 relative focus-within:z-30 shadow-2xs';
 
         rowCard.innerHTML = `
           <div class="flex items-center justify-between pb-2 border-b border-slate-200/70">
@@ -6695,7 +6834,7 @@
                 <i class="fas fa-check-circle text-emerald-700"></i>
                 <span id="feedbackMatkulText_${i}"></span>
               </div>
-              <div id="dropdownListMatkul_${i}" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100"></div>
+              <div id="dropdownListMatkul_${i}" class="hidden absolute left-0 right-0 z-[60] mt-1 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100"></div>
             </div>
 
             <div class="relative" id="autocompleteDosenContainer_${i}">
@@ -6728,7 +6867,7 @@
                 <i class="fas fa-check-circle text-emerald-700"></i>
                 <span id="feedbackDosenText_${i}"></span>
               </div>
-              <div id="dropdownListDosen_${i}" class="hidden absolute left-0 right-0 z-50 mt-1 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100"></div>
+              <div id="dropdownListDosen_${i}" class="hidden absolute left-0 right-0 z-[60] mt-1 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100"></div>
             </div>
           </div>
 
@@ -6765,11 +6904,27 @@
                     <i class="fas fa-copy text-[9px]"></i> Sama Dgn Dosen Baru
                   </button>
                 </div>
-                <input type="text" id="pendaftaranDosenLalu_${i}" list="datalistDosenTerdahulu" required autocomplete="off"
-                  value="${escapeHtml(rowData.dosenLalu || '')}"
-                  oninput="syncMatkulLegacyFields()"
-                  placeholder="Pilih dari daftar dosen atau ketik nama..."
-                  class="w-full py-2 px-3 bg-white border border-indigo-300 rounded-xl font-semibold text-slate-800 text-xs sm:text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-700 focus:border-indigo-700 shadow-2xs">
+                <div class="relative" id="autocompleteDosenLaluContainer_${i}">
+                  <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-indigo-400">
+                      <i class="fas fa-user-clock text-xs"></i>
+                    </div>
+                    <input type="text" id="pendaftaranDosenLalu_${i}" required autocomplete="off"
+                      value="${escapeHtml(rowData.dosenLalu || '')}"
+                      placeholder="Ketik kata kunci nama dosen terdahulu..."
+                      class="w-full pl-8 pr-16 py-2 bg-white border border-indigo-300 rounded-xl font-semibold text-slate-800 text-xs sm:text-sm placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-indigo-700 focus:border-indigo-700 transition-all shadow-2xs">
+                    <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+                      <button type="button" id="btnClearDosenLalu_${i}" title="Bersihkan input"
+                        class="hidden w-5 h-5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors">
+                        <i class="fas fa-times text-[10px]"></i>
+                      </button>
+                      <div class="text-indigo-400 pointer-events-none px-1">
+                        <i class="fas fa-chevron-down text-[10px]"></i>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="dropdownListDosenLalu_${i}" class="hidden absolute left-0 right-0 z-[60] mt-1 max-h-56 overflow-y-auto bg-white rounded-xl shadow-xl border border-indigo-200 divide-y divide-slate-100"></div>
+                </div>
                 <p class="text-[10px] text-slate-500 mt-1">Dosen yang mengajar saat Anda memperoleh nilai tersebut.</p>
               </div>
             </div>
@@ -6826,14 +6981,15 @@
             }
             if (filtered.length === 0) filtered = allMatkul;
 
-            if (!query || !query.trim()) return filtered;
-            const q = query.toLowerCase().trim();
+            const tokens = String(query || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+            if (tokens.length === 0) return filtered;
             return filtered.filter(m => {
-              const nama = (m['Nama Mata Kuliah'] || m.nama || '').toLowerCase();
-              const kode = (m['Kode Matkul'] || m.kode || '').toLowerCase();
-              const kls = (m.Kelas || m.kelas || m['Kelas'] || '').toLowerCase();
-              const dosen = (m['Dosen Pengampu'] || m.dosen || '').toLowerCase();
-              return nama.includes(q) || kode.includes(q) || kls.includes(q) || dosen.includes(q);
+              const nama = String(m['Nama Mata Kuliah'] || m.nama || '').toLowerCase();
+              const kode = String(m['Kode Matkul'] || m.kode || '').toLowerCase();
+              const kls = String(m.Kelas || m.kelas || m['Kelas'] || '').toLowerCase();
+              const dosen = String(m['Dosen Pengampu'] || m.dosen || '').toLowerCase();
+              const haystack = `${nama} ${kode} ${kls} ${dosen}`;
+              return tokens.every(tok => haystack.includes(tok));
             });
           },
           getItemValue: (item) => item['Nama Mata Kuliah'] || '',
@@ -6933,47 +7089,24 @@
           dropdownElem: dropD,
           clearBtnElem: btnClearD,
           containerElem: contD,
-          placeholderEmpty: 'Dosen pengampu tidak ditemukan',
+          placeholderEmpty: 'Dosen pengampu tidak ditemukan di Master Mata Kuliah',
           getItems: (query) => {
-            const master = appData.master || {};
-            const allDosen = master.dosen || [];
             const currProdi = (document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
-
-            let list = [...allDosen].sort((a, b) => {
-              const aProdi = String(a['Kode Prodi'] || '').toUpperCase() === currProdi ? 0 : 1;
-              const bProdi = String(b['Kode Prodi'] || '').toUpperCase() === currProdi ? 0 : 1;
-              return aProdi - bProdi;
+            const currMatkul = (inputM?.value || '').trim();
+            const catalog = getMasterMatkulDosenCatalog({
+              preferredProdi: currProdi,
+              preferredMatkul: currMatkul
             });
-
-            if (!query || !query.trim()) return list;
-            const q = query.toLowerCase().trim();
-            return list.filter(d => {
-              const nama = (d['Nama Dosen'] || d.Nama || '').toLowerCase();
-              const nidn = (d['NIK/NIDN'] || d.NIDN || '').toLowerCase();
-              return nama.includes(q) || nidn.includes(q);
-            });
+            return filterMasterMatkulDosenCatalog(catalog, query);
           },
-          getItemValue: (item) => item['Nama Dosen'] || item.Nama || '',
-          renderItem: (item, query) => {
-            const nama = item['Nama Dosen'] || item.Nama || '';
-            const highNama = highlightSearchMatch(nama, query);
-            const prodi = item['Kode Prodi'] || 'FEB';
-            const nidn = item['NIK/NIDN'] || item.NIDN || '';
-            const highNidn = nidn ? highlightSearchMatch(nidn, query) : '';
-            return `
-              <div class="flex-1 pr-2">
-                <div class="font-bold text-slate-800 text-xs sm:text-sm group-hover:text-blue-900">${highNama}</div>
-                ${nidn ? `<div class="text-[10px] text-slate-400 font-mono">NIDN: ${highNidn}</div>` : ''}
-              </div>
-              <span class="text-[10px] font-bold text-purple-800 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 shrink-0">${prodi}</span>
-            `;
-          },
+          getItemValue: (item) => item.nama || '',
+          renderItem: (item, query) => renderMasterMatkulDosenDropdownItem(item, query),
           onSelect: (item) => {
             const fb = document.getElementById(`feedbackDosenSelected_${i}`);
             const fbText = document.getElementById(`feedbackDosenText_${i}`);
             if (fb && fbText) {
               fb.classList.remove('hidden');
-              fbText.innerText = `${item['Nama Dosen'] || item.Nama} [${item['Kode Prodi'] || 'FEB'}]`;
+              fbText.innerText = `${item.nama} [${item.primaryProdi || 'FEB'}]`;
             }
             syncMatkulLegacyFields();
           },
@@ -6986,10 +7119,50 @@
           }
         });
 
+        const inputDLalu = document.getElementById(`pendaftaranDosenLalu_${i}`);
+        const dropDLalu = document.getElementById(`dropdownListDosenLalu_${i}`);
+        const btnClearDLalu = document.getElementById(`btnClearDosenLalu_${i}`);
+        const contDLalu = document.getElementById(`autocompleteDosenLaluContainer_${i}`);
+        let autoDosenLaluInstance = null;
+        if (inputDLalu && dropDLalu) {
+          autoDosenLaluInstance = setupAutocomplete({
+            inputElem: inputDLalu,
+            dropdownElem: dropDLalu,
+            clearBtnElem: btnClearDLalu,
+            containerElem: contDLalu,
+            strictValidation: false,
+            placeholderEmpty: 'Dosen tidak ditemukan di Master Mata Kuliah (tetap bisa diketik manual)',
+            getItems: (query) => {
+              const currProdi = (document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
+              const currMatkul = (inputM?.value || '').trim();
+              const catalog = getMasterMatkulDosenCatalog({
+                preferredProdi: currProdi,
+                preferredMatkul: currMatkul
+              });
+              return filterMasterMatkulDosenCatalog(catalog, query);
+            },
+            getItemValue: (item) => item.nama || '',
+            renderItem: (item, query) => renderMasterMatkulDosenDropdownItem(item, query),
+            onSelect: () => {
+              syncMatkulLegacyFields();
+            },
+            onClear: () => {
+              syncMatkulLegacyFields();
+            }
+          });
+          inputDLalu.addEventListener('input', () => {
+            syncMatkulLegacyFields();
+          });
+          if (rowData.dosenLalu) {
+            autoDosenLaluInstance.setValue(rowData.dosenLalu);
+          }
+        }
+
         dynamicMatkulAutocompletes.push({
           rowIdx: i,
           autoMatkul: autoMatkulInstance,
-          autoDosen: autoDosenInstance
+          autoDosen: autoDosenInstance,
+          autoDosenLalu: autoDosenLaluInstance
         });
 
         // Set data awal jika diberikan (misal saat mode edit pendaftaran atau perubahan dropdown)
@@ -7040,14 +7213,16 @@
     // Helper: Otomatis sarankan dosen pengampu untuk baris mata kuliah tertentu
     function suggestDosenForMatkulRow(rowIdx, matkulItem) {
       if (!matkulItem) return;
-      const master = appData.master || {};
-      let lecturerName = matkulItem['Dosen Pengampu'] || '';
+      let lecturerName = String(matkulItem['Dosen Pengampu'] || matkulItem.dosen || '').trim();
 
       if (!lecturerName) {
-        const activeProdi = (matkulItem['Kode Prodi'] || document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
-        const matchDosen = (master.dosen || []).find(d => String(d['Kode Prodi'] || '').toUpperCase() === activeProdi);
-        if (matchDosen) {
-          lecturerName = matchDosen['Nama Dosen'] || matchDosen.Nama;
+        const activeProdi = String(matkulItem['Kode Prodi'] || document.getElementById('pendaftaranProdi')?.value || 'MNJ').toUpperCase();
+        const catalog = getMasterMatkulDosenCatalog({
+          preferredProdi: activeProdi,
+          preferredMatkul: matkulItem['Nama Mata Kuliah'] || ''
+        });
+        if (catalog.length > 0) {
+          lecturerName = catalog[0].nama;
         }
       }
 
@@ -7068,7 +7243,11 @@
         // Jika form dalam mode Remedial Teaching dan dosen terdahulu masih kosong, sarankan nama yang sama
         const inputLalu = document.getElementById(`pendaftaranDosenLalu_${rowIdx}`);
         if (inputLalu && !inputLalu.value) {
-          inputLalu.value = lecturerName;
+          if (rowEntry.autoDosenLalu) {
+            rowEntry.autoDosenLalu.setValue(lecturerName);
+          } else {
+            inputLalu.value = lecturerName;
+          }
         }
       }
     }
@@ -7418,12 +7597,14 @@
             let filtered = prodiCode ? allMatkul.filter(m => String(m['Kode Prodi'] || '').toUpperCase() === prodiCode) : allMatkul;
             if (filtered.length === 0) filtered = allMatkul;
 
-            if (!query || !query.trim()) return filtered;
-            const q = query.toLowerCase().trim();
+            const tokens = String(query || '').toLowerCase().trim().split(/\s+/).filter(Boolean);
+            if (tokens.length === 0) return filtered;
             return filtered.filter(m => {
-              const nama = (m['Nama Mata Kuliah'] || '').toLowerCase();
-              const kode = (m['Kode Matkul'] || '').toLowerCase();
-              return nama.includes(q) || kode.includes(q);
+              const nama = String(m['Nama Mata Kuliah'] || m.nama || '').toLowerCase();
+              const kode = String(m['Kode Matkul'] || m.kode || '').toLowerCase();
+              const dosen = String(m['Dosen Pengampu'] || m.dosen || '').toLowerCase();
+              const haystack = `${nama} ${kode} ${dosen}`;
+              return tokens.every(tok => haystack.includes(tok));
             });
           },
           getItemValue: (item) => item['Nama Mata Kuliah'] || '',
@@ -7450,7 +7631,7 @@
         });
       }
 
-      // 2. AUTOCOMPLETE DOSEN PENGAMPU PADA FORM INPUT JADWAL UJIAN
+      // 2. AUTOCOMPLETE DOSEN PENGAMPU PADA FORM INPUT JADWAL UJIAN (DARI MASTER_MATKUL)
       const inputJadwalDosen = document.getElementById('jadwalDosenPengampu');
       const dropJadwalDosen = document.getElementById('dropdownListJadwalDosen');
       const btnClearJadwalDosen = document.getElementById('btnClearJadwalDosen');
@@ -7462,26 +7643,18 @@
           dropdownElem: dropJadwalDosen,
           clearBtnElem: btnClearJadwalDosen,
           containerElem: contJadwalDosen,
-          placeholderEmpty: 'Dosen tidak ditemukan',
+          placeholderEmpty: 'Dosen pengampu tidak ditemukan di Master Mata Kuliah',
           getItems: (query) => {
-            const master = appData.master || {};
-            const allDosen = master.dosen || [];
-            if (!query || !query.trim()) return allDosen;
-            const q = query.toLowerCase().trim();
-            return allDosen.filter(d => {
-              const nama = (d['Nama Dosen'] || d.Nama || '').toLowerCase();
-              const nidn = (d['NIK/NIDN'] || d.NIDN || '').toLowerCase();
-              return nama.includes(q) || nidn.includes(q);
+            const prodiCode = (document.getElementById('jadwalKodeProdi')?.value || '').toUpperCase();
+            const matkulVal = (document.getElementById('jadwalMataKuliah')?.value || '').trim();
+            const catalog = getMasterMatkulDosenCatalog({
+              preferredProdi: prodiCode,
+              preferredMatkul: matkulVal
             });
+            return filterMasterMatkulDosenCatalog(catalog, query);
           },
-          getItemValue: (item) => item['Nama Dosen'] || item.Nama || '',
-          renderItem: (item, query) => {
-            const highNama = highlightSearchMatch(item['Nama Dosen'] || item.Nama || '', query);
-            return `
-              <div class="font-bold text-slate-800 text-xs">${highNama}</div>
-              <span class="text-[10px] text-slate-400">${escapeHtml(item['Kode Prodi'] || 'FEB')}</span>
-            `;
-          }
+          getItemValue: (item) => item.nama || '',
+          renderItem: (item, query) => renderMasterMatkulDosenDropdownItem(item, query)
         });
       }
     }
@@ -7663,6 +7836,7 @@
           }
           if (entry.autoMatkul) entry.autoMatkul.refresh();
           if (entry.autoDosen) entry.autoDosen.refresh();
+          if (entry.autoDosenLalu) entry.autoDosenLalu.refresh();
         });
       }
 
@@ -9213,15 +9387,22 @@
       }
 
       const masterRuangan = (appData && appData.master && appData.master.ruangan) || (appData && appData.ruangan) || [];
-      const defaultDate = existingScheduleItem ? (existingScheduleItem['Tanggal Ujian'] || '') : new Date().toISOString().split('T')[0];
-      const defaultMulai = existingScheduleItem ? formatJamClean(existingScheduleItem['Jam Mulai']) : '08:00';
-      const defaultSelesai = existingScheduleItem ? formatJamClean(existingScheduleItem['Jam Selesai']) : '10:00';
-      const defaultRuang = existingScheduleItem ? (existingScheduleItem.Ruangan || '') : '';
+      const existingIsDirect = existingScheduleItem ? isHubungiDosenSchedule(existingScheduleItem) : false;
+      const fallbackToday = new Date().toISOString().split('T')[0];
+      const defaultDate = (existingScheduleItem && !existingIsDirect) ? (existingScheduleItem['Tanggal Ujian'] || fallbackToday) : fallbackToday;
+      const defaultMulai = (existingScheduleItem && !existingIsDirect) ? (formatJamClean(existingScheduleItem['Jam Mulai']) || '08:00') : '08:00';
+      const defaultSelesai = (existingScheduleItem && !existingIsDirect) ? (formatJamClean(existingScheduleItem['Jam Selesai']) || '10:00') : '10:00';
+      const defaultRuang = (existingScheduleItem && !existingIsDirect) ? (existingScheduleItem.Ruangan || '') : '';
       const defaultKet = existingScheduleItem ? (existingScheduleItem.Keterangan || '') : '';
 
       courses.forEach((c, idx) => {
+        const isDirect = existingScheduleItem ? existingIsDirect : isHubungiDosenSchedule(c);
+        const mode = isDirect ? 'contact_lecturer' : 'fixed';
+
         const card = document.createElement('div');
-        card.className = 'slot-jadwal-card bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5 transition hover:border-indigo-300';
+        card.className = 'slot-jadwal-card relative focus-within:z-30 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5 transition hover:border-indigo-300';
+        card.setAttribute('data-slot-idx', String(idx));
+        card.setAttribute('data-mode', mode);
         card.setAttribute('data-matkul', c.mataKuliah || c.nama || '');
         card.setAttribute('data-dosen', c.dosenPengampu || c.dosen || '');
         card.setAttribute('data-sks', c.sks || 3);
@@ -9234,48 +9415,179 @@
             return `<option value="${kode}" ${sel}>${kode} - ${nama}</option>`;
           }).join('');
 
+        const initialDosen = c.dosenPengampu || c.dosen || '';
+        const activeBtnCls = 'bg-white text-blue-950 font-bold shadow-xs border border-slate-200/80';
+        const inactiveBtnCls = 'text-slate-600 hover:text-slate-900 font-semibold border border-transparent';
+
         card.innerHTML = `
-          <div class="flex items-start justify-between border-b border-slate-100 pb-2">
+          <div class="flex items-start justify-between border-b border-slate-100 pb-2 gap-2">
             <div>
               <div class="font-extrabold text-blue-950 text-xs flex items-center gap-1.5 flex-wrap">
                 <span class="w-5 h-5 rounded-full bg-blue-900 text-white font-mono text-[10px] flex items-center justify-center font-bold">${idx + 1}</span>
                 <span class="text-slate-900">${escapeHtml(c.mataKuliah || c.nama)}</span>
                 <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">${c.sks || 3} SKS</span>
               </div>
-              <div class="text-[11px] text-slate-500 pl-6.5 mt-0.5">
-                <i class="fas fa-user-tie text-[10px] text-slate-400 mr-1"></i> Dosen Pengampu: <b class="text-slate-700">${escapeHtml(c.dosenPengampu || c.dosen || '-')}</b>
+            </div>
+            ${courses.length > 1 ? `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-mono font-bold shrink-0">Slot #${idx + 1}</span>` : ''}
+          </div>
+          <div class="relative" id="autocompleteSlotDosenContainer_${idx}">
+            <label for="slotDosenInput_${idx}" class="block font-bold text-slate-700 text-[11px] mb-1">Dosen Pengampu <span class="text-rose-500">*</span></label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                <i class="fas fa-user-tie text-[11px]"></i>
+              </div>
+              <input type="text" id="slotDosenInput_${idx}" required autocomplete="off"
+                value="${escapeHtml(initialDosen)}"
+                placeholder="Ketik kata kunci nama dosen pengampu..."
+                class="slot-dosen-input w-full pl-7 pr-14 py-1.5 bg-white border border-slate-300 rounded-xl font-semibold text-slate-800 text-xs placeholder:text-slate-400 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-blue-900 focus:border-blue-900 transition-all shadow-2xs">
+              <div class="absolute inset-y-0 right-0 pr-2 flex items-center gap-1">
+                <button type="button" id="btnClearSlotDosen_${idx}" title="Bersihkan input"
+                  class="hidden w-5 h-5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex items-center justify-center transition-colors">
+                  <i class="fas fa-times text-[10px]"></i>
+                </button>
+                <div class="text-slate-400 pointer-events-none px-1">
+                  <i class="fas fa-chevron-down text-[10px]"></i>
+                </div>
               </div>
             </div>
-            ${courses.length > 1 ? `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-mono font-bold">Slot #${idx + 1}</span>` : ''}
+            <div id="dropdownListSlotDosen_${idx}" class="hidden absolute left-0 right-0 z-[60] mt-1 max-h-48 overflow-y-auto bg-white rounded-xl shadow-xl border border-slate-200 divide-y divide-slate-100"></div>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            <div>
-              <label class="block font-bold text-slate-700 text-[11px] mb-1">Tanggal Ujian <span class="text-rose-500">*</span></label>
-              <input type="date" class="slot-tanggal w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-semibold text-xs focus:ring-2 focus:ring-blue-900" required value="${defaultDate}">
-            </div>
-            <div>
-              <label class="block font-bold text-slate-700 text-[11px] mb-1">Jam Mulai <span class="text-rose-500">*</span></label>
-              <input type="time" class="slot-jam-mulai w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-mono font-bold text-xs focus:ring-2 focus:ring-blue-900" required value="${defaultMulai}">
-            </div>
-            <div>
-              <label class="block font-bold text-slate-700 text-[11px] mb-1">Jam Selesai <span class="text-rose-500">*</span></label>
-              <input type="time" class="slot-jam-selesai w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-mono font-bold text-xs focus:ring-2 focus:ring-blue-900" required value="${defaultSelesai}">
+
+          <div>
+            <span class="block font-bold text-slate-700 text-[11px] mb-1">Metode Penjadwalan Ujian</span>
+            <div class="grid grid-cols-2 gap-1 p-1 bg-slate-100 rounded-xl border border-slate-200/80">
+              <button type="button" onclick="setSlotJadwalMode(${idx}, 'fixed')"
+                class="slot-mode-btn-fixed px-2.5 py-1.5 rounded-lg text-[11px] transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${!isDirect ? activeBtnCls : inactiveBtnCls}">
+                <i class="fas fa-calendar-check text-[10px]"></i>
+                <span>Tanggal, Jam &amp; Ruangan</span>
+              </button>
+              <button type="button" onclick="setSlotJadwalMode(${idx}, 'contact_lecturer')"
+                class="slot-mode-btn-direct px-2.5 py-1.5 rounded-lg text-[11px] transition flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${isDirect ? activeBtnCls : inactiveBtnCls}">
+                <i class="fas fa-comments text-[10px]"></i>
+                <span>Hubungi Dosen</span>
+              </button>
             </div>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+
+          <div class="slot-fixed-fields space-y-2.5 ${isDirect ? 'hidden' : ''}">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-1">Tanggal Ujian <span class="text-rose-500">*</span></label>
+                <input type="date" class="slot-tanggal w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-semibold text-xs focus:ring-2 focus:ring-blue-900" ${!isDirect ? 'required' : ''} value="${defaultDate}">
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-1">Jam Mulai <span class="text-rose-500">*</span></label>
+                <input type="time" class="slot-jam-mulai w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-mono font-bold text-xs focus:ring-2 focus:ring-blue-900" ${!isDirect ? 'required' : ''} value="${defaultMulai}">
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 text-[11px] mb-1">Jam Selesai <span class="text-rose-500">*</span></label>
+                <input type="time" class="slot-jam-selesai w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-mono font-bold text-xs focus:ring-2 focus:ring-blue-900" ${!isDirect ? 'required' : ''} value="${defaultSelesai}">
+              </div>
+            </div>
             <div>
               <label class="block font-bold text-slate-700 text-[11px] mb-1">Ruangan Ujian <span class="text-rose-500">*</span></label>
-              <select class="slot-ruangan w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-bold text-xs focus:ring-2 focus:ring-blue-900" required>
+              <select class="slot-ruangan w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white font-bold text-xs focus:ring-2 focus:ring-blue-900" ${!isDirect ? 'required' : ''}>
                 ${ruanganOptions}
               </select>
             </div>
-            <div>
-              <label class="block font-bold text-slate-700 text-[11px] mb-1">Tata Tertib / Catatan Ruangan</label>
-              <input type="text" class="slot-keterangan w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white text-xs focus:ring-2 focus:ring-blue-900" placeholder="Contoh: Membawa Kartu Ujian fisik/digital..." value="${escapeHtml(defaultKet)}">
+          </div>
+
+          <div class="slot-direct-info p-3 rounded-xl border border-amber-200 bg-amber-50/70 space-y-1 ${isDirect ? '' : 'hidden'}">
+            <div class="text-[11px] font-extrabold text-amber-900 flex items-center gap-1.5">
+              <i class="fas fa-user-check text-amber-700"></i>
+              <span>Hubungi / Konfirmasi Langsung ke Dosen</span>
             </div>
+            <p class="text-[11px] text-slate-700 leading-relaxed">
+              Mahasiswa akan melihat instruksi untuk menghubungi dan mengonfirmasi jadwal pelaksanaan ujian secara langsung kepada <b class="slot-direct-dosen-name text-slate-900">${escapeHtml(initialDosen || 'dosen pengampu')}</b>. Kartu Ujian Digital tetap aktif.
+            </p>
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 text-[11px] mb-1">Catatan / Instruksi Tambahan</label>
+            <input type="text" class="slot-keterangan w-full border border-slate-300 rounded-xl px-2.5 py-1.5 bg-white text-xs focus:ring-2 focus:ring-blue-900" placeholder="Contoh: Membawa Kartu Ujian atau hubungi WA dosen terkait..." value="${escapeHtml(defaultKet)}">
           </div>
         `;
         container.appendChild(card);
+
+        const inputSlotDosen = card.querySelector(`#slotDosenInput_${idx}`);
+        const dropSlotDosen = card.querySelector(`#dropdownListSlotDosen_${idx}`);
+        const btnClearSlotDosen = card.querySelector(`#btnClearSlotDosen_${idx}`);
+        const contSlotDosen = card.querySelector(`#autocompleteSlotDosenContainer_${idx}`);
+        const directDosenLabel = card.querySelector('.slot-direct-dosen-name');
+        const syncDirectDosenLabel = (nm) => {
+          if (directDosenLabel) directDosenLabel.textContent = (nm && nm.trim()) ? nm.trim() : 'dosen pengampu';
+        };
+        if (inputSlotDosen && dropSlotDosen && typeof setupAutocomplete === 'function') {
+          const autoSlotDosen = setupAutocomplete({
+            inputElem: inputSlotDosen,
+            dropdownElem: dropSlotDosen,
+            clearBtnElem: btnClearSlotDosen,
+            containerElem: contSlotDosen,
+            strictValidation: false,
+            placeholderEmpty: 'Dosen pengampu tidak ditemukan di Master Mata Kuliah',
+            getItems: (query) => {
+              const prodiCode = (document.getElementById('jadwalKodeProdi')?.value || '').toUpperCase();
+              const matkulVal = (c.mataKuliah || c.nama || '').trim();
+              const catalog = getMasterMatkulDosenCatalog({
+                preferredProdi: prodiCode,
+                preferredMatkul: matkulVal
+              });
+              return filterMasterMatkulDosenCatalog(catalog, query);
+            },
+            getItemValue: (item) => item.nama || '',
+            renderItem: (item, query) => renderMasterMatkulDosenDropdownItem(item, query),
+            onSelect: (item) => {
+              card.setAttribute('data-dosen', item.nama || '');
+              syncDirectDosenLabel(item.nama || '');
+            },
+            onClear: () => {
+              card.setAttribute('data-dosen', '');
+              syncDirectDosenLabel('');
+            }
+          });
+          inputSlotDosen.addEventListener('input', () => {
+            const v = (inputSlotDosen.value || '').trim();
+            card.setAttribute('data-dosen', v);
+            syncDirectDosenLabel(v);
+          });
+          if (autoSlotDosen && initialDosen) {
+            autoSlotDosen.setValue(initialDosen);
+          }
+        }
+      });
+    }
+
+    function setSlotJadwalMode(idx, mode) {
+      const card = document.querySelector(`.slot-jadwal-card[data-slot-idx="${idx}"]`);
+      if (!card) return;
+      const isDirect = mode === 'contact_lecturer';
+      card.setAttribute('data-mode', isDirect ? 'contact_lecturer' : 'fixed');
+
+      const fixedBox = card.querySelector('.slot-fixed-fields');
+      const directBox = card.querySelector('.slot-direct-info');
+      const btnFixed = card.querySelector('.slot-mode-btn-fixed');
+      const btnDirect = card.querySelector('.slot-mode-btn-direct');
+
+      if (fixedBox) fixedBox.classList.toggle('hidden', isDirect);
+      if (directBox) directBox.classList.toggle('hidden', !isDirect);
+
+      const activeCls = ['bg-white', 'text-blue-950', 'font-bold', 'shadow-xs', 'border-slate-200/80'];
+      const inactiveCls = ['text-slate-600', 'hover:text-slate-900', 'font-semibold', 'border-transparent'];
+
+      if (btnFixed && btnDirect) {
+        activeCls.forEach(cls => {
+          btnFixed.classList.toggle(cls, !isDirect);
+          btnDirect.classList.toggle(cls, isDirect);
+        });
+        inactiveCls.forEach(cls => {
+          btnFixed.classList.toggle(cls, isDirect);
+          btnDirect.classList.toggle(cls, !isDirect);
+        });
+      }
+
+      ['.slot-tanggal', '.slot-jam-mulai', '.slot-jam-selesai', '.slot-ruangan'].forEach(sel => {
+        const el = card.querySelector(sel);
+        if (el) el.required = !isDirect;
       });
     }
 
@@ -9283,6 +9595,7 @@
       const cards = document.querySelectorAll('.slot-jadwal-card');
       if (cards.length <= 1) return;
       const first = cards[0];
+      const firstMode = first.getAttribute('data-mode') || 'fixed';
       const tgl = first.querySelector('.slot-tanggal')?.value;
       const jmMulai = first.querySelector('.slot-jam-mulai')?.value;
       const jmSelesai = first.querySelector('.slot-jam-selesai')?.value;
@@ -9291,18 +9604,22 @@
 
       for (let i = 1; i < cards.length; i++) {
         const c = cards[i];
-        if (tgl && c.querySelector('.slot-tanggal')) c.querySelector('.slot-tanggal').value = tgl;
-        if (jmMulai && c.querySelector('.slot-jam-mulai')) c.querySelector('.slot-jam-mulai').value = jmMulai;
-        if (jmSelesai && c.querySelector('.slot-jam-selesai')) c.querySelector('.slot-jam-selesai').value = jmSelesai;
-        if (ruangan && c.querySelector('.slot-ruangan')) c.querySelector('.slot-ruangan').value = ruangan;
-        if (ket && c.querySelector('.slot-keterangan')) c.querySelector('.slot-keterangan').value = ket;
+        const slotIdx = parseInt(c.getAttribute('data-slot-idx') || String(i), 10);
+        setSlotJadwalMode(slotIdx, firstMode);
+        if (firstMode === 'fixed') {
+          if (tgl && c.querySelector('.slot-tanggal')) c.querySelector('.slot-tanggal').value = tgl;
+          if (jmMulai && c.querySelector('.slot-jam-mulai')) c.querySelector('.slot-jam-mulai').value = jmMulai;
+          if (jmSelesai && c.querySelector('.slot-jam-selesai')) c.querySelector('.slot-jam-selesai').value = jmSelesai;
+          if (ruangan && c.querySelector('.slot-ruangan')) c.querySelector('.slot-ruangan').value = ruangan;
+        }
+        if (ket !== undefined && c.querySelector('.slot-keterangan')) c.querySelector('.slot-keterangan').value = ket;
       }
 
       Swal.fire({
         toast: true,
         position: 'top-end',
         icon: 'success',
-        title: 'Tanggal & Ruangan berhasil disamakan ke semua mata kuliah!',
+        title: 'Pengaturan jadwal berhasil disamakan ke semua mata kuliah!',
         showConfirmButton: false,
         timer: 2000
       });
@@ -9467,6 +9784,7 @@
     window.findScheduleForRegistrationCourse = findScheduleForRegistrationCourse;
     window.getUnscheduledCoursesForPendaftaran = getUnscheduledCoursesForPendaftaran;
     window.renderSlotJadwalMatkul = renderSlotJadwalMatkul;
+    window.setSlotJadwalMode = setSlotJadwalMode;
     window.applyFirstSlotToAll = applyFirstSlotToAll;
     window.openJadwalModal = openJadwalModal;
     window.closeJadwalModal = closeJadwalModal;
@@ -9515,17 +9833,29 @@
     const items = [];
 
     slotCards.forEach((card, idx) => {
+      const mode = card.getAttribute('data-mode') || 'fixed';
+      const isDirect = mode === 'contact_lecturer';
       const matkul = card.getAttribute('data-matkul') || '';
-      const dosen = card.getAttribute('data-dosen') || '';
-      const tgl = card.querySelector('.slot-tanggal')?.value || '';
-      const jmMulai = card.querySelector('.slot-jam-mulai')?.value || '';
-      const jmSelesai = card.querySelector('.slot-jam-selesai')?.value || '';
-      const ruangan = card.querySelector('.slot-ruangan')?.value || '';
+      const dosen = (card.querySelector('.slot-dosen-input')?.value || card.getAttribute('data-dosen') || '').trim();
+      const rawTgl = card.querySelector('.slot-tanggal')?.value || '';
+      const rawJmMulai = card.querySelector('.slot-jam-mulai')?.value || '';
+      const rawJmSelesai = card.querySelector('.slot-jam-selesai')?.value || '';
+      const rawRuangan = card.querySelector('.slot-ruangan')?.value || '';
       const rawKet = (card.querySelector('.slot-keterangan')?.value || '').trim();
 
-      if (!tgl || !jmMulai || !jmSelesai || !ruangan) {
+      const tgl = isDirect ? 'Hubungi Dosen' : rawTgl;
+      const jmMulai = isDirect ? '-' : rawJmMulai;
+      const jmSelesai = isDirect ? '-' : rawJmSelesai;
+      const ruangan = isDirect ? 'Hubungi Dosen' : rawRuangan;
+
+      if (isDirect) {
+        if (!dosen) {
+          isValid = false;
+          missingField = `Mata kuliah "${matkul || 'Slot #' + (idx + 1)}" wajib mencantumkan nama Dosen Pengampu.`;
+        }
+      } else if (!dosen || !tgl || !jmMulai || !jmSelesai || !ruangan) {
         isValid = false;
-        missingField = `Mata kuliah "${matkul || 'Slot #' + (idx + 1)}" belum lengkap (Tanggal, Jam, dan Ruangan wajib diisi).`;
+        missingField = `Mata kuliah "${matkul || 'Slot #' + (idx + 1)}" belum lengkap (Dosen Pengampu, Tanggal, Jam, dan Ruangan wajib diisi).`;
       }
 
       let fullKet = rawKet;
@@ -9552,6 +9882,7 @@
       }
 
       items.push({
+        mode: mode,
         mataKuliah: matkul,
         dosenPengampu: dosen,
         tanggalUjian: tgl,
@@ -9875,6 +10206,7 @@
 
     function parseJadwalDateTimeMs(item) {
       if (!item || typeof item !== 'object') return 0;
+      if (typeof isHubungiDosenSchedule === 'function' && isHubungiDosenSchedule(item)) return 0;
       const dateMs = typeof parseInvoiceDateMs === 'function'
         ? parseInvoiceDateMs(item['Tanggal Ujian'] || item.tanggal || '')
         : 0;
@@ -9988,6 +10320,7 @@
       if (elRuang) {
         const ruangCount = new Set(
           list
+            .filter(j => !(typeof isHubungiDosenSchedule === 'function' && isHubungiDosenSchedule(j)))
             .map(j => String(j.Ruangan || '').trim())
             .filter(r => r && r !== '-')
         ).size;
@@ -10001,10 +10334,11 @@
 
       const idRaw = String(item.ID || '-').trim();
       const idAttr = escapeHtml(idRaw).replace(/'/g, '&#39;');
+      const isDirect = typeof isHubungiDosenSchedule === 'function' && isHubungiDosenSchedule(item);
       const cleanMulai = formatJamClean(item['Jam Mulai']);
       const cleanSelesai = formatJamClean(item['Jam Selesai']);
-      const durasi = hitungDurasiMenit(cleanMulai, cleanSelesai);
-      const jamDisplay = `${cleanMulai} - ${cleanSelesai} WIB`;
+      const durasi = (!isDirect && cleanMulai !== '-' && cleanSelesai !== '-') ? hitungDurasiMenit(cleanMulai, cleanSelesai) : '';
+      const jamDisplay = (!isDirect && cleanMulai !== '-' && cleanSelesai !== '-') ? `${cleanMulai} - ${cleanSelesai} WIB` : '';
       const tglIndo = formatTanggalIndo(item['Tanggal Ujian']);
       const kodeProdi = String(item['Kode Prodi'] || (typeof resolveInvoiceProdiCode === 'function' ? resolveInvoiceProdiCode(item) : '') || '-').trim() || '-';
       const namaProdi = String(item['Program Studi'] || '-').trim() || '-';
@@ -10026,25 +10360,43 @@
         </td>
       ` : '';
 
+      const jadwalSlotHtml = isDirect ? `
+        <div class="bg-amber-50/85 border border-amber-200 rounded-xl px-2 py-1.5 space-y-0.5 text-[11px]">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i class="fas fa-comments text-amber-700 text-[10px] shrink-0" aria-hidden="true"></i>
+            <span class="font-bold text-amber-950 leading-snug break-words">Hubungi / Konfirmasi Dosen</span>
+          </div>
+          <div class="text-[10px] text-amber-900/90 leading-snug break-words">
+            Konfirmasi langsung ke dosen pengampu
+          </div>
+        </div>
+      ` : `
+        <div class="bg-indigo-50/75 border border-indigo-200/80 rounded-xl px-2 py-1.5 space-y-1 text-[11px]">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <i class="fas fa-calendar-day text-indigo-700 text-[10px] shrink-0" aria-hidden="true"></i>
+            <span class="font-bold text-slate-900 leading-snug break-words">${escapeHtml(tglIndo)}</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-1">
+            <span class="font-bold font-mono text-indigo-950 text-[10.5px] tabular-nums whitespace-nowrap">${escapeHtml(jamDisplay || '-')}</span>
+            ${durasi ? `<span class="text-[9.5px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 font-semibold whitespace-nowrap">${escapeHtml(durasi)}</span>` : ''}
+          </div>
+        </div>
+      `;
+
+      const ruangBadgeHtml = isDirect
+        ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-900 font-black border border-amber-300 text-[11px] max-w-full truncate" title="Konfirmasi Langsung ke Dosen"><i class="fas fa-user-check text-[9px] text-amber-700" aria-hidden="true"></i> Hubungi Dosen</span>`
+        : `<span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-900 font-black border border-emerald-300 text-[11px] max-w-full truncate" title="${escapeHtml(ruangan)}">${escapeHtml(ruangan)}</span>`;
+
       tr.innerHTML = `
         <td class="px-2.5 py-2.5 min-w-0">
           <div class="flex items-center justify-between gap-1.5 mb-1">
             <span class="font-mono font-bold text-blue-900 text-[11px] tabular-nums truncate">${escapeHtml(idRaw)}</span>
             <span class="sm:hidden inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-900 border border-blue-200 text-[9px] font-bold shrink-0">${escapeHtml(jenisUjian)}</span>
           </div>
-          <div class="bg-indigo-50/75 border border-indigo-200/80 rounded-xl px-2 py-1.5 space-y-1 text-[11px]">
-            <div class="flex items-center gap-1.5 min-w-0">
-              <i class="fas fa-calendar-day text-indigo-700 text-[10px] shrink-0" aria-hidden="true"></i>
-              <span class="font-bold text-slate-900 leading-snug break-words">${escapeHtml(tglIndo)}</span>
-            </div>
-            <div class="flex flex-wrap items-center gap-1">
-              <span class="font-bold font-mono text-indigo-950 text-[10.5px] tabular-nums whitespace-nowrap">${escapeHtml(jamDisplay)}</span>
-              <span class="text-[9.5px] bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 font-semibold whitespace-nowrap">${escapeHtml(durasi)}</span>
-            </div>
-          </div>
+          ${jadwalSlotHtml}
         </td>
         <td class="px-2.5 py-2.5 min-w-0">
-          <span class="inline-flex items-center px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-900 font-black border border-emerald-300 text-[11px] max-w-full truncate" title="${escapeHtml(ruangan)}">${escapeHtml(ruangan)}</span>
+          ${ruangBadgeHtml}
           <div class="font-bold text-slate-800 text-[11px] leading-snug mt-1 break-words">
             <span class="text-blue-900">[${escapeHtml(kodeProdi)}]</span> ${escapeHtml(namaProdi)}
           </div>
@@ -10360,13 +10712,13 @@
             : null
         }));
 
-        const hasAnySchedule = scheduledCourses.some(sc => sc.schedule && sc.schedule['Tanggal Ujian'] && sc.schedule.Ruangan);
+        const hasAnySchedule = scheduledCourses.some(sc => sc.schedule && (isHubungiDosenSchedule(sc.schedule) || (sc.schedule['Tanggal Ujian'] && sc.schedule.Ruangan)));
 
         // KONDISI KHUSUS: Jika Belum Disetujui atau Jadwal Belum Diinput oleh Admin TU -> Tampilkan Status Pending!
         if (!isApproved || !hasAnySchedule) {
           const pendingNotice = !isApproved
             ? `Berkas pendaftaran Anda masih berstatus "${statusApp}" (Menunggu Verifikasi Persetujuan Admin TU).`
-            : `Pendaftaran telah disetujui, namun Admin Master/TU belum selesai memasukkan jadwal ujian (Tanggal, Jam, dan Ruangan) untuk mata kuliah ini.`;
+            : `Pendaftaran telah disetujui, namun Admin Master/TU belum selesai memasukkan jadwal ujian untuk mata kuliah ini.`;
 
           const pendingCard = document.createElement('div');
           pendingCard.className = 'bg-white rounded-3xl border-2 border-amber-200 shadow-sm p-6 space-y-3';
@@ -10375,14 +10727,14 @@
               <div class="w-12 h-12 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center text-xl shrink-0"><i class="fas fa-hourglass-half animate-pulse"></i></div>
               <div>
                 <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase border border-amber-300">STATUS: MENUNGGU JADWAL RESMI</span>
-                <h4 class="font-black text-slate-800 text-sm mt-0.5">${p['Mata Kuliah']}</h4>
+                <h4 class="font-black text-slate-800 text-sm mt-0.5">${escapeHtml(p['Mata Kuliah'] || '')}</h4>
               </div>
             </div>
             <div class="bg-amber-50/60 p-3.5 rounded-2xl border border-amber-200 text-xs text-slate-700 space-y-1.5">
-              <p><b>Mahasiswa:</b> ${p['Nama Mahasiswa']} (NPM: ${p.NPM || p.NIM})</p>
-              <p><b>Program Studi:</b> ${p['Program Studi']}</p>
-              <p><b>Jenis Layanan:</b> ${p['Jenis Layanan']}</p>
-              <p class="text-amber-900 font-bold mt-2 pt-1 border-t border-amber-200"><i class="fas fa-circle-info"></i> ${pendingNotice}</p>
+              <p><b>Mahasiswa:</b> ${escapeHtml(p['Nama Mahasiswa'] || '')} (NPM: ${escapeHtml(p.NPM || p.NIM || '')})</p>
+              <p><b>Program Studi:</b> ${escapeHtml(p['Program Studi'] || '')}</p>
+              <p><b>Jenis Layanan:</b> ${escapeHtml(p['Jenis Layanan'] || '')}</p>
+              <p class="text-amber-900 font-bold mt-2 pt-1 border-t border-amber-200"><i class="fas fa-circle-info"></i> ${escapeHtml(pendingNotice)}</p>
             </div>
             <p class="text-[11px] text-slate-400 italic">Kartu Tanda Peserta Ujian Digital otomatis muncul dan dapat dicetak segera setelah Admin TU memasukkan jadwal ujian.</p>
           `;
@@ -10409,22 +10761,22 @@
 
           <div class="flex justify-between items-center">
             <div>
-              <span class="text-[10px] font-mono font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">NO: ${p.ID}</span>
-              <h4 class="text-sm font-black text-slate-900 mt-1 uppercase">${p['Jenis Layanan']}</h4>
+              <span class="text-[10px] font-mono font-bold text-blue-900 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">NO: ${escapeHtml(p.ID)}</span>
+              <h4 class="text-sm font-black text-slate-900 mt-1 uppercase">${escapeHtml(p['Jenis Layanan'])}</h4>
             </div>
             <span class="px-2.5 py-1 rounded-full text-[10px] font-bold border bg-emerald-100 text-emerald-800 border-emerald-300">DISETUJUI</span>
           </div>
 
           <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs space-y-1">
-            <p><b>Nama:</b> ${p['Nama Mahasiswa']}</p>
-            <p><b>NPM:</b> ${p.NPM || p.NIM}</p>
-            <p><b>Prodi:</b> ${p['Program Studi']} (${p['Kode Prodi']})</p>
-            <p><b>Semester & Kelas:</b> ${p.Semester || 'Semester 3'} · ${p.Kelas || 'Reguler'}</p>
+            <p><b>Nama:</b> ${escapeHtml(p['Nama Mahasiswa'])}</p>
+            <p><b>NPM:</b> ${escapeHtml(p.NPM || p.NIM)}</p>
+            <p><b>Prodi:</b> ${escapeHtml(p['Program Studi'])} (${escapeHtml(p['Kode Prodi'])})</p>
+            <p><b>Semester &amp; Kelas:</b> ${escapeHtml(p.Semester || 'Semester 3')} · ${escapeHtml(p.Kelas || 'Reguler')}</p>
           </div>
 
           <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-2xs">
             <div class="bg-indigo-900 text-white px-3 py-2 font-bold text-xs flex items-center justify-between">
-              <span><i class="fas fa-calendar-alt mr-1.5 text-indigo-300"></i> Rincian Jadwal & Ruangan Ujian</span>
+              <span><i class="fas fa-calendar-alt mr-1.5 text-indigo-300"></i> Rincian Jadwal &amp; Ruangan Ujian</span>
               <span class="text-[10px] bg-indigo-800 px-2 py-0.5 rounded font-mono">${scheduledCourses.length} Mata Kuliah</span>
             </div>
             <div class="overflow-x-auto">
@@ -10432,32 +10784,54 @@
                 <thead class="bg-slate-100 text-slate-700 font-bold border-b border-slate-200 text-[11px] uppercase">
                   <tr>
                     <th class="p-2.5 text-center w-8">#</th>
-                    <th class="p-2.5">Mata Kuliah & Dosen</th>
+                    <th class="p-2.5">Mata Kuliah &amp; Dosen</th>
                     <th class="p-2.5">Jadwal Pelaksanaan</th>
-                    <th class="p-2.5 text-center">Ruangan</th>
+                    <th class="p-2.5 text-center">Ruangan / Keterangan</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 text-xs">
                   ${scheduledCourses.map((sc, scIdx) => {
                     const c = sc.course;
                     const j = sc.schedule;
-                    const tgl = j ? formatTanggalIndo(j['Tanggal Ujian']) : '<span class="text-amber-600 font-bold italic">Menunggu Jadwal</span>';
-                    const jamMulai = j ? formatJamClean(j['Jam Mulai']) : '';
-                    const jamSelesai = j ? formatJamClean(j['Jam Selesai']) : '';
-                    const jam = (jamMulai && jamSelesai) ? `${jamMulai} - ${jamSelesai} WIB` : '';
-                    const ruang = j ? `<span class="px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 font-black border border-emerald-300 text-xs">${j.Ruangan}</span>` : '<span class="text-slate-400">-</span>';
+                    const isDirect = j && isHubungiDosenSchedule(j);
+                    const dosenNama = (j && j['Dosen Pengampu']) || c.dosenPengampu || c.dosen || '-';
+                    const cleanNote = j ? extractCleanJadwalNote(j.Keterangan) : '';
+
+                    let jadwalCellHtml = '<span class="text-amber-600 font-bold italic">Menunggu Jadwal</span>';
+                    let ruangCellHtml = '<span class="text-slate-400">-</span>';
+
+                    if (j) {
+                      if (isDirect) {
+                        jadwalCellHtml = `
+                          <div class="font-extrabold text-amber-900 leading-snug">Hubungi / Konfirmasi Langsung ke Dosen</div>
+                          <div class="text-[11px] text-slate-600 mt-0.5 leading-snug">Silakan hubungi ${escapeHtml(dosenNama)} untuk penjadwalan teknis ujian</div>
+                          ${cleanNote ? `<div class="text-[10.5px] text-slate-500 mt-0.5 italic">Catatan: ${escapeHtml(cleanNote)}</div>` : ''}
+                        `;
+                        ruangCellHtml = `<span class="inline-block px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-900 font-bold border border-amber-300 text-xs whitespace-nowrap">Hubungi Dosen</span>`;
+                      } else {
+                        const tgl = formatTanggalIndo(j['Tanggal Ujian']);
+                        const jamMulai = formatJamClean(j['Jam Mulai']);
+                        const jamSelesai = formatJamClean(j['Jam Selesai']);
+                        const jam = (jamMulai && jamSelesai && jamMulai !== '-' && jamSelesai !== '-') ? `${jamMulai} - ${jamSelesai} WIB` : '';
+                        jadwalCellHtml = `
+                          <div class="font-bold text-slate-900">${escapeHtml(tgl)}</div>
+                          ${jam ? `<div class="font-mono font-bold text-indigo-950 text-[11px] tabular-nums">${escapeHtml(jam)}</div>` : ''}
+                        `;
+                        ruangCellHtml = `<span class="px-2.5 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 font-black border border-emerald-300 text-xs">${escapeHtml(j.Ruangan || '-')}</span>`;
+                      }
+                    }
+
                     return `
-                      <tr class="hover:bg-slate-50 transition">
+                      <tr class="hover:bg-slate-50 transition align-top">
                         <td class="p-2.5 text-center font-mono font-bold text-blue-900">${scIdx + 1}</td>
                         <td class="p-2.5">
                           <div class="font-extrabold text-blue-950">${escapeHtml(c.mataKuliah || c.nama)} <span class="text-[10px] text-indigo-700 font-bold">(${c.sks || 3} SKS)</span></div>
-                          <div class="text-[11px] text-slate-500 mt-0.5"><i class="fas fa-user-tie text-[10px] text-slate-400 mr-1"></i> Dosen: ${escapeHtml(c.dosenPengampu || c.dosen || '-')}</div>
+                          <div class="text-[11px] text-slate-500 mt-0.5"><i class="fas fa-user-tie text-[10px] text-slate-400 mr-1"></i> Dosen: ${escapeHtml(dosenNama)}</div>
                         </td>
-                        <td class="p-2.5 whitespace-nowrap">
-                          <div class="font-bold text-slate-900">${tgl}</div>
-                          ${jam ? `<div class="font-mono font-bold text-indigo-950 text-[11px]">${jam}</div>` : ''}
+                        <td class="p-2.5 ${isDirect ? '' : 'whitespace-nowrap'}">
+                          ${jadwalCellHtml}
                         </td>
-                        <td class="p-2.5 text-center whitespace-nowrap">${ruang}</td>
+                        <td class="p-2.5 text-center whitespace-nowrap">${ruangCellHtml}</td>
                       </tr>
                     `;
                   }).join('')}
@@ -17556,12 +17930,11 @@
         quickSel.value = combos.some(c => c.key === prev) ? prev : '';
       }
 
-      // Kumpulkan daftar Dosen dari Pendaftaran + Master Dosen
+      // Kumpulkan daftar Dosen dari Pendaftaran + Master Mata Kuliah (Master_Matkul)
       const dosenSet = new Set();
       entries.forEach(e => { if (e.dosen) dosenSet.add(e.dosen); });
-      ((appData.master && appData.master.dosen) || []).forEach(d => {
-        const nm = String(d['Nama Dosen'] || d.nama || '').trim();
-        if (nm) dosenSet.add(nm);
+      getMasterMatkulDosenCatalog().forEach(d => {
+        if (d.nama) dosenSet.add(d.nama);
       });
       if (suratDosenState.dosen) dosenSet.add(suratDosenState.dosen);
 

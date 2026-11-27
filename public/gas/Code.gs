@@ -4618,10 +4618,17 @@ function addJadwal(payload) {
         itemId = String(item.id).trim();
       }
 
-      var tgl = item['Tanggal Ujian'] || item.tanggalUjian || payload['Tanggal Ujian'] || payload.tanggalUjian || '';
-      var jmMulai = item['Jam Mulai'] || item.jamMulai || payload['Jam Mulai'] || payload.jamMulai || '08:00';
-      var jmSelesai = item['Jam Selesai'] || item.jamSelesai || payload['Jam Selesai'] || payload.jamSelesai || '09:30';
-      var ruang = item.Ruangan || item.ruangan || payload.Ruangan || payload.ruangan || '';
+      var itemMode = String(item.mode || payload.mode || '').toLowerCase();
+      var rawTgl = item['Tanggal Ujian'] !== undefined ? item['Tanggal Ujian'] : (item.tanggalUjian !== undefined ? item.tanggalUjian : (payload['Tanggal Ujian'] !== undefined ? payload['Tanggal Ujian'] : payload.tanggalUjian));
+      var rawJmMulai = item['Jam Mulai'] !== undefined ? item['Jam Mulai'] : (item.jamMulai !== undefined ? item.jamMulai : (payload['Jam Mulai'] !== undefined ? payload['Jam Mulai'] : payload.jamMulai));
+      var rawJmSelesai = item['Jam Selesai'] !== undefined ? item['Jam Selesai'] : (item.jamSelesai !== undefined ? item.jamSelesai : (payload['Jam Selesai'] !== undefined ? payload['Jam Selesai'] : payload.jamSelesai));
+      var rawRuang = item.Ruangan !== undefined ? item.Ruangan : (item.ruangan !== undefined ? item.ruangan : (payload.Ruangan !== undefined ? payload.Ruangan : payload.ruangan));
+      var isDirectItem = itemMode === 'contact_lecturer' || String(rawTgl || '').toLowerCase().indexOf('hubungi dosen') !== -1 || String(rawRuang || '').toLowerCase().indexOf('hubungi dosen') !== -1;
+
+      var tgl = (rawTgl !== undefined && rawTgl !== null && rawTgl !== '') ? rawTgl : (isDirectItem ? 'Hubungi Dosen' : '');
+      var jmMulai = (rawJmMulai !== undefined && rawJmMulai !== null && rawJmMulai !== '') ? rawJmMulai : (isDirectItem ? '-' : '08:00');
+      var jmSelesai = (rawJmSelesai !== undefined && rawJmSelesai !== null && rawJmSelesai !== '') ? rawJmSelesai : (isDirectItem ? '-' : '09:30');
+      var ruang = (rawRuang !== undefined && rawRuang !== null && rawRuang !== '') ? rawRuang : (isDirectItem ? 'Hubungi Dosen' : '');
       var matkul = item['Mata Kuliah'] || item.mataKuliah || '';
       var dosen = item['Dosen Pengampu'] || item.dosenPengampu || '';
       var ket = String(item.Keterangan || item.keterangan || baseKet || '').trim();
@@ -4683,8 +4690,12 @@ function addJadwal(payload) {
     var logSummary = isMulti ? (createdItems.length + ' Mata Kuliah (' + baseId + ')') : (createdItems[0].ID + ' (' + createdItems[0]['Mata Kuliah'] + ')');
     var jActor = String(payload.actor || 'Admin TU').trim();
     var jRole = String(payload.role || 'Admin TU').trim();
+    var singleRuang = createdItems[0].Ruangan || '';
+    var singleDetail = String(singleRuang).toLowerCase().indexOf('hubungi dosen') !== -1
+      ? 'Konfirmasi langsung ke dosen (' + (createdItems[0]['Dosen Pengampu'] || '-') + ')'
+      : ('ruangan ' + singleRuang);
     bumpSyncVersion(jActor, 'Tambah Jadwal Ujian ' + logSummary);
-    addActivityLog(jActor, 'Tambah Jadwal Ujian', logSummary, 'Penjadwalan ' + (isMulti ? (createdItems.length + ' mata kuliah') : ('ruangan ' + createdItems[0].Ruangan)), jRole);
+    addActivityLog(jActor, 'Tambah Jadwal Ujian', logSummary, 'Penjadwalan ' + (isMulti ? (createdItems.length + ' mata kuliah') : singleDetail), jRole);
 
     return {
       success: true,
@@ -4760,8 +4771,11 @@ function updateJadwal(idOrPayload, maybePayload) {
 
     var updJActor = String(payload.actor || 'Admin TU').trim();
     var updJRole = String(payload.role || 'Admin TU').trim();
+    var updDetail = String(ruang || '').toLowerCase().indexOf('hubungi dosen') !== -1
+      ? ('Pembaruan jadwal konfirmasi langsung ke dosen (' + (dosen || '-') + ')')
+      : ('Pembaruan jadwal ujian ruangan ' + ruang + ' tanggal ' + tgl);
     bumpSyncVersion(updJActor, 'Update Jadwal ' + id);
-    addActivityLog(updJActor, 'Update Jadwal Ujian', id + ' (' + matkul + ')', 'Pembaruan jadwal ujian ruangan ' + ruang + ' tanggal ' + tgl, updJRole);
+    addActivityLog(updJActor, 'Update Jadwal Ujian', id + ' (' + matkul + ')', updDetail, updJRole);
     return { success: true, message: 'Jadwal ujian ' + id + ' berhasil diperbarui.' };
   } catch (err) {
     return { success: false, message: 'Gagal memperbarui jadwal: ' + err.message };

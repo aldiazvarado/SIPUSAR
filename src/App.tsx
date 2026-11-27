@@ -559,7 +559,13 @@ export default function App() {
                       const matchJadwal = appState.jadwal.find(j =>
                         j['Kode Prodi'] === item['Kode Prodi'] && j['Mata Kuliah'] === item['Mata Kuliah']
                       );
-                      const hasSchedule = matchJadwal && matchJadwal['Tanggal Ujian'] && matchJadwal.Ruangan;
+                      const isDirect = Boolean(
+                        matchJadwal && (
+                          String(matchJadwal['Tanggal Ujian'] || '').toLowerCase().includes('hubungi dosen') ||
+                          String(matchJadwal.Ruangan || '').toLowerCase().includes('hubungi dosen')
+                        )
+                      );
+                      const hasSchedule = Boolean(matchJadwal && (isDirect || (matchJadwal['Tanggal Ujian'] && matchJadwal.Ruangan)));
 
                       let badgeStatus = 'bg-amber-100 text-amber-800 border-amber-300';
                       if (isApproved) badgeStatus = 'bg-emerald-100 text-emerald-800 border-emerald-300';
@@ -599,10 +605,17 @@ export default function App() {
                           </td>
                           <td className="p-3.5 text-center text-xs">
                             {hasSchedule ? (
-                              <>
-                                <b className="text-slate-800">{matchJadwal['Tanggal Ujian']}</b><br />
-                                <span className="text-emerald-700 font-bold">{matchJadwal.Ruangan}</span>
-                              </>
+                              isDirect ? (
+                                <>
+                                  <b className="text-amber-900">Hubungi / Konfirmasi Dosen</b><br />
+                                  <span className="text-amber-700 font-bold">Langsung ke Dosen Pengampu</span>
+                                </>
+                              ) : (
+                                <>
+                                  <b className="text-slate-800">{matchJadwal?.['Tanggal Ujian']}</b><br />
+                                  <span className="text-emerald-700 font-bold">{matchJadwal?.Ruangan}</span>
+                                </>
+                              )
                             ) : (
                               <span className="text-slate-400 italic">Belum dijadwalkan</span>
                             )}
@@ -894,20 +907,38 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {appState.jadwal.map(j => (
+                  {appState.jadwal.map(j => {
+                    const isDirect =
+                      String(j['Tanggal Ujian'] || '').toLowerCase().includes('hubungi dosen') ||
+                      String(j.Ruangan || '').toLowerCase().includes('hubungi dosen');
+                    return (
                     <tr key={j.ID} className="hover:bg-slate-50">
                       <td className="p-3 font-mono font-bold text-blue-900">{j.ID}</td>
                       <td className="p-3">
-                        <b className="text-slate-900">{j['Tanggal Ujian']}</b><br />
-                        <span className="font-mono text-emerald-800 font-bold">{j['Jam Mulai']} - {j['Jam Selesai']} WIB</span>
+                        {isDirect ? (
+                          <>
+                            <b className="text-amber-900">Hubungi / Konfirmasi Dosen</b><br />
+                            <span className="text-amber-800 font-semibold">Konfirmasi langsung ke dosen pengampu</span>
+                          </>
+                        ) : (
+                          <>
+                            <b className="text-slate-900">{j['Tanggal Ujian']}</b><br />
+                            <span className="font-mono text-emerald-800 font-bold">{j['Jam Mulai']} - {j['Jam Selesai']} WIB</span>
+                          </>
+                        )}
                       </td>
-                      <td className="p-3"><span className="px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-900 font-black border border-emerald-300">{j.Ruangan}</span></td>
+                      <td className="p-3">
+                        <span className={`px-2.5 py-1 rounded-xl font-black border ${isDirect ? 'bg-amber-50 text-amber-900 border-amber-300' : 'bg-emerald-50 text-emerald-900 border-emerald-300'}`}>
+                          {j.Ruangan}
+                        </span>
+                      </td>
                       <td className="p-3"><b>{j['Program Studi']}</b><br /><span className="text-slate-500">{j.Semester} &bull; {j.Kelas}</span></td>
                       <td className="p-3"><b className="text-blue-950">{j['Mata Kuliah']}</b></td>
                       <td className="p-3 text-slate-700">{j['Dosen Pengampu']}</td>
                       <td className="p-3 text-slate-500 text-[11px]">{j.Keterangan || '-'}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

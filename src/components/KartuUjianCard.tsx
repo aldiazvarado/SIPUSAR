@@ -10,11 +10,20 @@ interface KartuUjianCardProps {
 
 export const KartuUjianCard: React.FC<KartuUjianCardProps> = ({ pendaftaran, jadwal, onPrint }) => {
   const isApproved = pendaftaran['Status Persetujuan'] === 'Disetujui';
-  const hasSchedule = jadwal && jadwal['Tanggal Ujian'] && jadwal.Ruangan;
+  const isHubungiDosen = Boolean(
+    jadwal && (
+      String(jadwal['Tanggal Ujian'] || '').toLowerCase().includes('hubungi dosen') ||
+      String(jadwal.Ruangan || '').toLowerCase().includes('hubungi dosen') ||
+      String(jadwal['Tanggal Ujian'] || '').toLowerCase().includes('konfirmasi dosen')
+    )
+  );
+  const hasSchedule = Boolean(jadwal && (isHubungiDosen || (jadwal['Tanggal Ujian'] && jadwal.Ruangan)));
 
-  const tglUjian = jadwal?.['Tanggal Ujian'] || 'Menunggu Penjadwalan TU';
-  const jamUjian = jadwal ? `${jadwal['Jam Mulai']} - ${jadwal['Jam Selesai']} WIB` : '-';
-  const ruanganUjian = jadwal?.Ruangan || 'Belum Diplot';
+  const tglUjian = isHubungiDosen ? 'Hubungi / Konfirmasi Langsung ke Dosen' : (jadwal?.['Tanggal Ujian'] || 'Menunggu Penjadwalan TU');
+  const jamUjian = isHubungiDosen
+    ? `Silakan hubungi ${jadwal?.['Dosen Pengampu'] || pendaftaran['Dosen Pengampu']} untuk teknis ujian`
+    : (jadwal ? `${jadwal['Jam Mulai']} - ${jadwal['Jam Selesai']} WIB` : '-');
+  const ruanganUjian = isHubungiDosen ? 'Hubungi Dosen' : (jadwal?.Ruangan || 'Belum Diplot');
   const noReg = pendaftaran.ID;
   const npm = pendaftaran.NPM;
   const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -98,20 +107,20 @@ export const KartuUjianCard: React.FC<KartuUjianCardProps> = ({ pendaftaran, jad
       </div>
 
       {/* JADWAL PELAKSANAAN RESMI & RUANGAN */}
-      <div className="grid grid-cols-2 gap-3 bg-emerald-50/80 p-3.5 rounded-2xl border border-emerald-200 text-xs">
+      <div className={`grid grid-cols-2 gap-3 p-3.5 rounded-2xl border text-xs ${isHubungiDosen ? 'bg-amber-50/80 border-amber-200' : 'bg-emerald-50/80 border-emerald-200'}`}>
         <div>
-          <p className="text-[10px] font-bold text-emerald-800 uppercase flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Jadwal Pelaksanaan
+          <p className={`text-[10px] font-bold uppercase flex items-center gap-1 ${isHubungiDosen ? 'text-amber-800' : 'text-emerald-800'}`}>
+            <span>Jadwal Pelaksanaan</span>
           </p>
           <p className="font-black text-slate-900 mt-1 text-sm">{tglUjian}</p>
-          <p className="text-xs font-mono font-bold text-emerald-950 mt-0.5">{jamUjian}</p>
+          <p className={`text-xs font-bold mt-0.5 ${isHubungiDosen ? 'text-amber-950' : 'font-mono text-emerald-950'}`}>{jamUjian}</p>
         </div>
         <div>
-          <p className="text-[10px] font-bold text-emerald-800 uppercase flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span> Ruangan Ujian
+          <p className={`text-[10px] font-bold uppercase flex items-center gap-1 ${isHubungiDosen ? 'text-amber-800' : 'text-emerald-800'}`}>
+            <span>{isHubungiDosen ? 'Status Pelaksanaan' : 'Ruangan Ujian'}</span>
           </p>
-          <p className="text-base font-black text-emerald-900 mt-1">{ruanganUjian}</p>
-          <p className="text-[10px] text-slate-500">Gedung FEB UIKA Bogor</p>
+          <p className={`text-base font-black mt-1 ${isHubungiDosen ? 'text-amber-900' : 'text-emerald-900'}`}>{ruanganUjian}</p>
+          <p className="text-[10px] text-slate-500">{isHubungiDosen ? 'Konfirmasi langsung ke dosen pengampu' : 'Gedung FEB UIKA Bogor'}</p>
         </div>
       </div>
 
