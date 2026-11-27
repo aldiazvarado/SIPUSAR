@@ -1613,7 +1613,7 @@
         background: #ffffff !important;
       }
       .printable-active.printable-multipage {
-        position: absolute !important;
+        position: static !important;
         left: 0 !important;
         top: 0 !important;
         width: 100% !important;
@@ -1624,6 +1624,57 @@
         background: #ffffff !important;
         border: none !important;
         box-shadow: none !important;
+      }
+      body.printing-rekap-pdf > *:not(#modalExportPdf) {
+        display: none !important;
+      }
+      body.printing-rekap-pdf #modalExportPdf,
+      body.printing-rekap-pdf #modalExportPdf * {
+        visibility: visible !important;
+      }
+      body.printing-rekap-pdf #modalExportPdf {
+        position: static !important;
+        display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: none !important;
+        overflow: visible !important;
+        background: #ffffff !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      body.printing-rekap-pdf #modalExportPdf > div {
+        max-width: 100% !important;
+        max-height: none !important;
+        overflow: visible !important;
+        box-shadow: none !important;
+        border: none !important;
+        border-radius: 0 !important;
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      body.printing-rekap-pdf #printableExportPdfModal {
+        position: static !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        height: auto !important;
+        border: none !important;
+        padding: 8mm !important;
+        margin: 0 !important;
+      }
+      body.printing-rekap-pdf #printableExportPdfModal .overflow-x-auto {
+        overflow: visible !important;
+      }
+      body.printing-rekap-pdf #printableExportPdfModal table {
+        width: 100% !important;
+        page-break-inside: auto !important;
+      }
+      body.printing-rekap-pdf #printableExportPdfModal thead {
+        display: table-header-group !important;
+      }
+      body.printing-rekap-pdf #printableExportPdfModal tbody tr {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
       }
       .surat-f4-sheet, .surat-a4-sheet {
         box-shadow: none !important;
@@ -3304,21 +3355,21 @@
 
   <!-- MODAL: EXPORT DATA KE PDF RESMI -->
   <div id="modalExportPdf" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-50 p-4">
-    <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full p-6 space-y-4 max-h-[95vh] overflow-y-auto">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-6xl w-full p-6 space-y-4 max-h-[95vh] overflow-y-auto">
       <div class="flex justify-between items-center border-b border-slate-200 pb-3 no-print">
         <div class="flex items-center gap-2">
           <span class="w-8 h-8 rounded-xl bg-rose-100 text-rose-800 flex items-center justify-center text-sm font-bold"><i class="fas fa-file-pdf"></i></span>
           <h3 class="font-black text-slate-800 text-sm">Export Data Rekapitulasi ke PDF</h3>
         </div>
         <div class="flex items-center gap-2">
-          <button onclick="window.print()" class="bg-rose-700 hover:bg-rose-600 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm">
+          <button type="button" onclick="printExportPdfReport()" class="bg-rose-700 hover:bg-rose-600 text-white font-bold px-3.5 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm whitespace-nowrap shrink-0 cursor-pointer">
             <i class="fas fa-print"></i> <span>Cetak / Simpan PDF</span>
           </button>
-          <button onclick="closeExportPdfModal()" class="text-slate-400 hover:text-slate-600 p-1"><i class="fas fa-times text-lg"></i></button>
+          <button type="button" onclick="closeExportPdfModal()" class="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"><i class="fas fa-times text-lg"></i></button>
         </div>
       </div>
 
-      <div id="printableExportPdfModal" class="bg-white p-6 border border-slate-300 rounded-2xl space-y-4 text-slate-800 font-sans">
+      <div id="printableExportPdfModal" class="printable-multipage bg-white p-6 border border-slate-300 rounded-2xl space-y-4 text-slate-800 font-sans">
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b-2 border-slate-900 pb-3 gap-2">
           <div class="flex items-center space-x-3.5">
             <div style="width: 58px; height: 58px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: #fff; border-radius: 12px; padding: 2px; border: 1px solid #cbd5e1;">
@@ -3331,34 +3382,34 @@
             </div>
           </div>
           <div class="text-right text-xs">
-            <p class="font-bold text-slate-800">Tahun Akademik: 2026/2027</p>
+            <p id="pdfAcademicYearText" class="font-bold text-slate-800">Tahun Akademik: 2026/2027 (Ganjil)</p>
             <p id="pdfReportDate" class="text-slate-500 text-[11px]">Tanggal Cetak: -</p>
           </div>
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200 text-xs">
-          <div><span class="text-slate-500 block text-[10px]">Total Berkas:</span><b id="pdfStatTotal" class="text-sm text-slate-900">0</b></div>
-          <div><span class="text-slate-500 block text-[10px]">Disetujui:</span><b id="pdfStatApproved" class="text-sm text-emerald-700">0</b></div>
-          <div><span class="text-slate-500 block text-[10px]">Pending:</span><b id="pdfStatPending" class="text-sm text-amber-700">0</b></div>
-          <div><span class="text-slate-500 block text-[10px]">Total Retribusi:</span><b id="pdfStatNominal" class="text-sm text-blue-950 font-mono">Rp 0</b></div>
+          <div><span class="text-slate-500 block text-[10px]">Total Berkas:</span><b id="pdfStatTotal" class="text-sm text-slate-900 font-mono tabular-nums">0</b></div>
+          <div><span class="text-slate-500 block text-[10px]">Disetujui:</span><b id="pdfStatApproved" class="text-sm text-emerald-700 font-mono tabular-nums">0</b></div>
+          <div><span class="text-slate-500 block text-[10px]">Pending:</span><b id="pdfStatPending" class="text-sm text-amber-700 font-mono tabular-nums">0</b></div>
+          <div><span class="text-slate-500 block text-[10px]">Total Retribusi:</span><b id="pdfStatNominal" class="text-sm text-blue-950 font-mono tabular-nums">Rp 0</b></div>
         </div>
 
         <div class="border border-slate-300 rounded-xl overflow-x-auto">
           <table class="w-full text-left border-collapse text-[11px]">
             <thead class="bg-blue-950 text-white uppercase text-[9.5px] font-bold">
               <tr>
-                <th class="p-2 text-center w-8">No</th>
-                <th class="p-2">ID Reg</th>
-                <th class="p-2">NPM</th>
-                <th class="p-2">Nama Mahasiswa</th>
-                <th class="p-2">Program Studi</th>
-                <th class="p-2">Mata Kuliah</th>
-                <th class="p-2">Layanan</th>
-                <th class="p-2 text-right">Retribusi</th>
-                <th class="p-2 text-center">Status</th>
+                <th class="p-2 text-center w-9 whitespace-nowrap">No</th>
+                <th class="p-2 whitespace-nowrap">ID Reg</th>
+                <th class="p-2 whitespace-nowrap">NPM</th>
+                <th class="p-2 whitespace-nowrap min-w-[130px]">Nama Mahasiswa</th>
+                <th class="p-2 whitespace-nowrap min-w-[115px]">Program Studi</th>
+                <th class="p-2 min-w-[230px]">Mata Kuliah</th>
+                <th class="p-2 whitespace-nowrap">Layanan</th>
+                <th class="p-2 text-right whitespace-nowrap">Retribusi</th>
+                <th class="p-2 text-center whitespace-nowrap">Status</th>
               </tr>
             </thead>
-            <tbody id="exportPdfTableBody" class="divide-y divide-slate-100"></tbody>
+            <tbody id="exportPdfTableBody" class="divide-y divide-slate-200"></tbody>
           </table>
         </div>
 
@@ -3376,7 +3427,7 @@
         </div>
       </div>
       <div class="flex justify-end pt-2 no-print">
-        <button type="button" onclick="closeExportPdfModal()" class="px-5 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300">Tutup Window</button>
+        <button type="button" onclick="closeExportPdfModal()" class="px-5 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 cursor-pointer">Tutup Window</button>
       </div>
     </div>
   </div>
@@ -3569,7 +3620,6 @@
               <label for="pendaftaranEditStatusPembayaranSelect" class="block font-bold text-slate-600 mb-1">Status Pembayaran</label>
               <select id="pendaftaranEditStatusPembayaranSelect" onchange="onPendaftaranEditManualBillingChange('payment')" class="w-full border border-slate-300 rounded-xl px-3 py-2 bg-white font-semibold text-slate-800 focus:ring-2 focus:ring-blue-900">
                 <option value="Gratis (Tepat Waktu)">Gratis (Tepat Waktu)</option>
-                <option value="Belum Bayar (Denda Keterlambatan)">Belum Bayar (Denda Keterlambatan)</option>
                 <option value="Belum Bayar">Belum Bayar</option>
                 <option value="Lunas">Lunas</option>
                 <option value="Gratis (Masa Terlambat)">Gratis (Masa Terlambat)</option>
@@ -7060,6 +7110,18 @@
 
     let pendaftaranEditBillingState = null;
 
+    function normalizePaymentStatusLabel(rawStatus, nominal = 0) {
+      const raw = String(rawStatus || '').trim();
+      const nomVal = Number(nominal || 0);
+      if (!raw) {
+        return nomVal > 0 ? 'Belum Bayar' : 'Gratis (Tepat Waktu)';
+      }
+      if (raw.toLowerCase().startsWith('belum bayar')) {
+        return 'Belum Bayar';
+      }
+      return raw;
+    }
+
     function ensureSelectOptionExists(selectEl, val) {
       if (!selectEl || val === undefined || val === null) return;
       const strVal = String(val).trim();
@@ -7225,7 +7287,7 @@
       const isMhsUser = currentUser && (currentUser.role || '').toLowerCase() === 'mahasiswa';
 
       let jadwalVal = isLate ? 'Terlambat' : 'Tepat Waktu';
-      let paymentVal = (isLate && totalNominal > 0) ? 'Belum Bayar (Denda Keterlambatan)' : 'Gratis (Tepat Waktu)';
+      let paymentVal = (isLate && totalNominal > 0) ? 'Belum Bayar' : 'Gratis (Tepat Waktu)';
 
       if (hasEditState && editBillingMode === 'preserve') {
         jadwalVal = pendaftaranEditBillingState.originalStatusJadwal || 'Tepat Waktu';
@@ -8027,17 +8089,15 @@
           if (kelasSelect) kelasSelect.value = itemCleanClass;
 
           const rawNominal = Math.max(0, Number(item.Nominal || 0) || 0);
-          let rawStatusBayar = String(item['Status Pembayaran'] || '').trim();
+          const origPayRaw = String(item['Status Pembayaran'] || '').trim();
           let rawStatusJadwal = String(item['Status Jadwal'] || '').trim();
-          if (!rawStatusBayar) {
-            rawStatusBayar = rawNominal > 0 ? 'Belum Bayar' : 'Gratis (Tepat Waktu)';
-          }
-          if (!rawStatusJadwal || (rawStatusJadwal.toLowerCase() === 'belum terjadwal' && rawStatusBayar.toLowerCase().includes('tepat waktu'))) {
-            const payLower = rawStatusBayar.toLowerCase();
+          if (!rawStatusJadwal || (rawStatusJadwal.toLowerCase() === 'belum terjadwal' && origPayRaw.toLowerCase().includes('tepat waktu'))) {
+            const payLower = origPayRaw.toLowerCase();
             rawStatusJadwal = (rawNominal > 0 && (payLower.includes('denda') || payLower.includes('terlambat')))
               ? 'Terlambat'
               : 'Tepat Waktu';
           }
+          const rawStatusBayar = normalizePaymentStatusLabel(origPayRaw, rawNominal);
           pendaftaranEditBillingState = {
             recordId: String(item.ID || id).trim(),
             originalTanggal: String(item.Tanggal || item.tanggal || '').trim(),
@@ -12744,11 +12804,11 @@
       const idRaw = String(p.ID || '').trim();
       const idAttr = escapeHtml(idRaw).replace(/'/g, '&#39;');
       const statusApp = String(p['Status Persetujuan'] || 'Pending').trim() || 'Pending';
-      const statusBayar = String(p['Status Pembayaran'] || 'Belum Bayar').trim() || 'Belum Bayar';
+      const nominal = Number(p.Nominal || 0);
+      const statusBayar = normalizePaymentStatusLabel(p['Status Pembayaran'], nominal);
       const bayarBadgeClass = typeof getInvoicePaymentBadgeStyle === 'function'
         ? getInvoicePaymentBadgeStyle(statusBayar)
         : (statusBayar.toLowerCase() === 'lunas' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' : 'bg-rose-50 text-rose-800 border-rose-300');
-      const nominal = Number(p.Nominal || 0);
       const kodeProdi = String(p['Kode Prodi'] || (typeof resolveInvoiceProdiCode === 'function' ? resolveInvoiceProdiCode(p) : '') || '-').trim() || '-';
       const namaProdi = String(p['Program Studi'] || '-').trim() || '-';
       const layananStr = String(p['Jenis Layanan'] || p.Layanan || '-').trim() || '-';
@@ -13963,7 +14023,7 @@
       document.getElementById('setPayModalMatkul').innerText = item['Mata Kuliah'] || '-';
       document.getElementById('setPayModalNominal').innerText = 'Rp ' + Number(item.Nominal || 0).toLocaleString('id-ID');
 
-      const currStatus = (item['Status Pembayaran'] || 'Belum Bayar').trim();
+      const currStatus = normalizePaymentStatusLabel(item['Status Pembayaran'], item.Nominal);
       const radLunas = document.getElementById('radioStatusLunas');
       const radBelum = document.getElementById('radioStatusBelumBayar');
       if (currStatus.toLowerCase() === 'lunas') {
@@ -14043,6 +14103,60 @@
     // [FITUR EXPORT EXCEL RESMI - REVISI POIN 3]
     // Membaca array data aktif di memori (filteredData / tableData)
     // ==========================================
+    // [HELPER PENAMAAN FILE EKSPOR BERSIH TANPA UNDERSCORE + TAHUN AKADEMIK]
+    // ==========================================
+    function sanitizeExportFileSegment(str, maxLen = 50, fallback = '') {
+      const cleaned = String(str || '')
+        .replace(/[\/\\:*?"<>|_]+/g, ' ')
+        .replace(/[^a-zA-Z0-9\s\-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, maxLen)
+        .trim();
+      return cleaned || fallback;
+    }
+
+    function getExportAcademicPeriodLabel(customTa = '', customSem = '') {
+      let rawTa = String(customTa || '').trim();
+      let rawSem = String(customSem || '').trim();
+
+      if (!rawTa || !rawSem) {
+        const listTa = (typeof appData !== 'undefined' && appData && appData.master && Array.isArray(appData.master.tahunAkademik))
+          ? appData.master.tahunAkademik
+          : [];
+        const activeTa = listTa.find(t => String(t.Status || t.status || '').trim().toLowerCase() === 'aktif') || listTa[0];
+        if (activeTa) {
+          if (!rawTa) rawTa = String(activeTa['Tahun Akademik'] || activeTa.Tahun || '').trim();
+          if (!rawSem) rawSem = String(activeTa.Semester || '').trim();
+        }
+      }
+
+      if (!rawTa || !rawSem) {
+        const listPrd = (typeof appData !== 'undefined' && appData && appData.master && Array.isArray(appData.master.periode))
+          ? appData.master.periode
+          : [];
+        const activePrd = listPrd.find(p => String(p.Status || p.status || '').trim().toLowerCase() === 'aktif') || listPrd[0];
+        if (activePrd) {
+          if (!rawTa) rawTa = String(activePrd['Tahun Akademik'] || '').trim();
+          if (!rawSem) rawSem = String(activePrd.Semester || '').trim();
+        }
+      }
+
+      if (!rawTa) rawTa = '2026/2027';
+      const taMatch = rawTa.match(/(\d{4})\s*[\/\-]\s*(\d{4})/);
+      const taFormatted = taMatch
+        ? `${taMatch[1]}-${taMatch[2]}`
+        : sanitizeExportFileSegment(rawTa, 20, '2026-2027');
+
+      const semLower = rawSem.toLowerCase();
+      const taLower = rawTa.toLowerCase();
+      const semFormatted = semLower.includes('genap')
+        ? 'Genap'
+        : (semLower.includes('ganjil') ? 'Ganjil' : (taLower.includes('genap') ? 'Genap' : 'Ganjil'));
+
+      return `${taFormatted} ${semFormatted}`.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
     function exportToExcel() {
       const btn = document.querySelector('button[onclick*="loadAppData"] i.fa-spin');
       if (btn) {
@@ -14088,12 +14202,13 @@
           'Bukti Foto': buktiLink,
           'Nominal Retribusi': Number(item.Nominal || item.nominal || 0),
           'Status Persetujuan': item['Status Persetujuan'] || item.statusApproval || 'Pending',
-          'Status Pembayaran': item['Status Pembayaran'] || item.statusBayar || 'Belum Bayar'
+          'Status Pembayaran': normalizePaymentStatusLabel(item['Status Pembayaran'] || item.statusBayar, item.Nominal || item.nominal)
         };
       });
 
       const dateStr = new Date().toISOString().slice(0, 10);
-      const fileName = `Pendaftaran_FEB_UIKA_${dateStr}.xlsx`;
+      const periodLabel = getExportAcademicPeriodLabel();
+      const fileName = `Pendaftaran FEB UIKA ${periodLabel} ${dateStr}.xlsx`;
 
       if (typeof XLSX !== 'undefined') {
         try {
@@ -14101,7 +14216,7 @@
           const wb = XLSX.utils.book_new();
           XLSX.utils.book_append_sheet(wb, ws, 'Pendaftaran');
           XLSX.writeFile(wb, fileName);
-          Swal.fire('Export Sukses', `File Excel (.xlsx) berisi ${exportRows.length} baris data berhasil diunduh.`, 'success');
+          Swal.fire('Export Sukses', `File Excel (${fileName}) berisi ${exportRows.length} baris data berhasil diunduh.`, 'success');
           return;
         } catch(e) {
           console.warn('XLSX.writeFile gagal, menggunakan fallback .xls:', e);
@@ -14111,7 +14226,7 @@
       // Fallback .xls
       if (typeof downloadHtmlXls === 'function') {
         downloadHtmlXls('Pendaftaran', exportRows, dateStr);
-        Swal.fire('Export Sukses', `File Excel (.xls) berisi ${exportRows.length} baris data berhasil diunduh.`, 'success');
+        Swal.fire('Export Sukses', `File Excel berisi ${exportRows.length} baris data berhasil diunduh.`, 'success');
         return;
       }
 
@@ -14124,7 +14239,7 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `Pendaftaran_FEB_UIKA_${dateStr}.csv`;
+      link.download = `Pendaftaran FEB UIKA ${periodLabel} ${dateStr}.csv`;
       document.body.appendChild(link);
       link.click();
       setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 500);
@@ -14355,7 +14470,9 @@
       const target = select ? select.value : 'Master_Matkul';
       let headers = [];
       let sampleData = [];
-      let filename = `Template_${target}_FEB_UIKA.xlsx`;
+      const targetLabel = sanitizeExportFileSegment(target, 40, 'Template');
+      const periodLabel = getExportAcademicPeriodLabel();
+      let filename = `Template ${targetLabel} FEB UIKA ${periodLabel}.xlsx`;
 
       if (target === 'Master_Matkul') {
         headers = ['Kode Matkul', 'Nama Mata Kuliah', 'SKS', 'Kode Prodi', 'Dosen Pengampu', 'Kelas'];
@@ -15219,7 +15336,9 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${sheetName}_FEB_UIKA_${dateStr}.xls`;
+      const sheetLabel = sanitizeExportFileSegment(sheetName, 40, 'Data');
+      const periodLabel = getExportAcademicPeriodLabel();
+      a.download = `${sheetLabel} FEB UIKA ${periodLabel} ${dateStr}.xls`;
       document.body.appendChild(a);
       a.click();
       setTimeout(() => {
@@ -15263,7 +15382,9 @@
       }
 
       const dateStr = new Date().toISOString().slice(0, 10);
-      const fileNameXlsx = `${sheetName}_FEB_UIKA_${dateStr}.xlsx`;
+      const sheetLabel = sanitizeExportFileSegment(sheetName, 40, 'Data');
+      const periodLabel = getExportAcademicPeriodLabel();
+      const fileNameXlsx = `${sheetLabel} FEB UIKA ${periodLabel} ${dateStr}.xlsx`;
 
       // Sanitasi Data & pengayaan kolom peserta (Nama Mahasiswa, NPM di paling kanan untuk Jadwal_Ujian)
       const cleanRows = prepareSheetRowsForViewerOrExport(sheetName, rows, true);
@@ -15318,7 +15439,7 @@
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = `${sheetName}_FEB_UIKA_${dateStr}.csv`;
+        link.download = `${sheetLabel} FEB UIKA ${periodLabel} ${dateStr}.csv`;
         document.body.appendChild(link);
         link.click();
         setTimeout(() => { document.body.removeChild(link); URL.revokeObjectURL(url); }, 500);
@@ -16264,8 +16385,8 @@
 
       const idRaw = String(p.ID || '').trim();
       const idAttr = escapeHtml(idRaw).replace(/'/g, '&#39;');
-      const statusBayar = String(p['Status Pembayaran'] || 'Belum Bayar').trim() || 'Belum Bayar';
       const nominal = Number(p.Nominal) || 0;
+      const statusBayar = normalizePaymentStatusLabel(p['Status Pembayaran'], nominal);
       const canEdit = canEditInvoicePaymentStatus();
       const kodeProdi = String(p['Kode Prodi'] || '-').trim() || '-';
       const namaProdi = String(p['Program Studi'] || '-').trim() || '-';
@@ -16471,7 +16592,7 @@
       if (!canEditInvoicePaymentStatus()) {
         if (selectEl) {
           const existing = (appData.pendaftaran || []).find(p => String(p.ID).trim() === String(id).trim());
-          if (existing) selectEl.value = existing['Status Pembayaran'] || 'Belum Bayar';
+          if (existing) selectEl.value = normalizePaymentStatusLabel(existing['Status Pembayaran'], existing.Nominal);
         }
         Swal.fire('Akses Ditolak', 'Hanya Admin TU atau Master Admin yang dapat mengubah status pembayaran.', 'warning');
         return;
@@ -16480,7 +16601,7 @@
       const item = (appData.pendaftaran || []).find(p => String(p.ID).trim() === String(id).trim());
       if (!item) return;
 
-      const prevStatus = String(item['Status Pembayaran'] || 'Belum Bayar').trim() || 'Belum Bayar';
+      const prevStatus = normalizePaymentStatusLabel(item['Status Pembayaran'], item.Nominal);
       if (prevStatus.toLowerCase() === String(newStatus || '').trim().toLowerCase()) return;
 
       const baseSelectClasses = 'w-full max-w-[126px] text-[10px] sm:text-[11px] font-bold rounded-lg px-1.5 py-1.5 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-900 transition truncate';
@@ -16613,7 +16734,7 @@
       }
 
       const nominal = Number(item.Nominal) || 0;
-      const statusBayar = item['Status Pembayaran'] || 'Lunas';
+      const statusBayar = normalizePaymentStatusLabel(item['Status Pembayaran'] || 'Lunas', nominal);
       const isLunas = statusBayar.toLowerCase() === 'lunas';
 
       // Set value ke elemen modal Kwitansi
@@ -16752,6 +16873,73 @@
       if (printLate) printLate.classList.remove('printable-active');
     }
 
+    function formatExportPdfCoursesHtml(p) {
+      const entries = [];
+      if (Array.isArray(p.mataKuliahList) && p.mataKuliahList.length > 0) {
+        p.mataKuliahList.forEach(m => {
+          const baseName = String((m && (m.nama || m.mataKuliah)) || '').trim();
+          if (!baseName) return;
+          const sksVal = Number(m && m.sks ? m.sks : 0);
+          const hasSksLabel = /\(\s*\d+\s*SKS\s*\)/i.test(baseName);
+          const text = sksVal > 0 && !hasSksLabel ? `${baseName} (${sksVal} SKS)` : baseName;
+          const nilai = String((m && m.nilaiHuruf) || '').trim();
+          entries.push({ text, nilai });
+        });
+      }
+
+      if (entries.length === 0) {
+        const raw = String(p['Mata Kuliah'] || '').trim();
+        if (raw && raw !== '-') {
+          const lines = raw.split(/\r?\n/);
+          lines.forEach(line => {
+            const trimmedLine = line.trim();
+            if (!trimmedLine) return;
+            const splitInline = trimmedLine.split(/(?=(?:^|\s)\d+\.\s+)/);
+            splitInline.forEach(part => {
+              const cleaned = part.trim().replace(/^\d+\.\s*/, '').trim();
+              if (cleaned) entries.push({ text: cleaned, nilai: '' });
+            });
+          });
+        }
+      }
+
+      if (entries.length === 0) {
+        return '<span class="text-slate-400">-</span>';
+      }
+
+      if (entries.length === 1) {
+        const only = entries[0];
+        const nilaiHtml = only.nilai
+          ? ` <span class="text-[9.5px] font-bold text-indigo-800">[Nilai: ${escapeHtml(only.nilai)}]</span>`
+          : '';
+        return `<div class="leading-snug text-slate-800 font-medium break-words">${escapeHtml(only.text)}${nilaiHtml}</div>`;
+      }
+
+      return `<div class="space-y-1">${entries.map((entry, idx) => {
+        const nilaiHtml = entry.nilai
+          ? ` <span class="text-[9.5px] font-bold text-indigo-800">[Nilai: ${escapeHtml(entry.nilai)}]</span>`
+          : '';
+        return `
+          <div class="flex items-baseline gap-1.5 leading-snug text-slate-800">
+            <span class="font-mono font-bold text-slate-500 shrink-0 tabular-nums w-4 text-right">${idx + 1}.</span>
+            <span class="font-medium break-words min-w-0">${escapeHtml(entry.text)}${nilaiHtml}</span>
+          </div>
+        `;
+      }).join('')}</div>`;
+    }
+
+    function printExportPdfReport() {
+      const prevTitle = document.title;
+      const periodLabel = typeof getExportAcademicPeriodLabel === 'function'
+        ? getExportAcademicPeriodLabel()
+        : '2026-2027 Ganjil';
+      document.title = `Rekapitulasi Pendaftaran Ujian FEB UIKA ${periodLabel}`.replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+      const restoreTitle = () => { document.title = prevTitle; };
+      window.addEventListener('afterprint', restoreTitle, { once: true });
+      window.print();
+      setTimeout(restoreTitle, 1500);
+    }
+
     function openExportPdfModal() {
       const tbody = document.getElementById('exportPdfTableBody');
       if (!tbody) return;
@@ -16763,6 +16951,13 @@
       const pending = list.filter(p => (p['Status Persetujuan'] || '').toLowerCase() === 'pending').length;
       const nominal = list.reduce((acc, p) => acc + (Number(p.Nominal) || 0), 0);
       const today = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      const periodLabel = typeof getExportAcademicPeriodLabel === 'function'
+        ? getExportAcademicPeriodLabel()
+        : '2026-2027 Ganjil';
+      const periodMatch = periodLabel.match(/^(\d{4}-\d{4})\s+(Ganjil|Genap)$/i);
+      const academicDisplay = periodMatch
+        ? `${periodMatch[1].replace('-', '/')} (${periodMatch[2]})`
+        : periodLabel;
 
       const elTotal = document.getElementById('pdfStatTotal');
       const elApp = document.getElementById('pdfStatApproved');
@@ -16770,6 +16965,7 @@
       const elNom = document.getElementById('pdfStatNominal');
       const elRepDate = document.getElementById('pdfReportDate');
       const elSignDate = document.getElementById('pdfSignDate');
+      const elTaText = document.getElementById('pdfAcademicYearText');
 
       if (elTotal) elTotal.innerText = total + ' Berkas';
       if (elApp) elApp.innerText = approved + ' Berkas';
@@ -16777,29 +16973,47 @@
       if (elNom) elNom.innerText = 'Rp ' + nominal.toLocaleString('id-ID');
       if (elRepDate) elRepDate.innerText = 'Tanggal Cetak: ' + today;
       if (elSignDate) elSignDate.innerText = 'Bogor, ' + today;
+      if (elTaText) elTaText.innerText = 'Tahun Akademik: ' + academicDisplay;
 
       tbody.innerHTML = '';
       if (list.length === 0) {
         tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-400">Tidak ada data pendaftaran yang sesuai filter</td></tr>';
       } else {
         list.forEach((p, i) => {
+          const nominalVal = Number(p.Nominal || 0);
+          const statusBayar = normalizePaymentStatusLabel(p['Status Pembayaran'], nominalVal);
+          const bayarLower = statusBayar.toLowerCase();
+          const bayarColor = bayarLower.includes('lunas')
+            ? 'text-emerald-700'
+            : (bayarLower.includes('gratis') ? 'text-blue-700' : 'text-rose-700');
+
+          const statusApp = String(p['Status Persetujuan'] || 'Pending').trim();
+          const statusLower = statusApp.toLowerCase();
+          const statusColor = statusLower === 'disetujui'
+            ? 'text-emerald-700'
+            : (statusLower === 'ditolak' ? 'text-rose-700' : 'text-amber-700');
+
           const tr = document.createElement('tr');
-          tr.className = 'border-b border-slate-200 text-[11px]';
+          tr.className = 'border-b border-slate-200 text-[11px] hover:bg-slate-50/70';
           tr.innerHTML = `
-            <td class="p-2 text-center font-mono">${i + 1}</td>
-            <td class="p-2 font-mono font-bold text-blue-900">${p.ID || '-'}</td>
-            <td class="p-2 font-mono">${p.NPM || p.NIM || '-'}</td>
-            <td class="p-2 font-bold">${p['Nama Mahasiswa'] || '-'}</td>
-            <td class="p-2">[${p['Kode Prodi'] || '-'}] ${p['Program Studi'] || '-'}</td>
-            <td class="p-2">${p['Mata Kuliah'] || '-'}</td>
-            <td class="p-2">${p['Jenis Layanan'] || '-'}</td>
-            <td class="p-2 text-right font-mono">Rp ${Number(p.Nominal || 0).toLocaleString('id-ID')}</td>
-            <td class="p-2 text-center font-bold">${p['Status Persetujuan'] || 'Pending'}</td>
+            <td class="p-2 align-top text-center font-mono text-slate-500 tabular-nums whitespace-nowrap">${i + 1}</td>
+            <td class="p-2 align-top font-mono font-bold text-blue-900 tabular-nums whitespace-nowrap">${escapeHtml(p.ID || '-')}</td>
+            <td class="p-2 align-top font-mono text-slate-700 tabular-nums whitespace-nowrap">${escapeHtml(p.NPM || p.NIM || '-')}</td>
+            <td class="p-2 align-top font-bold text-slate-900 leading-snug">${escapeHtml(p['Nama Mahasiswa'] || '-')}</td>
+            <td class="p-2 align-top text-slate-700 leading-snug">[${escapeHtml(p['Kode Prodi'] || '-')}] ${escapeHtml(p['Program Studi'] || '-')}</td>
+            <td class="p-2 align-top text-slate-800">${formatExportPdfCoursesHtml(p)}</td>
+            <td class="p-2 align-top text-slate-700 font-medium whitespace-nowrap">${escapeHtml(p['Jenis Layanan'] || '-')}</td>
+            <td class="p-2 align-top text-right whitespace-nowrap">
+              <div class="font-mono font-bold text-slate-900 tabular-nums whitespace-nowrap">Rp ${nominalVal.toLocaleString('id-ID')}</div>
+              <div class="text-[9.5px] font-semibold leading-tight mt-0.5 whitespace-nowrap ${bayarColor}">${escapeHtml(statusBayar)}</div>
+            </td>
+            <td class="p-2 align-top text-center font-bold whitespace-nowrap ${statusColor}">${escapeHtml(statusApp)}</td>
           `;
           tbody.appendChild(tr);
         });
       }
 
+      document.body.classList.add('printing-rekap-pdf');
       const modal = document.getElementById('modalExportPdf');
       const printable = document.getElementById('printableExportPdfModal');
       if (printable) printable.classList.add('printable-active');
@@ -16810,6 +17024,7 @@
     }
 
     function closeExportPdfModal() {
+      document.body.classList.remove('printing-rekap-pdf');
       const modal = document.getElementById('modalExportPdf');
       const printable = document.getElementById('printableExportPdfModal');
       if (printable) printable.classList.remove('printable-active');
@@ -18391,10 +18606,23 @@
     }
 
     function buildSuratSafeFileName(model, ext) {
-      const safeSlug = (str) => String(str || '').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'Dokumen';
       const cleanExt = String(ext || 'pdf').replace(/^\.+/, '');
-      const sigSuffix = (model && model.includeSignatures === false) ? '_Tanpa_TTD' : '';
-      return `Surat_Pengantar_${safeSlug(model.perihalSingkat)}_${safeSlug(model.mataKuliah)}_${safeSlug(model.dosenNama)}${sigSuffix}.${cleanExt}`;
+      const periodLabel = getExportAcademicPeriodLabel(
+        model && model.tahunAkademik,
+        model && model.semester
+      );
+      const parts = [
+        'Surat Pengantar',
+        sanitizeExportFileSegment(model && model.perihalSingkat, 40, 'Dokumen'),
+        sanitizeExportFileSegment(model && model.mataKuliah, 45, 'Mata Kuliah'),
+        sanitizeExportFileSegment(model && model.dosenNama, 45, 'Dosen'),
+        periodLabel
+      ];
+      if (model && model.includeSignatures === false) {
+        parts.push('Tanpa TTD');
+      }
+      const baseName = parts.filter(Boolean).join(' ').replace(/_+/g, ' ').replace(/\s+/g, ' ').trim();
+      return `${baseName}.${cleanExt}`;
     }
 
     function ensurePdfLibrariesLoaded() {

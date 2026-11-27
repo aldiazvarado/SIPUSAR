@@ -262,14 +262,22 @@ export default function App() {
       'Dosen Pengampu': d['Dosen Pengampu'],
       'Jenis Layanan': d['Jenis Layanan'],
       'Nominal Retribusi': Number(d.Nominal || 0),
-      'Status Pembayaran': d['Status Pembayaran'],
+      'Status Pembayaran': String(d['Status Pembayaran'] || '').trim().toLowerCase().startsWith('belum bayar')
+        ? 'Belum Bayar'
+        : (d['Status Pembayaran'] || (Number(d.Nominal || 0) > 0 ? 'Belum Bayar' : 'Gratis (Tepat Waktu)')),
       'Status Persetujuan': d['Status Persetujuan']
     }));
 
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Pendaftaran_FEB_UIKA');
-    XLSX.writeFile(wb, `Pendaftaran_FEB_UIKA_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, 'Pendaftaran FEB UIKA');
+    const activePeriod = appState.master?.periode?.find((p) => String(p.Status || '').toLowerCase() === 'aktif') || appState.master?.periode?.[0];
+    const rawTa = String(activePeriod?.['Tahun Akademik'] || '2026/2027').trim();
+    const taMatch = rawTa.match(/(\d{4})\s*[\/\-]\s*(\d{4})/);
+    const taLabel = taMatch ? `${taMatch[1]}-${taMatch[2]}` : rawTa.replace(/[\/\\_]+/g, '-');
+    const semRaw = String(activePeriod?.Semester || rawTa || 'Ganjil').toLowerCase();
+    const semLabel = semRaw.includes('genap') ? 'Genap' : 'Ganjil';
+    XLSX.writeFile(wb, `Pendaftaran FEB UIKA ${taLabel} ${semLabel} ${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
   return (
@@ -933,7 +941,7 @@ export default function App() {
       {/* MODAL: EXPORT DATA KE PDF POPUP */}
       {showExportPdfModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full p-6 space-y-4 max-h-[95vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-6xl w-full p-6 space-y-4 max-h-[95vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-slate-200 pb-3 no-print">
               <h3 className="font-black text-slate-800 text-sm">Export Rekapitulasi Data Pendaftaran ke PDF</h3>
               <button onClick={() => setShowExportPdfModal(false)} className="text-slate-400 hover:text-slate-600 p-1">
